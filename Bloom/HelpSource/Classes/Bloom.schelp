@@ -1,0 +1,817 @@
+TITLE:: Bloom
+summary:: a musical phrase that can be transformed
+categories:: Collections>Ordered
+related:: Classes/Event
+
+DESCRIPTION::
+
+A strong::Bloom:: is a musical phrase that can be transformed.
+
+The phrase is represented by 3 arrays: code::notes::, code::velocities::, code::timeIntervals::.
+
+Together, the code::velocities:: and code::timeIntervals:: are considered the 'shape' of the bloom.
+
+A 4th array, code::chans::, represents a sequence of MIDI output channels.
+
+subsection::First code examples:
+
+code::
+// initialize MIDI
+(
+MIDIClient.init;
+Bloom.midiOut_(MIDIOut.newByName("IAC Driver", "Bus 1"));
+Bloom.midiIn_(MIDIIn.findPort("IAC Driver","Bus 1"));
+)
+
+
+b = Bloom.new.seed; // create a new bloom and fill it with random* notes, velocities, and timeIntervals
+b.verbose_(true); // print contents whenever it is played
+
+b.play;
+b.scramble.play; // randomize order
+b.softer.slower.play;
+b.diatonicTranspose(1).play;
+b.applyScale(Scale.dorian).play;
+b.notes = b.notes.reverse;
+b.timeIntervals = [1/8,3/8,1/8]
+
+::
+*see .seed for constraints on randomness
+
+
+CLASSMETHODS::
+
+METHOD::new
+create a new Bloom.  It's contents can be specified at instantiation, but more often it is filled with .seed.  Lists do not need to be the same length - velocities, timeIntervals and chans will wrap.
+
+
+code::
+b = Bloom.new // default Bloom
+b.report
+b.play
+
+b = Bloom.new([46,28,43,24,67],[65,23,45,11],1,0) // lists of different lengths are ok
+b.report
+b.play
+::
+
+argument::notes
+list of midi notes
+argument::vels
+list of velocities
+argument::times
+list of timeIntervals between each note
+argument::chans
+list of midi channels
+
+
+METHOD::midiInit
+initialize the MIDIClient and set a MIDIIn and a MIDIOut.
+you can also set the class variables midiin and midiout directly
+argument:: out
+a MIDIOut
+argument:: in
+a MIDIIn
+
+
+METHOD::clock
+by default code::TempoClock.default::, this can be set to another clock or to a code::LinkClock:: to sync with Ableton, as in this example, which also sets a 1 bar quant with an offset to compensate for latency.  All play methods (code::.play, .loop, .pulse::) use this code::clock:: and the instance variable code::quant::.
+
+note:: Command-period will kill your LinkClock's connection to Ableton.  Rerun the following line to re-establish.  Including it and your MIDI initialization in code::startup.scd:: may be useful.::
+
+code::
+l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).quant_([4,0,0]);
+::
+
+
+
+
+INSTANCEMETHODS::
+
+METHOD::init
+re-initialize a bloom with default settings
+argument::n
+list of note values
+argument::vel
+list of velocities
+argument::times
+list of timeIntervals
+argument::chans
+list of channels
+
+METHOD::copyFromBloom
+copies all data from a bloom
+argument::bloom
+
+subsection::selection
+
+METHOD::at
+given an index or array of indices, return the notes as playable Events
+code::
+b.at(0).play // play the first note
+b.at([0,1,2]).play // play a chord made of the first three notes
+::
+argument::index
+integer or array of integers
+
+subsection::storage
+
+All bloom transformations change the internal state of the bloom destructively.  Storage is important for creating musical recapitulation.  There are three approaches to storage built into each bloom.
+list:: ##strong::the log::: a globally-available library that is written to disk to persist between sessions and recompiles.  Suggested use: when you come across something really beautiful, code::.log:: it.  Instead of using code::.seed:: to get random blooms, draw randomly code::.fromLog:: for curated results.  Multiple logs can be kept.  Items in the log are located by number.
+##strong::save and restore::: a single 'undo' for returning to a previous state.
+##strong::the stack::: an ordered sequence of states saved by code::.push:: and retrieved by code::.pop::.  Useful for exploring forking paths of change.
+::
+
+METHOD::log
+save this bloom for future use (in code::Archive.global::).  Logged blooms persist between recompiles.
+argument::index
+use a value for code::index:: if you want to overwrite an entry.  Otherwise, leave it empty and it will append to the end of the list.
+
+METHOD::fromLog
+restore a bloom from the log by number.  If no number is specified, one will be chosen at random.
+argument::index
+
+METHOD::clearLog
+resets the log.  careful!
+
+METHOD::logName
+Multiple logs can be maintained by name.  Set the instance variable code::logName:: to a code::\symbol::.
+
+code::
+b.logName = \blooms;
+b.seed.applyScale.play;
+b.log;
+b.seed.play;
+b.fromLog.play;
+b.logName = \diads;
+b.seed(2).play.log;
+b.seed(2).play.log;
+b.fromLog.play;
+b.logName = \blooms;
+b.fromLog.play;
+b.logName = \diads; b.clearLog; b.logName = \blooms;
+::
+
+METHOD::logAsArray
+for accessing the entire log.  Modifications to this array will not affect the log.  Replace the log with code::Archive.global.put(logName, array);::
+
+METHOD::save
+save a copy of the current state of the bloom.  Saved bloom is accessable via instance variable code::saved::.
+code::
+b.seed.chooseScale.play;
+b.save;
+b.stutter.play;
+b.saved.report;
+b.restore.play;
+b.meanInvert.play;
+b.restore.play; // you can restore
+::
+
+METHOD::restore
+restore the saved bloom.
+
+METHOD::push
+save the current state to the stack
+
+METHOD::pop
+return to the last saved state in the stack, and remove it from the stack.
+
+METHOD::popAny
+returns to a random previous state.
+
+METHOD::stack
+instance variable that holds the stack
+
+subsection::random variation
+
+METHOD:: seed
+new random notes / velocities / timeIntervals in prototypical Bloom shape: 4-10 notes, pitches between code::low:: and code::hi::, velocities between 40-100 sorted loud to soft, timeIntervals between 0.1-0.5.  All randomization uses code::exprand:: to privilege lower values.
+argument:: numNotes
+how many notes in the bloom (if nil, random 4-10)
+argument:: low
+lowest note
+argument:: hi
+highest note
+
+METHOD:: newNotes
+new random notes (timeIntervals and velocities stay the same)
+
+METHOD:: newShape
+new random timeIntervals and velocities (notes stay the same)
+
+METHOD:: shiftNotes
+adjust some notes upward or downward one semitone
+argument:: probability
+percentage of notes that get altered
+
+METHOD:: shiftNotesD
+adjust some notes upward or downward one diatonic step, using the current scale
+argument:: probability
+percentage of notes that get altered
+
+METHOD:: shiftShape
+adjust timeIntervals and velocities by random percentages within spread
+argument:: spread
+max percentage of any adjustment
+
+METHOD:: shift
+convenience method: shifts notes and shape the default amount.
+
+METHOD:: shiftD
+convenience method: shifts notes diatonically and shape the default amount.
+
+METHOD:: compass
+restricts the pitches to a range.  notes are transposed by octave; pitch classes are preserved
+
+METHOD:: scramble
+randomize order of notes; shape is maintained; notes in chords stay together
+
+METHOD:: deepScramble
+randomize order of notes; shape is maintained; notes can leave their chords
+
+METHOD:: shuffle
+shuffle all dimensions like a perfect card shuffle (second half interleaved with first half).  Notes in chords stay together.
+
+METHOD:: deepShuffle
+shuffle all dimensions; notes leave their chords
+
+
+
+subsection::expanding / contracting
+
+METHOD:: remove
+remove note at index
+method:index
+
+METHOD:: addOne
+appends one new note, random if nil
+method:midinote
+
+METHOD:: addOneInScale
+appends one new note with the bloom's scale
+
+METHOD:: dropLast
+drop the last note of the bloom
+
+METHOD:: curvesExtend
+"connects the dots" of the bloom (notes, timeIntervals and velocities) with a chromatic line of the desired length.  Channel array is wrapped.  Result is longer than
+argument:: newSize
+
+METHOD:: curvesD
+"connects the dots" of the bloom (notes, timeIntervals and velocities) with a diatonic line of the desired length.  Uses the existing diatonic space or uses code::.chooseScale:: to establish one.  Channel array is wrapped.
+argument:: newSize
+
+METHOD:: thicken
+creates a new Bloom and interlace its notes in this bloom.  If no scale has been applied, it draws from the pitches present (but randomizes octave).  If a scale has been applied, it draws from the scale.  A new note is added between each note, with a lowered velocity.  Because it uses code::.lace::, the total duration doesn't change.
+argument:: percentNew
+The interlaced bloom is by default 50% as long as the original, and it wraps to fill the remainder.  This results in more common tones and greater harmonic cohesion.  A value of code::1:: will produce all new notes, and closer to code::0:: creates a pedal tone
+
+METHOD:: thickenLengthen
+Same as thicken but uses .laceLengthen, so the total duration is lengthened
+argument:: percentNew
+
+METHOD:: thin
+remove some notes but preserve the shape (a removed note leaves a 'hole' in the timeInterval)
+argument:: probability
+the percentage of notes to be cut
+
+METHOD:: thinShorten
+remove some notes along with their timeIntervals;
+argument:: probability
+the percentage of notes to be cut
+
+METHOD:: gap
+silence some notes
+argument:: probability
+the percentage of notes to be silenced
+
+METHOD:: unGap
+restore silent notes
+
+METHOD:: removeDoubles
+remove any doubled notes (adjacent duplicates)
+
+METHOD:: trimTo
+trim the bloom to a certain number of items
+argument:: length
+
+METHOD:: trimToDur
+trim the bloom to an exact duration
+argument:: dur
+
+METHOD:: scaleToDur
+compress the bloom to an exact duration
+
+
+
+
+subsection::rotations
+
+METHOD:: rotate
+rotate all lists by n
+argument:: n
+
+METHOD:: rotateNotes
+rotate all lists by n
+argument:: n
+
+METHOD:: rotateVelocities
+rotate velocity list by n
+argument:: n
+
+METHOD:: rotateTime
+rotate timeInterval list by n
+argument:: n
+
+
+
+subsection::shaping
+
+METHOD::slower
+multiplies all timeIntervals by multiplier
+argument::multiplier
+
+METHOD::faster
+argument::multiplier
+
+METHOD::softer
+multiplies all velocities by multiplier
+argument::multiplier
+
+METHOD::louder
+argument::multiplier
+
+METHOD::fan
+sort timeIntervals fast to slow
+
+METHOD::avgTime
+equally space all notes within the total duration
+
+METHOD::addComma
+add dur to the final timeInterval; useful in looping patterns
+argument::dur
+
+METHOD::decrescendo
+sorts velocities in descending order
+
+METHOD::crescendo
+sorts velocities in ascending order
+
+
+
+
+
+subsection::fission
+
+METHOD::curdle
+divide the Bloom into a few Blooms at random
+argument:: probability
+probability (0.0-1.0) of splitting at a given point
+
+METHOD::split
+divide the Bloom into two Blooms at a certain point.
+argument:: splitAt
+index of division.  If nil, it will choose a random point.
+
+
+
+
+subsection::fusion
+
+METHOD::add
+append entries to any list, or append an entire bloom.
+argument:: newNotesOrBloom
+can be either a note, a list of ntoes, or a Bloom
+argument:: newVels
+corresponding velocity or list
+argument:: newTimes
+corresponding timeInterval or list
+argument:: newChans
+corresponding chans or list
+
+METHOD::++
+concatenate Blooms.
+note:: this notation returns a new bloom, and does not modify the receiver::
+code::
+b.seed;
+c.seed;
+z = b ++ c;
+b.play; // unchanged
+c.play; // unchanged
+::
+
+METHOD::lace
+interlace the notes of one bloom into the shape of another.  Total duration doesn't change; each new note is slotted between the originals
+argument::bloom
+
+METHOD::laceLengthen
+interlace the notes of one bloom into the shape of another.  Total duration does change
+argument::bloom
+
+METHOD::cast
+apply the shape (timing, velocities and registral contour) of another bloom to this one.  The sequence of pitch classes is preserved; each note is moved to the octave nearest the applied note.  Blooms of different lengths will wrap.
+argument::bloom
+
+
+
+
+subsection::patterning
+
+METHOD::stutter
+repeat each note of a bloom
+argument:: repetitions
+
+METHOD::sputter
+repeat some notes of a bloom, determined by chance.  notes, timeIntervals and velocities are linked.
+argument:: probability
+the chance a note will be repeated
+
+METHOD::sputterAll
+sputter notes, timeIntervals and velocities separately.
+argument:: probability
+the chance an element will be repeated
+
+METHOD::ratchet
+repeat a note code::repetitions:: number of times, subdividing the duration eg. a quarter note becomes two identical eighth notes.
+argument:: repetitions
+how many repetitions of the note code::index::
+argument:: index
+which note to ratchet.  If no index is specified, a random note will be chosen.
+
+METHOD::mirror
+append the bloom's reverse;  make palendromic
+argument:: repetitions
+
+METHOD::pyramid
+apply one of Supercollider's pyramid counting algorithms.  See Array.pyramid.
+argument:: patternType
+choose counting algorthim 1-10
+
+METHOD::slide
+traverse the bloom in repeated subsequences of length windowLength.  See code::Array.slide::
+argument::windowLength
+
+METHOD::quantize
+quantize the durations to fractions of the beat.  Two grids can be used to allow for polythmic relationships.  Grids are defined in fractions of a beat.  Beat duration is set via code::TempoClock.default::.
+
+code::
+b.quantize(4) // quantize to quarters of a beat (16th notes)
+b.quantize([5,3]) // quantize to a 5 against 3 polyrhythm
+b.quantize(4, 0.5) // quantize to quarter-beats but snap only halfway to ideal position
+::
+
+argument::grid
+can be a single value or an Array of two values.
+argument:: strength
+determines the degree to which the number will be changed.  1 will snap each value perfectly to the denominator, 0 will change no values.
+
+METHOD::wrapTime
+applies a rhythmic pattern across the Bloom by wrapping a list of timeIntervals
+argument:: list
+a list of timeIntervals
+
+METHOD::wrapVel
+applies an accent pattern across the Bloom by wrapping a list of velocities
+argument:: list
+a list of velocities
+
+METHOD::wrapChan
+wrap a list across the midi channels
+
+code:: b.wrapChan([0,1,2]) // note 1 goes out channel 0, 2 out 1, etc.
+
+argument:: list
+a list of channels
+
+
+
+
+
+
+
+subsection::pitch operations
+
+METHOD::compass
+compress all pitches within a range
+
+METHOD::compress
+compress all pitches within an octave
+
+METHOD:: shear
+randomize octaves of pitches; lowest pitch is held; shape is maintained
+
+METHOD::meanInvert
+set inversion: inversion around mean.  Bloom is inverted as a whole, not each chord separately.
+
+METHOD::invert
+chord inversion: move lowest note to the top.  Bloom is inverted as a whole, not each chord separately.
+
+METHOD::transpose
+chromatic transposition
+argument:: semitones
+
+METHOD::dTranspose
+diatonic transposition, using the applied scale if a scale has been applied, or using the pitches present in the bloom as a scale if not.
+argument:: steps
+
+METHOD::resolve
+analyzes the notes for their intervals, chooses a few (percentToResolve) at random, and resolves them to consonant intervals.  As the resolutions of each interval produces new intervals with other pitches in the bloom, the results are unpredictable but produces a winding path toward harmonic simplification.
+
+TABLE::
+## interval || resolves to
+##M7 || M6
+##P4 || M3
+##TT	 || P5
+##m7	 || M6
+##M2 || m3
+##m2 || U
+##m6	 || P5
+::
+
+argument::percentToResolve
+
+METHOD::pivot
+a pivot is a two step pitch operation consisting of
+list::
+## chord inversion (lowest pitch moved to highest pitch)
+## transposition down so that the highest pitch of the new chord is the same as the highest pitch of the old chord
+::
+A pivot holds one note (top note) in place and shifts all others around it.  The interval vectors of the two chords are the same, so they have very similar qualities while in distant keys.  The aural effect is a pleasing paradox of similarity and difference.
+
+argument:: i
+pivot iterations.  There are as many unique iterations as there are pitches in the bloom.
+
+METHOD::pivotBass
+pivot around the bass
+argument:: i
+
+METHOD::pivotLoudest
+pivot around the loudest note
+argument:: i
+
+METHOD::negHarmony
+applies Ernst Levy’s notion of negative harmony (recently popularized by Jacob Collier) - a reflection across the midpoint between the root and fifth of a key.
+argument:: root
+pitch class as an integer
+
+METHOD::flatten
+choose notes from the scale and lowers them a semitone
+argument:: howManyToFlatten
+
+
+
+subsection::diatonicism
+
+METHOD::applyScale
+fits notes into a scale
+argument:: input
+can be a Bloom, a List or Array of semitones, a Scale, or will choose random scale if nil.
+argument:: root
+can be a pitch class 0-11 or a note name as a String
+
+METHOD::chooseScale
+searches Scale.directory for the scales that best contain the notes of the bloom.  If there are multiple scales that match it equally well, it chooses one at random.  The scale is applied to the Bloom and stored for diatonic transpositions.
+
+METHOD::slantScale
+searches Scale.directory for neighbor scales -- scales that contain the notes of the bloom nearly but not exactly.  Choose one at random and apply it to the bloom.
+
+METHOD::root
+sets the root of the scale and adjusts the notes to fit.
+argument:: root
+can be a pitch class 0-11 or a note name as a String
+code::
+b.applyScale(Scale.dorian);
+b.root(2); // D dorian
+b.root("F#"); // F# dorian.  Sharps and flats allowed.
+::
+
+METHOD::addSharp
+adds one sharp in the circle of 5ths (sets the root up a fifth)
+
+METHOD::addFlat
+adds one flat in the circle of 5ths (sets the root down a fifth)
+
+METHOD::scale
+return the current diatonic space.  If a scale has been applied, it will be that; if not, it will be a scale made up of the pitches present in the bloom.
+
+METHOD::simplifyScale
+removes one note from the scale and adjusts notes to fit
+
+
+
+subsection::chords
+
+METHOD:: chord
+group the whole bloom into a chord
+
+METHOD:: chords
+group notes into chords of a given size.  The timeIntervals of each note in a chord are summed, so the total duration doesn't change.  // !! would love this to take an array of chord sizes
+argument:: notesPerChord
+how many notes in each chord
+
+METHOD:: chordsShorten
+group notes into chords of a given size.  The timeIntervals of each note in a chord are not summed, so chords play in the initial, faster rhythm.
+argument:: notesPerChord
+how many notes in each chord
+
+METHOD:: chordsRand
+group notes into chords by probability.  The timeIntervals of each note in a chord are summed, so the total duration doesn't change.
+argument:: probability
+the chance that a note will begin a new chord.  Lower numbers produce larger chords, higher numbers smaller.
+
+METHOD:: chordsRandShorten
+group notes into chords by probability.  The timeIntervals of each note in a chord are not summed, so chords play in the initial rhythm.
+argument:: probability
+the chance that a note will begin a new chord.  Lower numbers produce larger chords, higher numbers smaller.
+
+METHOD:: chordsByInterval
+group notes into chords if they make a stack of a given interval.
+argument:: interval
+If no scale has been applied, code::interval:: is chromatic, otherwise it will be diatonic (a value of 3, for example, may return minor or major 3rds in a major scale).  Notes are sorted.
+
+METHOD:: harmonizeEfficiently
+adds a diatonic chord below each note of the bloom based on the applied scale.  Progression is optimized for efficient voice leading.  Diminished triads are discouraged !! not implemented yet.
+argument:: chordTones
+[1,3,5] will create triads, like the 1 3 and 5 of a chord.
+
+
+METHOD:: flattenChords
+undo chords, restore a sequence of single notes
+
+METHOD:: pivotChords
+pivot each chord around its soprano separately
+
+METHOD:: spaceChords
+attempt pianistic spacing of each chord separately
+
+METHOD:: efficientChordVoicings
+all chords will have notes rearranged by octave to move as efficiently as possible from one to the next.  Singleton notes are skipped.
+
+
+
+subsection::playing
+
+METHOD:: play
+play the Bloom with MIDI.  Specifying code::channels:: overrides the existing channel array code::b.chans::
+argument:: channels
+argument:: trace
+use code::true:: for debugging
+
+METHOD:: playWait
+play the Bloom and return a .wait of its duration.  Intended for use in Tasks.
+
+METHOD::quant
+the code::Quant:: value for .play and for any spawned code::.loop:: and code::.pulse:.
+
+METHOD::asPbind
+returns a Pbind of the Bloom with a full complement of Pdefns for intervention.  Each Pdefn is create with a unique name; check post window for yours.
+list::
+## by default
+
+TABLE::
+##Pdefn || what it does || default behavior
+##code::\i::  || "playhead": chooses which note to play next || Pseries(0,1,inf) - forward through code::notes:: (looping)
+##code::\dur:: || event dur || forward through timeIntervals (looping) * \durScale
+##code::\durScale:: || duration multiplier || 1
+##code::\vel:: || sets velocity || forward through velocities (looping)
+##code::\chan:: || sets midi output channel || forward through chans (looping)
+::
+::
+
+METHOD::asPdef
+returns a Pdef of the Pbind.  You must provide a name.
+argument::name
+
+METHOD::loop
+loop the bloom.  Returns a Pdef (see above).
+argument::name
+you must pass it a code::\Symbol:: to name it.
+
+METHOD::pulse
+loop the bloom at regular intervals, running code::action:: at each iteration.  Returns a BloomPulsar, whose rate is set with code::.rate:: for on-the-fly change.
+code::
+b.fixedDur_(4);
+
+~pulsar = b.seed.pulse(4, {b.negHarmony(11.rand).newShape.softer});
+~pulsar.rate_(6);
+~pulsar.stop;
+::
+
+argument::dur
+duration in beats
+argument::action
+action can be a code::Function:: or a code::Routine::
+code::
+
+(
+b.seed;
+z = b.pulse(4, Routine{
+	loop {
+		4.do{b.pivot.yield};
+		b.shift;
+	}
+});
+)
+z.stop;
+z = b.pulse(4, {b.shear});
+z.stop;
+
+::
+
+
+METHOD::setSustain
+sets the duration each note sustains.
+argument:: value
+
+METHOD::setLegato
+turns off sustain mode, note durations are determined by code::timeInterval * value::
+argument::value
+
+
+
+
+subsection:: recording and importing
+
+METHOD::record
+records MIDI input and saves it into the Bloom.  Recording begins with the first note played.  The metronome plays at code::TempoClock.default.tempo:: and must be terminated with code::.rstop::
+argument:: metronome
+if code::true::, it will use the \default synth, or you can specify your own synth
+
+METHOD::rstop
+stops recoring and saves the contents in the Bloom
+
+METHOD::fromMIDI
+takes a code::SimpleMIDIFile:: (extension in quart wslib) and imports a given track of MIDI into the Bloom.
+argument:simpleMIDIfile
+argument:whichTrack
+
+
+
+subsection:: fixed modes
+
+METHOD::fixedScale
+code::true:: or code::false::.  When code::true::, the applied code::Scale:: is enforced every time the bloom is played.
+code::
+b.fixedScale_(true);
+b.fixedScale = false;
+::
+
+METHOD::fixedDur
+Enforces a total duration for the bloom at the time of play.  Uses code::.trimToDur:: or code::.scaleToDur:: depending on code::fixedDurMode::.
+code::
+b.fixedDur_(4);
+z = b.pulse(4);
+b.newShape;
+b.mirror;
+b.fixedDurMode_(\trim);
+b.fixedDurMode_(\scale); // try each mode with the above transformations
+z.stop;
+::
+
+METHOD::fixedDurMode
+specify either code::\trim:: or code::\scale::
+
+METHOD::fixedGrid
+Enforces a rhythmic quantization for the blom at the time of play.  Pass it a single value or list of two values as you would code::.quantize::.
+
+
+
+
+subsection:: reporting and converting
+
+METHOD::report
+prints the note, velocity, timeInterval, and channel arrays of the bloom
+
+METHOD::rp
+prints the arrays in easy-to-copy form
+
+METHOD::asScale
+returns a Scale object containing the pitch classes of the current notes
+argument::notesPerOctave
+
+METHOD::asPChist
+returns a pitch-class histogram
+
+METHOD::asMIDIhist
+returns a histogram of all MIDI notes 0-127
+
+METHOD::duration
+total duration
+
+METHOD::dur
+total duration?
+
+METHOD::intervals
+returns the intervals -- ??
+
+
+METHOD::absTime
+returns an Array of the absolute time positions of each note
+
+METHOD::setRelTime
+convert a list of absolute time positions to relative timeIntervals
+argument::absTimes
+list of time points
+
+
+
