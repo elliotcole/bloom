@@ -53,6 +53,7 @@ Bloom.defaultHighestPossibleNote_(104);
 Bloom.defaultFixedGrid_(nil);
 Bloom.defaultFixedDurMode_(\scale);
 Bloom.defaultFixedDur_(nil);
+Bloom.defaultFixedScale_(nil);
 
 /*
 // pianoland
