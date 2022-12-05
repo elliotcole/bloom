@@ -1,8 +1,21 @@
 Bloom {
-	classvar <>midiOut, <>midiIn, <>clock, <>defaultQuant = 0, <>defaultChan = 0,
-	<>defaultLegato = 2, <>defaultSustain = 4, <>defaultTimeRangeLow = 0.1, <>defaultTimeRangeHi = 0.5,
-	<>defaultLowestPossibleNote = 20, <>defaultHighestPossibleNote = 100,
-	<>defaultLowestSeedNote=50, <>defaultHighestSeedNote=100;
+	classvar <>midiOut, <>midiIn, <>clock,
+	<>defaultQuant = 0,
+	<>defaultChan = 0,
+	<>defaultLegato = 2,
+	<>defaultSustain = 4,
+	<>defaultTimeRangeLow = 0.1,
+	<>defaultTimeRangeHi = 0.5,
+	<>defaultLowestPossibleNote = 20,
+	<>defaultHighestPossibleNote = 100,
+	<>defaultLowestSeedNote = 50,
+	<>defaultHighestSeedNote = 100,
+	<>maxChan = 0,
+	<>defaultFixedGrid = false,
+	<>defaultFixedScale = false,
+	<>defaultFixedDur = false,
+	<>defaultFixedDurMode = \trim;
+
 	var <>notes, <>velocities, <>timeIntervals, <>chans;
 	var <>lowestPossibleNote, <>highestPossibleNote;
 	var <>lowestSeedNote, <>highestSeedNote;
@@ -10,14 +23,16 @@ Bloom {
 	var <>legato, <>sustain;
 	var <>name;
 	var <>appliedScale, <>keyRoot = 0;
-	var <isRecording = false;
-	var <>fixedScale = false;
-	var <>fixedDur = nil, <>fixedDurMode = \trim;
-	var <>fixedGrid = nil;
-	var <>quant = 0;
+	var <isRecording;
+	var <>fixedScale;
+	var <>fixedDur;
+	var <>fixedDurMode;
+	var <>fixedGrid;
+	var <>quant;
 	var <quantFractions;
 	var <>logName = \blooms, <saved, <>stack;
 	var <>verbose = true;
+	var savedTimeIntervals; // could be replaced with push/pop
 	var nest;
 
 	*new {arg notes, vels, times, chans;
@@ -27,22 +42,22 @@ Bloom {
 
 
 	*midiInit{|out = nil, in = nil|
-		if (out.class != MIDIOut, {
+		if (out == nil, {
 			MIDIClient.init;
-			"must be MIDIOut; using default".postln;
+			"MIDI Out: using default".postln;
 			out = MIDIOut.newByName("IAC Driver", "Bus 1");
 		});
 
-		if (in.class != MIDIEndPoint , {
-			"must be MIDIEndPoint; using default".postln;
-			in = MIDIClient.sources[1];});
+		if (in == nil, {
+			"MIDI In: using default".postln;
+			in = MIDIClient.sources[0];});
 
 		midiOut = out;
 		midiIn = in.uid;
 	}
 
 	init {arg n, vel, times, chans;
-		if (n.class == Bloom, {this.copyFromBloom(n)},
+		if (n.class == Bloom, {this.import(n)},
 			{
 				n = n ? 60;
 				vel = vel ? 60;
@@ -60,8 +75,12 @@ Bloom {
 				highestPossibleNote = defaultHighestPossibleNote;
 				lowestSeedNote = defaultLowestSeedNote;
 				highestSeedNote = defaultHighestSeedNote;
+				fixedDur = defaultFixedDur;
+				fixedDurMode = defaultFixedDurMode;
+				fixedScale = defaultFixedScale;
+				fixedGrid = defaultFixedGrid;
 				stack = [];
-				if (midiOut == nil || midiIn == nil, {this.midiInit});
+				if (midiOut == nil || midiIn == nil, {Bloom.midiInit});
 			}
 		)
 	}
@@ -82,10 +101,14 @@ Bloom {
 		if (chans == nil, {chans = [defaultChan.asInteger]}, {chans = [defaultChan.asInteger].flatten})
 	}
 
-	copyFromBloom {arg bloom;
+	import {arg bloom;
 		bloom = bloom.deepCopy; // divorce from source
-		notes = bloom.notes; timeIntervals = bloom.timeIntervals; velocities = bloom.velocities; chans = bloom.chans;
-		lowestPossibleNote = bloom.lowestPossibleNote; highestPossibleNote = bloom.highestPossibleNote;
+		notes = bloom.notes;
+		timeIntervals = bloom.timeIntervals;
+		velocities = bloom.velocities;
+		chans = bloom.chans;
+		lowestPossibleNote = bloom.lowestPossibleNote;
+		highestPossibleNote = bloom.highestPossibleNote;
 		lowestSeedNote = bloom.lowestSeedNote; highestSeedNote = bloom.highestSeedNote;
 		timeRangeLow = bloom.timeRangeLow; timeRangeHi = bloom.timeRangeHi;
 		legato = bloom.legato; sustain = bloom.sustain;
@@ -108,6 +131,7 @@ Bloom {
 		notes = [];
 		velocities = [];
 		timeIntervals = [];
+		chans = [];
 	}
 
 	at {|index = 0|
@@ -126,7 +150,7 @@ Bloom {
 		notes = notes.flat.matchNesting(nest);
 		velocities = velocities.flat.matchNesting(nest);
 		chans = chans.flat.matchNesting(nest);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 	log {|index|
@@ -162,7 +186,8 @@ Bloom {
 		}, {
 			bloom = bloomLog.at(index);
 		});
-		this.init(bloom.notes, bloom.velocities, bloom.timeIntervals, bloom.chans);
+		"logged bloom %".format(index).postln;
+		this.import(bloom);
 	}
 
 	clearLog {
@@ -178,7 +203,7 @@ Bloom {
 			var restored, lastSave;
 			"restoring".postln;
 			lastSave = saved.deepCopy;
-			this.copyFromBloom(saved);
+			this.import(saved);
 			this.save;
 		},{
 			"no bloom saved".postln;
@@ -186,13 +211,13 @@ Bloom {
 	}
 
 	pop {
-		if(stack.notNil and: { stack.notEmpty }) { this.copyFromBloom(stack.pop) };
+		if(stack.notNil and: { stack.notEmpty }) { this.import(stack.pop) };
 	}
 
 	push { stack = stack.add(this.deepCopy) }
 
 	popAny {
-		if(stack.notNil and: { stack.notEmpty }) { this.copyFromBloom(stack.removeAt(stack.at((stack.size-1).rand)))};
+		if(stack.notNil and: { stack.notEmpty }) { this.import(stack.removeAt(stack.at((stack.size-1).rand)))};
 	}
 
 
@@ -201,7 +226,7 @@ Bloom {
 		numNotes = numNotes ? round(exprand(4, 10));
 		low = low ? lowestSeedNote; hi = hi ? highestSeedNote;
 		notes = dup({round(exprand(low,hi))}, numNotes);
-		velocities = dup({round(exprand(40,100))},numNotes).sort.reverse;
+		velocities = dup({round(exprand(30,110))},numNotes).sort.reverse;
 		timeIntervals = dup({exprand(timeRangeLow,timeRangeHi).round(0.01)}, numNotes) * clock.tempo;
 		chans = [0];
 		this.enforceRange;
@@ -224,7 +249,7 @@ Bloom {
 	}
 
 
-	shiftNotes { |probability = 0.3| /// to do: if there's a scale, adjust diatonically
+	mutateNotes { |probability = 0.3| /// to do: if there's a scale, adjust diatonically
 		var random;
 		this.saveNest;
 		notes = notes.flat;
@@ -247,7 +272,7 @@ Bloom {
 		this.enforceRange;
 	}
 
-	shiftNotesD { arg probability = 0.3;
+	mutateNotesD { arg probability = 0.3;
 		var random, currentScale, degrees, newDegrees;
 		this.saveNest;
 
@@ -270,32 +295,40 @@ Bloom {
 		this.enforceRange;
 	}
 
-	shiftShape {| spread = 0.4 |
-		var tempVel, tempTime;
-		tempVel = []; tempTime = [];
+	mutateVelocities {| maxChange = 30 |
+		var tempVel = [];
 
-		velocities.do({|vel, i|
-			tempVel = tempVel.add(max(25, vel + ((vel * spread).rand * ([1,-1,-1]).choose)));
-		});
-
-		timeIntervals.do({|t, i|
-			tempTime = tempTime.add(t + ((t * spread).rand * ([1,-1,1]).choose));
-		});
-
-		velocities = tempVel.round;
-		timeIntervals = tempTime;
-		this.enforceRange;
+		velocities = velocities.collect {|vel, i|
+			var change = (maxChange.rand * ([1,-1]).choose).round;
+			(change + vel).wrap(0,127);
+		};
 
 	}
 
-	shift {
-		this.shiftNotes;
-		this.shiftShape;
+	mutateTime {
+		var possibilities = [1/4, 1/2, 1, 1, 1, 1.5, 2];
+
+		if (0.5.coin, {timeIntervals = timeIntervals.scramble}, {
+			timeIntervals = timeIntervals.collect {| time |
+				var newTime = time * (possibilities.choose);
+				if (newTime > 0.05, {newTime}, {time});
+			};
+		})
 	}
 
-	shiftD {
-		this.shiftNotesD;
-		this.shiftShape;
+	mutateShape {| maxChange = 0.2 |
+		this.mutateTime;
+		this.mutateVelocities;
+	}
+
+	mutate {
+		this.mutateNotes;
+		this.mutateShape;
+	}
+
+	mutateD {
+		this.mutateNotesD;
+		this.mutateShape;
 	}
 
 	scramble {
@@ -317,7 +350,7 @@ Bloom {
 		notes = notes.perfectShuffle;
 		timeIntervals = timeIntervals.perfectShuffle;
 		velocities = velocities.perfectShuffle;
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 	deepShuffle {
@@ -334,8 +367,9 @@ Bloom {
 
 	remove { |index=0|
 		notes.removeAt(index);
-		timeIntervals.removeAt(index);
-		velocities.removeAt(index);
+		if(timeIntervals.at(index).isNil, {}, {timeIntervals.removeAt(index)});
+		if(velocities.at(index).isNil, {}, {velocities.removeAt(index)});
+		if(chans.at(index).isNil, {}, {chans.removeAt(index)});
 	}
 
 
@@ -347,11 +381,11 @@ Bloom {
 			timeIntervals = timeIntervals.add(timeIntervals[timeIntervals.size.rand]);
 		});
 
-		if (noteOrList.class == SimpleNumber,
+		if (noteOrList.isKindOf(SimpleNumber),
 			{
 				notes = notes.add(noteOrList); // add the input number and random attendants
-		velocities = velocities.add(velocities[velocities.size.rand]);  // use a vel and time from somewhere
-		timeIntervals = timeIntervals.add(timeIntervals[timeIntervals.size.rand]);
+				velocities = velocities.add(velocities.choose);  // use a vel and time from somewhere
+				timeIntervals = timeIntervals.add(timeIntervals.choose);
 			}
 		);
 
@@ -372,7 +406,7 @@ Bloom {
 			this.addOne
 		},
 		{
-			newNote = round(exprand(40,100));
+			newNote = round(exprand(lowestPossibleNote,highestPossibleNote));
 			newNote = newNote.nearestInScale(scale);
 			this.addOne(newNote);
 		})
@@ -382,21 +416,22 @@ Bloom {
 		this.remove(this.notes.size - 1);
 	}
 
-	curvesExtend{|newSize = 10|
+	drawCurves{|newSize = 10|
 		notes = notes.resamp1(newSize).round;
 		timeIntervals = timeIntervals.resamp1(newSize).round(0.001);
 		velocities = velocities.resamp1(newSize).round;
 		chans = chans.wrapExtend(newSize);
 	}
 
-	curvesD{|newSize = 10|
-		var scale = appliedScale;
+	drawCurvesD{|newSize = 10|
+		var scale;
+		scale = this.scale;
 		notes = notes.resamp1(newSize).round;
 		timeIntervals = timeIntervals.resamp1(newSize).round(0.001);
 		velocities = velocities.resamp1(newSize).round;
 		chans = chans.wrapExtend(newSize);
-		if (scale.isNil, {this.chooseScale});
-		this.applyScale(appliedScale, keyRoot);
+
+		this.applyScale(scale);
 	}
 
 	curvesDownward {
@@ -409,8 +444,8 @@ Bloom {
 		if (appliedScale.notNil, {scale = appliedScale}, {scale = this.asScale});
 		//scale.postln;
 		thickener.applyScale(scale);
-		this.wrapAll;
-		this.lace(thickener);
+		//this.wrapToNotes;
+		this.blend(thickener);
 		this.enforceRange;
 	}
 
@@ -419,8 +454,8 @@ Bloom {
 		var scale;
 		if (appliedScale.notNil, {scale = appliedScale}, {scale = this.asScale});
 		thickener.applyScale(scale);
-		this.wrapAll;
-		this.laceLengthen(thickener);
+		//this.wrapToNotes;
+		this.interlace(thickener);
 		this.enforceRange;
 	}
 
@@ -500,10 +535,33 @@ Bloom {
 	}
 
 	removeDoubles {
-		this.saveNest;
-		notes = notes.flat.removeDoubles;
-		this.restoreNest;
+		var numberOfItems, newNotes, doubles;
+		doubles = notes.indexOfDoubles;
+		doubles.do {|double|
+			var iToKeep = double[0], iToReject = double[1];
+			notes[iToReject] = nil;
+			timeIntervals[iToReject] = nil;
+			velocities[iToReject] = nil;
+			chans[iToReject] = nil;
+		};
+		notes = notes.reject{| item | item == nil};
+		timeIntervals = timeIntervals.reject{| item | item == nil};
+		velocities = velocities.reject{| item | item == nil};
+		chans = chans.reject{| item | item == nil};
 	}
+
+	/*
+	var doubles = this.indexOfDoubles;
+	var array = this.copy;
+	doubles.do {|set|
+	set.do {|indexOfDouble, i|
+	if (i>0, {
+	array[indexOfDouble] = nil;
+	})
+	}
+	};
+	^array.reject{|item| item.isNil}
+	*/
 
 	moveDoublesUpOctave {
 		this.saveNest;
@@ -512,32 +570,32 @@ Bloom {
 	}
 
 	trimTo {|length|
-		if (length == nil, {length = notes.size - ((notes.size / 2).rand)});
-		if (length < notes.size, {
-			(notes.size - length).do({
-				this.remove(this.notes.size - 1);
-			})
-		})
+		if (length == nil, {length = notes.size});
+		notes = notes.keep(length);
+		timeIntervals = timeIntervals.keep(length);
+		velocities = velocities.keep(length);
+		chans = chans.keep(length);
 	}
 
 	trimToDur {|dur = 4|
 		var total = 0, n = 0, excess;
-		if (dur <= timeIntervals.sum, {
-			while ({total < dur}, {
-				total = timeIntervals.at(n) + total;
-				n = n + 1;
+		if (dur.isNil, {}, {
+			if (dur <= timeIntervals.sum, {
+				while ({total < dur}, {
+					total = timeIntervals.at(n) + total;
+					n = n + 1;
+				});
+				timeIntervals = timeIntervals.keep(n);
+				excess = timeIntervals.sum - dur;
+				timeIntervals[n-1] = timeIntervals[n-1] - excess;
+				notes = notes.keep(timeIntervals.size);
+				velocities = velocities.keep(timeIntervals.size);
+				chans = chans.keep(timeIntervals.size);
+			}, { // if target dur is greater than current dur, simply extend last note
+				var excess = dur - timeIntervals.sum;
+				timeIntervals[timeIntervals.size-1] = timeIntervals[timeIntervals.size-1] + excess;
 			});
-			timeIntervals = timeIntervals.keep(n);
-			excess = timeIntervals.sum - dur;
-			timeIntervals[n-1] = timeIntervals[n-1] - excess;
-			notes = notes.keep(timeIntervals.size);
-			velocities = velocities.keep(timeIntervals.size);
-			chans = chans.keep(timeIntervals.size);
-		}, { // if target dur is greater than current dur, simply extend last note
-			var excess = dur - timeIntervals.sum;
-			timeIntervals[timeIntervals.size-1] = timeIntervals[timeIntervals.size-1] + excess;
-		});
-
+		})
 	}
 
 	scaleToDur{|dur = 4|
@@ -566,7 +624,9 @@ Bloom {
 		timeIntervals = timeIntervals.rotate(n);
 	}
 
-
+	rotateChans {|n = 1|
+		chans = chans.rotate(n);
+	}
 
 
 	// SHAPING
@@ -577,11 +637,13 @@ Bloom {
 	// shaping
 
 	slower {|multiplier=1.2|
-		notes.do({|note, count|	 timeIntervals[count] = (timeIntervals[count]*multiplier).round(0.01)});
+		timeIntervals.do({|note, count|
+			timeIntervals[count] = (timeIntervals[count]*multiplier).round(0.01)}
+		);
 	}
 
 	faster {|multiplier=1.2|
-		notes.do({|note, count| timeIntervals[count] = (timeIntervals[count]*(multiplier.reciprocal)).round(0.01)});
+		timeIntervals.do({|note, count| timeIntervals[count] = (timeIntervals[count]*(multiplier.reciprocal)).round(0.01)});
 	}
 
 	louder {|multiplier=1.2|
@@ -638,10 +700,13 @@ Bloom {
 		velocities = velocities.sort;
 	}
 
+	// CHANNELS
 
-
-
-
+	addChan {chans = chans.add((maxChan + 1).rand);}
+	dropChan {if (chans.size > 1, {chans = chans.drop(-1)});}
+	randChans {chans = chans.collect{(maxChan+1).rand};}
+	sortChans {chans = chans.sort;}
+	cycleChans {chans = chans.collect{|chan| (chan+1).wrap(0, maxChan)};}
 
 
 	// FISSION
@@ -672,7 +737,7 @@ Bloom {
 		var newBloom = Bloom.new.empty, ret;
 		var newN = [], newV = [], newT = [], newC = [];
 
-		this.wrapAll; // make all lists the same length
+		this.wrapToNotes; // make all lists the same length
 
 		if (splitAt == nil, {splitAt = notes.size.rand});
 		newN = notes.clumps([splitAt, notes.size - splitAt]);
@@ -710,8 +775,16 @@ Bloom {
 		^newBloom;
 	}
 
+	fromListOfBlooms {|list|
+		list = list.select{|item| item.isKindOf(Bloom)};
+		notes = []; timeIntervals = []; velocities = []; chans = [];
+		notes = list.collect{|bloom| bloom.notes}.flat;
+		timeIntervals = list.collect{|bloom| bloom.timeIntervals}.flat;
+		velocities = list.collect{|bloom| bloom.velocities}.flat;
+		chans = list.collect{|bloom| bloom.chans}.flat;
+	}
 
-	lace { |bloom|  // doesn't quite do timeIntervals correctly -- last time is empty (till the wrap)
+	blend { |bloom|  // doesn't quite do timeIntervals correctly -- last time is empty (till the wrap)
 		var newTime;
 		newTime = [];
 		if ((bloom.class == Bloom), {
@@ -724,9 +797,6 @@ Bloom {
 
 			timeIntervals.pairsDo({|orig, new|
 
-				if (new > orig, {new = new - orig; "%>%".format(new, orig)});
-				if (new == orig, {new = orig * 0.3}); // what?
-
 				newTime = newTime.add(orig - new);
 				newTime = newTime.add(new);
 
@@ -736,11 +806,11 @@ Bloom {
 
 			timeIntervals = newTime.abs;
 
-			this.wrapAll;
-		}, {"can only lace a bloom with a bloom".postln});
+			this.wrapToNotes;
+		}, {"can only blend a bloom with a bloom".postln});
 	}
 
-	laceLengthen { |bloom|
+	interlace { |bloom|
 
 		if ((bloom.class == Bloom), {
 
@@ -784,6 +854,7 @@ Bloom {
 		notes = notes.stutter(repetitions);
 		velocities = velocities.stutter(repetitions);
 		timeIntervals = timeIntervals.stutter(repetitions);
+		chans = chans.stutter(repetitions);
 	}
 
 	sputter {arg probability = 0.3;
@@ -804,22 +875,32 @@ Bloom {
 		notes = newNotes; timeIntervals = newTimes; velocities = newVels; chans = newChans;
 	}
 
-	sputterAll {|probability = 0.25|
+	spray {|probability = 0.25|
 		notes = notes.sputter(probability);
 		velocities = velocities.sputter(probability);
 		timeIntervals = timeIntervals.sputter(probability);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
-	ratchet {|repetitions = 2, index|
+	ratchet {|repetitions, index|
 		var ratchetedEvent;
-		index = index ? notes.size.rand;
-		ratchetedEvent = [notes[index], velocities[index], timeIntervals[index]];
+		index = index ? timeIntervals.indexOf(timeIntervals.sort.reverse.keep(1).choose);
+		// split one of the two greatest durations // not quite working right
+		repetitions = repetitions ? ([2,3].choose);
+		ratchetedEvent = [
+			notes.wrapAt(index), velocities.wrapAt(index),
+			timeIntervals.wrapAt(index), chans.wrapAt(index)];
 		this.remove(index);
+		"removing item %".format(index).postln;
+		this.report;
 		repetitions.do({
-			notes = notes.insert(index,ratchetedEvent[0]);
-			velocities = velocities.insert(index,ratchetedEvent[1]);
-			timeIntervals = timeIntervals.insert(index,ratchetedEvent[2] / repetitions);
+			if (ratchetedEvent[2] > 0, {
+				notes = notes.insert(index,ratchetedEvent[0]);
+				velocities = velocities.insert(index,ratchetedEvent[1]);
+				timeIntervals = timeIntervals.insert(index,ratchetedEvent[2] / repetitions);
+				chans = chans.insert(index,ratchetedEvent[3]);
+				"inserting % in space %".format(ratchetedEvent, index).postln;
+			})
 		});
 	}
 
@@ -831,13 +912,13 @@ Bloom {
 	}
 
 
-	pyramid{|patternType = 1|
+	pyramid {|patternType = 1|
 		notes = notes.pyramid(patternType);
 		timeIntervals = timeIntervals.pyramid(patternType);
 		velocities = velocities.pyramid(patternType);
 	}
 
-	slide{|windowLength = 3|
+	slide {|windowLength = 3|
 		if (notes.size < windowLength, {notes.wrapExtend(windowLength)});
 		if (timeIntervals.size < windowLength, {timeIntervals.wrapExtend(notes.size)});
 		if (velocities.size < windowLength, {velocities.wrapExtend(notes.size)});
@@ -846,16 +927,18 @@ Bloom {
 		velocities = velocities.slide(windowLength);
 	}
 
-
+	braid {|windowLength = 3|
+		this.slide(windowLength);
+	}
 
 	quantize {|grid = 4, strength = 1| // grid can be a list
-		// write one that makes two blooms - one for each denominator.  pull out the polyrhythm.  and scale up!  4 is not quarter note, its uarter beat
+		// write one that makes two blooms - one for each denominator.  pull out the polyrhythm.  and scale up!  4 is not quarter note, its quarter beat
 		var temp, temp2, diff, newabs, length, targetlength;
 		var margin;
 		var grid1, grid2, q1, q2;
 		grid1 = List.new; grid2 = List.new;
 		if (grid.isArray, {q1 = grid[0]; q2 = grid[1]});
-		if (grid.isInteger, {q1 = grid; q2 = grid});
+		if (grid.isNumber, {q1 = grid; q2 = grid});
 
 		margin = q1.max(q2);
 
@@ -913,7 +996,11 @@ Bloom {
 		chans = notes.collect{|x, i| list.wrapAt(i)}
 	}
 
-
+	applyShape{|bloom|
+		timeIntervals = bloom.timeIntervals;
+		velocities = bloom.velocities;
+		chans = bloom.chans;
+	}
 
 
 
@@ -930,15 +1017,30 @@ Bloom {
 	// PITCH
 
 
-
 	compass {| lo = 60, hi = 90 |
+		this.saveNest;
+		if (hi-lo < 12, {hi = lo+12});
+
+		notes = notes.flat;
 		notes = notes.collect {|note|
-			var newNote = note;
-			if (note < lo, {newNote = note.justAbove(lo)});
-			if (note > hi, {newNote - note.justBelow(hi)});
-			newNote;
-		}
+			case {note < lo}
+			{
+				var newNote;
+				newNote = note.justAbove(lo);
+				//"note % less than % becomes %".format(note, lo, note.justAbove(lo)).postln;
+			}
+			{note > hi}
+			{
+				var newNote;
+				newNote = note.justBelow(hi);
+				//"note % more than % becomes %".format(note, hi, note.justBelow(hi)).postln;
+			}
+			{note >= lo && note <= hi} {note};
+		};
+		this.restoreNest;
 	}
+
+
 
 	compress {
 		var lowestNote;
@@ -955,28 +1057,25 @@ Bloom {
 	}
 
 	shear {		// randomizes octave of all notes except lowest.  lowest stays lowest
-		var change, lowestIndex, newNote;
+		var change, lowestIndex, lowestNote, newNote;
 		this.saveNest;
 
 		notes = notes.flat;
 		lowestIndex = notes.minIndex;
+		lowestNote = notes[lowestIndex];
 
 		(notes.size - 1).do({ arg iter;			// subtract 1 so iter = list index
 
 			if ((iter != lowestIndex), {	// don't change lowest note
-				change = rrand(-2,2)*12;		// two octaves up or down
+				change = rrand(-2,2)*12;		// one octaves up or down
 				newNote = notes[iter]+change;
-
-				while ( {(newNote <= notes[lowestIndex]) || (newNote >= highestPossibleNote)} , { // so no note goes below the lowest note or above rangeHi
-					change = rrand(-2,2)*12;		// three octaves up or down
-					newNote = notes[iter]+change;
-				}
-				);
+				while ({newNote < lowestNote}, {newNote = newNote + 12});
 				notes[iter] = newNote;
 			},
-			{}	// if it IS the lowest note, do nothing
-			)
+			{})	// if it IS the lowest note, do nothing
 		});
+
+		this.compass(lowestPossibleNote, highestPossibleNote);
 
 		this.restoreNest;
 	}
@@ -988,6 +1087,7 @@ Bloom {
 		notes = notes.flat.invertMean;
 		appliedScale = nil;
 		this.restoreNest;
+		appliedScale = this.asScale;
 	}
 
 	invert { |n = 1|
@@ -1000,6 +1100,7 @@ Bloom {
 	transpose { |semitones = 0|
 		notes = notes + semitones;
 		//if (appliedScale.notNil, {appliedScale = appliedScale.transpose(semitones)});
+		this.appliedScale = nil;
 		this.enforceRange;
 	}
 
@@ -1076,7 +1177,7 @@ Bloom {
 		notes = newBloom.notes;
 		this.enforceRange;
 		this.restoreNest;
-
+		appliedScale = this.asScale;
 	}
 
 	pivotBass {|i=1|
@@ -1092,6 +1193,7 @@ Bloom {
 		notes = newBloom.notes;
 		this.enforceRange;
 		this.restoreNest;
+		appliedScale = this.asScale;
 	}
 
 	pivotLoudest {|i=1|
@@ -1107,11 +1209,13 @@ Bloom {
 		notes = newBloom.notes;
 		this.enforceRange;
 		this.restoreNest;
+		appliedScale = this.asScale;
 	}
 
 	negHarmony {|root|
 		if (root.isNil, {root = keyRoot});
 		notes = notes.negHarmony(root);
+		appliedScale = this.asScale;
 	}
 
 	flatten {|howManyToFlatten = 1|
@@ -1146,7 +1250,9 @@ Bloom {
 		rootZeroDegrees = ((newScale.degrees - keyRoot) % 12).sort; // with prior keyRoot
 		if (root.isNil, {}, {keyRoot = root});
 		if (verbose,
-			{"applying scale % [%] with root: %".format(rootZeroDegrees.spell, newScale.name, keyRoot).postln}
+			{
+				//"applying scale % [%] with root: %".format(rootZeroDegrees.spell, newScale.name, keyRoot).postln
+			}
 		);
 		rootShiftedDegrees = ((rootZeroDegrees + keyRoot) % 12).sort;
 		appliedScale = Scale.new(rootShiftedDegrees, newScale.pitchesPerOctave, newScale.tuning, newScale.name);
@@ -1169,7 +1275,6 @@ Bloom {
 		newScale = slantScales.choose;
 		this.applyScale(newScale);
 		newScale.name.postln;
-		//^newScale;
 	}
 
 	root {|root|
@@ -1192,7 +1297,7 @@ Bloom {
 		if (appliedScale == nil, {^this.asScale}, {^appliedScale});
 	}
 
-	simplifyScale {
+	reduceScale {
 		var newScale, newName;
 		newScale = this.asScale.degrees;
 		newScale.removeAt(newScale.size.rand);
@@ -1205,7 +1310,17 @@ Bloom {
 
 
 	// CHORDS
+
+	saveTimeIntervals {
+		savedTimeIntervals = timeIntervals;
+	}
+
+	restoreTimeIntervals {
+		if (savedTimeIntervals.isNil, {}, {timeIntervals = savedTimeIntervals})
+	}
+
 	chord {
+		this.saveTimeIntervals;
 		notes = [notes];
 		timeIntervals = timeIntervals.matchNesting(notes);
 		timeIntervals = timeIntervals.collect {|item|
@@ -1215,6 +1330,7 @@ Bloom {
 	}
 
 	chords {|notesPerChord=3|
+		this.saveTimeIntervals;
 		this.flattenChords;
 		notes = notes.clump(notesPerChord).flatBelow(1);
 		timeIntervals = timeIntervals.matchNesting(notes);
@@ -1222,18 +1338,20 @@ Bloom {
 			if (item.class == Array, {item.sum}, {item})
 		};
 		velocities = velocities.matchNesting(notes);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 
 	chordsShorten {|notesPerChord=3|
+		this.saveTimeIntervals;
 		this.flattenChords;
 		notes = notes.clump(notesPerChord).flatBelow(1);
 		velocities = velocities.matchNesting(notes);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 	chordsRand {|probability=0.3333|
+		this.saveTimeIntervals;
 		this.flattenChords;
 		notes = notes.curdle(probability).flatBelow(1);
 		timeIntervals = timeIntervals.matchNesting(notes);
@@ -1241,10 +1359,11 @@ Bloom {
 			if (item.class == Array, {item.sum}, {item})
 		};
 		velocities = velocities.copyRange(0, notes.size);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 	chordsRandShorten {|probability=0.3333|
+		this.saveTimeIntervals;
 		this.flattenChords;
 		notes = notes.curdle(probability).flatBelow(1);
 		timeIntervals = timeIntervals.matchNesting(notes);
@@ -1252,7 +1371,7 @@ Bloom {
 			if (item.class == Array, {item.sum}, {item})
 		};
 		velocities = velocities.copyRange(0, notes.size);
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
 
@@ -1261,6 +1380,7 @@ Bloom {
 		// works except repeated applications makes the list longer somehow
 		var chords = [], scaleSize;
 		var savedPCorder = this.notes.extractPCOrder;
+		this.saveTimeIntervals;
 		if (appliedScale.notNil, {
 			notes = notes.keyToDegree(appliedScale);
 			interval = interval - 1; //a diatonic third is actually +2 steps
@@ -1301,22 +1421,30 @@ Bloom {
 		if (appliedScale.notNil, {notes = notes.degreeToKey(appliedScale)});
 		//notes.restorePCOrder(savedPCorder);
 		this.restoreNest;
-		this.wrapAll;
+		this.wrapToNotes;
 	}
 
-	harmonize {|chordTones|
+	harmonize {|chordTones, probability=1|
 		var harmonies;
 		this.flattenChords;
 		chordTones = chordTones ? [1,3,5];
 		harmonies = notes.collect {|note| note.harmonies(this.scale, chordTones, this.root)
-			.reject {|chord| chord.sort.differentiate.drop(1).sum == (chord.size-1 * 3)  // reject diminished triads
-				.choose // pick any
-		}};
+			.reject {|chord| chord.sort.differentiate.drop(1).sum == (chord.size-1 * 3)
+				// reject diminished triads ^ ?
+
+			}.choose // pick any
+		};
 
 		notes = notes.collect {|note, i|
-			[note] ++ harmonies[i]
+			if (probability.coin, {
+				harmonies[i]
+			}, {
+				note
+			})
 		}
 	}
+
+
 
 	harmonizeEfficiently {|chordTones|
 		var harmonies;
@@ -1330,11 +1458,11 @@ Bloom {
 
 
 	flattenChords {
-		var totalDur = this.dur;
 		notes = notes.flat;
 		velocities = velocities.flat;
-		this.wrapTime(totalDur / this.notes.size);
-		this.wrapAll;
+		chans = chans.flat;
+		this.restoreTimeIntervals;
+		this.wrapToNotes;
 	}
 
 	extractChords {
@@ -1448,21 +1576,22 @@ Bloom {
 		if (name == nil, {name = 1000.rand.asSymbol});
 		if (channel == nil, {channel = defaultChan});
 
-		"Pbind name %.  Created Pdefns / %_dur / %_vel / %_durScale / %_chan / %_i".format(name,name,name,name,name,name,name).postln;
+		//"Pbind name %.  Created Pdefns: %_bloom / %_dur / %_vel / %_durScale / %_chan / %_i".format(
+		//name, name, name, name, name, name, name, name).postln;
 
 		pbind = Pbind(
 			\type, \midi,
-			\bloom, Pfunc{this},
+			\bloom, Pdefn((name++"_bloom").asSymbol, Pfunc{this}),
 			\midiout, midiOut,
 			\i, Pdefn((name++"_i").asSymbol, Pseries(0,1)), // which note to play
 			\midinote, Pdefn((name++"_midinote").asSymbol,
-				Pfunc({|ev| ev.bloom.notes.wrapAt(ev.i)}),
+				Pfunc({|ev| ev.bloom.notes.wrapAt(ev.i)}), Prout
 			),
 			\durScale, Pdefn((name++"_durScale").asSymbol, 1),
 			\dur, Pdefn((name++"_dur").asSymbol, p {loop {[timeIntervals].flat.do{|time| (time.yield)}}}) * Pkey(\durScale);,
 			\amp, Pdefn((name++"_vel").asSymbol, p { loop {[velocities].flat.do{|amp| amp.linlin(0,127,0,1.0).yield}}}),
 			\legato, Pfunc{this.legato},
-			\chan, Pdefn((name++"_chan").asSymbol, Pseq(chans,inf)),
+			\chan, Pdefn((name++"_chan").asSymbol, p { loop {[chans].flat.do{|chan| chan.yield}}}),
 		);
 
 		if (sustain.notNil, {pbind = Pbindf(pbind, \sustain, sustain)});
@@ -1515,16 +1644,17 @@ Bloom {
 
 			last = thisThread.seconds;
 
-			~xresponder = NoteOnResponder( { |src, chan, num, vel|
+			MIDIdef.noteOn(\bloomListener, { |vel, num, chan, src|
 				now = thisThread.seconds;
 				notes = notes.add(num);
 				velocities = velocities.add(vel);
+				chans = chans.add(chan);
 				timeIntervals = timeIntervals.add(
 					max((now - last), 0.005).postln;
 				);
 				last = now;
 				this.report;
-			}, midiIn)
+			},srcID: midiIn.uid)
 		}).play;
 	}
 
@@ -1538,8 +1668,8 @@ Bloom {
 		});
 		this.report;
 		"recording stopped".postln;
-		~xresponder.remove;
-		if (~metronome.class == Task, {~metronome.stop})
+		MIDIdef(\bloomListener).free;
+		if (~metronome.isKindOf(Task), {~metronome.stop})
 	}
 
 	fromMIDI {|simpleMIDIFile, whichTrack=0|
@@ -1569,9 +1699,9 @@ Bloom {
 
 	trans {
 		[
-			{this.shiftNotesD; "shiftD".postln},
+			{this.mutateNotesD; "shiftD".postln},
 			{this.newShape},
-			{this.shiftShape},
+			{this.mutateShape},
 			{this.scramble},
 			{this.deepScramble},
 			{this.shear},
@@ -1589,7 +1719,7 @@ Bloom {
 			{this.chords},
 			{this.chordsShorten},
 			{this.sputter},
-			{this.sputterAll},
+			{this.spray},
 			{this.mirror},
 			{this.pyramid},
 			{this.slide},
@@ -1615,7 +1745,7 @@ Bloom {
 			{this.applyScale},
 			{this.chooseScale},
 			{this.slantScale},
-			{this.simplifyScale},
+			{this.reduceScale},
 			{this.invertMean},
 			{this.invert},
 			{this.transpose(2)},
@@ -1705,6 +1835,7 @@ Bloom {
 		this.reportNotes(lengths);
 		this.reportVelocities(lengths);
 		this.reportTimes(lengths);
+		this.reportChans(lengths);
 		this.reportQ(lengths);
 		this.reportScale(lengths);
 		this.reportName(lengths);
@@ -1811,26 +1942,36 @@ Bloom {
 
 
 
-
 	// PRIVATE METHODS
 
+	// these resolutions aren't right - think again
+
 	resolveFixedDur {
-		if (fixedDurMode == \scale and: {fixedDur.isNumber}, {this.scaleToDur(fixedDur)});
-		if (fixedDurMode == \trim and: {fixedDur.isNumber}, {this.trimToDur(fixedDur)});
+		if (fixedDur.isKindOf(Number), {
+			if (fixedDurMode == \scale, {this.scaleToDur(fixedDur)});
+			if (fixedDurMode == \trim, {this.trimToDur(fixedDur)});
+		})
 	}
 
 	resolveFixedScale {
-		if (fixedScale, {this.applyScale(this.scale)});
+		if (fixedScale.isKindOf(Scale), {this.applyScale(fixedScale)});
 	}
 
 	resolveFixedGrid {
-		if (fixedGrid.notNil, {this.quantize(fixedGrid)});
+		if (fixedGrid.isKindOf(Collection) or: fixedGrid.isKindOf(Number),
+			{this.quantize(fixedGrid)});
 	}
 
 	resolveFixed {
 		case
-		{fixedDurMode == \trim} {this.resolveFixedGrid; this.resolveFixedDur}
-		{fixedDurMode == \scale} {this.resolveFixedDur; this.resolveFixedGrid; this.trimToDur(fixedDur)};
+		{fixedDurMode == \trim} {
+			this.resolveFixedGrid;
+			this.resolveFixedDur}
+		{fixedDurMode == \scale} {
+			this.resolveFixedDur;
+			this.resolveFixedGrid;
+			this.trimToDur(fixedDur)};
+
 		this.resolveFixedScale;
 	}
 
@@ -1929,11 +2070,20 @@ Bloom {
 	}
 
 
-	wrapAll { // makes all parameters the same length
-		timeIntervals = notes.collect {|note, i| timeIntervals.wrapAt(i)};
+	wrapToNotes { // makes all parameters the same length as notes
 		velocities = notes.collect {|note, i| velocities.wrapAt(i)};
 		timeIntervals = notes.collect {|note, i| timeIntervals.wrapAt(i)};
 		chans = notes.collect {|note, i| chans.wrapAt(i)};
+	}
+
+
+	wrapToLongest {
+		var longest = [notes.size, timeIntervals.size, velocities.size, chans.size].maxItem;
+		"longest %".format(longest).postln;
+		notes = longest.collect {|i| notes.wrapAt(i)};
+		velocities = longest.collect {|i| velocities.wrapAt(i)};
+		timeIntervals = longest.collect {|i| timeIntervals.wrapAt(i)};
+		chans = longest.collect {|i| chans.wrapAt(i)};
 	}
 
 	checkQ {
@@ -1968,19 +2118,22 @@ Bloom {
 }
 
 BloomPulsar {
-	var <>task, <>rate = 8, routine;
+	var <>task, <>rate = 8, <>pulsingBloom, <>routine;
 
 	*new {|bloom, rate, clock, quant, action|
 		^super.new.init(bloom, rate, clock, quant, action)
 	}
 
-	init {|bloom, rate, clock, quant, action|
+	init {|bloom, startingRate, clock, quant, action|
 		if (action.class == Routine, {routine = action});
+		pulsingBloom = bloom;
+		rate = startingRate;
 		task = Task.new({
 			loop {
 				if (action.class == Function, {action.value});
 				if (action.class == Routine, {routine.next});
-				bloom.play;
+				//"playing %".format(pulsingBloom).postln;
+				pulsingBloom.play;
 				rate.wait;
 			}
 		}, clock).play(quant: quant)
@@ -1989,11 +2142,13 @@ BloomPulsar {
 	start {task.start}
 
 	stop {task.stop}
+
+	isPlaying {^task.isPlaying}
 }
 
 
 Pedal {
-	var chan = 0, midiOut;
+	var chan = 0, midiOut, <state;
 
 	*new {|chan, midiOut|
 		^super.new.init(chan, midiOut);
@@ -2001,14 +2156,17 @@ Pedal {
 
 	init {|ch, out|
 		chan = ch; midiOut = out;
+		state = false;
 	}
 
 	down {
 		midiOut.control(chan, 64, 127);
+		state = true;
 	}
 
 	up {
 		midiOut.control(chan, 64, 0);
+		state = false
 	}
 }
 
@@ -2311,13 +2469,12 @@ Chord[slot] : Array {
 	}
 
 	indexOfDoubles {
-		var histo = this.histo(128,0,127);
-		var doubles;
-		doubles = histo.collect {|item, i|
-			if (item>1,
-				{this.indicesOfEqual(i)}
-			)
-		}.reject{|x| x.isNil};
+		var doubles = [];
+		var i = 0;
+		this.doAdjacentPairs{|a, b|
+			if (a==b, {doubles = doubles.add([i, i+1])});
+			i = i+1
+		};
 		^doubles;
 	}
 
@@ -2529,6 +2686,12 @@ Chord[slot] : Array {
 	}
 
 	harmonies {|scale, chordTones, root|
+		/*
+		the receiver is a scale degree
+		chordTones are also scale degrees, written like we say them: one, three, five
+		all inversions of all diatonic chords are returned
+		NOTE that this then returns CHROMATIC scale note numbers
+		*/
 		var options;
 		chordTones = chordTones ? [1,3,5];
 		scale = scale ? Scale.ionian;
