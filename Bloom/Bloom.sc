@@ -1363,14 +1363,8 @@ Bloom {
 	}
 
 	chordsRandShorten {|probability=0.3333|
-		this.saveTimeIntervals;
 		this.flattenChords;
 		notes = notes.curdle(probability).flatBelow(1);
-		timeIntervals = timeIntervals.matchNesting(notes);
-		timeIntervals = timeIntervals.collect {|item|
-			if (item.class == Array, {item.sum}, {item})
-		};
-		velocities = velocities.copyRange(0, notes.size);
 		this.wrapToNotes;
 	}
 
