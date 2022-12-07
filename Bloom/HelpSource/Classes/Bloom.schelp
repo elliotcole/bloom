@@ -80,7 +80,7 @@ by default code::TempoClock.default::, this can be set to another clock or to a 
 note:: Command-period will kill your LinkClock's connection to Ableton.  Rerun the following line to re-establish.  Including it and your MIDI initialization in code::startup.scd:: may be useful.::
 
 code::
-l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).quant_([4,0,0]);
+l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).defaultQuant_([4,0,0]);
 ::
 
 
@@ -99,8 +99,8 @@ list of timeIntervals
 argument::chans
 list of channels
 
-METHOD::copyFromBloom
-copies all data from a bloom
+METHOD::import
+copies all data and settings from a bloom (push/pop stack excluded).
 argument::bloom
 
 subsection::selection
@@ -199,25 +199,32 @@ new random notes (timeIntervals and velocities stay the same)
 METHOD:: newShape
 new random timeIntervals and velocities (notes stay the same)
 
-METHOD:: shiftNotes
+METHOD:: mutateNotes
 adjust some notes upward or downward one semitone
 argument:: probability
 percentage of notes that get altered
 
-METHOD:: shiftNotesD
+METHOD:: mutateNotesD
 adjust some notes upward or downward one diatonic step, using the current scale
 argument:: probability
 percentage of notes that get altered
 
-METHOD:: shiftShape
-adjust timeIntervals and velocities by random percentages within spread
-argument:: spread
-max percentage of any adjustment
+METHOD:: mutateShape
+mutate velocities and timeIntervals
 
-METHOD:: shift
+METHOD:: mutateTime
+vary the timeIntervals by either:
+scrambling list order, or
+scaling times by 1/2, 1, 1.5 or 2 at random, weighted toward no change
+
+METHOD:: mutateVelocities
+increase or decrease each velocity by a random amount less than maxChange. Out of bounds (0-127) values will wrap.
+argument:: maxChange
+
+METHOD:: mutate
 convenience method: shifts notes and shape the default amount.
 
-METHOD:: shiftD
+METHOD:: mutateD
 convenience method: shifts notes diatonically and shape the default amount.
 
 METHOD:: compass
@@ -253,11 +260,11 @@ appends one new note with the bloom's scale
 METHOD:: dropLast
 drop the last note of the bloom
 
-METHOD:: curvesExtend
-"connects the dots" of the bloom (notes, timeIntervals and velocities) with a chromatic line of the desired length.  Channel array is wrapped.  Result is longer than
+METHOD:: drawCurves
+"connects the dots" of the bloom (notes, timeIntervals and velocities) with a chromatic line of the desired length.  Channel array is wrapped.
 argument:: newSize
 
-METHOD:: curvesD
+METHOD:: drawCurvesD
 "connects the dots" of the bloom (notes, timeIntervals and velocities) with a diatonic line of the desired length.  Uses the existing diatonic space or uses code::.chooseScale:: to establish one.  Channel array is wrapped.
 argument:: newSize
 
@@ -360,6 +367,22 @@ sorts velocities in ascending order
 
 
 
+subsection::channels
+The channel list is used for dividing a bloom across multiple instruments in MIDI playback.
+
+METHOD::addChan
+adds one random channel, constrained by class variable maxChan
+
+METHOD::randChans
+replaces each item of chans with a random value, constrained by maxChan
+
+METHOD::sortChans
+sorts chans
+
+METHOD::cycleChans
+adds 1 to every channel, wrapping to chan 0 when maxChan is reached
+
+
 
 subsection::fission
 
@@ -400,13 +423,15 @@ b.play; // unchanged
 c.play; // unchanged
 ::
 
-METHOD::lace
-interlace the notes of one bloom into the shape of another.  Total duration doesn't change; each new note is slotted between the originals
+METHOD::interlace
+interlace the notes/velocities/timeIntervals of one bloom into another.
 argument::bloom
 
-METHOD::laceLengthen
-interlace the notes of one bloom into the shape of another.  Total duration does change
+
+METHOD::blend
+interlace the notes of one bloom into the notes of another.  Adjust durations such that the total duration doesn't change.
 argument::bloom
+
 
 METHOD::cast
 apply the shape (timing, velocities and registral contour) of another bloom to this one.  The sequence of pitch classes is preserved; each note is moved to the octave nearest the applied note.  Blooms of different lengths will wrap.
@@ -426,7 +451,7 @@ repeat some notes of a bloom, determined by chance.  notes, timeIntervals and ve
 argument:: probability
 the chance a note will be repeated
 
-METHOD::sputterAll
+METHOD::spray
 sputter notes, timeIntervals and velocities separately.
 argument:: probability
 the chance an element will be repeated
@@ -500,7 +525,7 @@ compress all pitches within an octave
 METHOD:: shear
 randomize octaves of pitches; lowest pitch is held; shape is maintained
 
-METHOD::meanInvert
+METHOD::invertMean
 set inversion: inversion around mean.  Bloom is inverted as a whole, not each chord separately.
 
 METHOD::invert
@@ -550,7 +575,7 @@ pivot around the loudest note
 argument:: i
 
 METHOD::negHarmony
-applies Ernst Levy’s notion of negative harmony (recently popularized by Jacob Collier) - a reflection across the midpoint between the root and fifth of a key.
+applies Ernst Levy’s notion of negative harmony - a reflection across the midpoint between the root and fifth of a key.
 argument:: root
 pitch class as an integer
 
@@ -594,7 +619,7 @@ adds one flat in the circle of 5ths (sets the root down a fifth)
 METHOD::scale
 return the current diatonic space.  If a scale has been applied, it will be that; if not, it will be a scale made up of the pitches present in the bloom.
 
-METHOD::simplifyScale
+METHOD::reduceScale
 removes one note from the scale and adjusts notes to fit
 
 
@@ -628,6 +653,13 @@ METHOD:: chordsByInterval
 group notes into chords if they make a stack of a given interval.
 argument:: interval
 If no scale has been applied, code::interval:: is chromatic, otherwise it will be diatonic (a value of 3, for example, may return minor or major 3rds in a major scale).  Notes are sorted.
+
+METHOD:: harmonize
+add chords below each note. Provide a list of chord tones in the form [1,3,5] for root, third fifth. All diatonic chords that include the note are generated, and one is selected at random.
+
+argument::chordTones
+argument::probability
+the chance that a note will be harmonized
 
 METHOD:: harmonizeEfficiently
 adds a diatonic chord below each note of the bloom based on the applied scale.  Progression is optimized for efficient voice leading.  Diminished triads are discouraged !! not implemented yet.
