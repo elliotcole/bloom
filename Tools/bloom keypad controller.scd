@@ -1,13 +1,4 @@
-b.report
-b.play
-// make it impossible to delete last entry of g
-// make it impossible for .thin to make them all go away
-b.sustain
 
-z = Bloom.new
-z.report
-z.fromListOfBlooms(g)
-z.report
 
 (
 var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings;
@@ -54,7 +45,6 @@ Bloom.defaultFixedGrid_(nil);
 Bloom.defaultFixedDurMode_(\scale);
 Bloom.defaultFixedDur_(nil);
 Bloom.defaultFixedScale_(nil);
-
 /*
 // pianoland
 Bloom.defaultLowestPossibleNote_(20);
@@ -68,7 +58,8 @@ b = Bloom.new.verbose_(true);
 
 b.sustain = 2;
 
-keypad.w = Window.new("Bloom Keypad", Rect(100,600,650,1200)).background_(Color.cyan);
+keypad.sizes = (full: Rect(0,0, 650, 1200), small: Rect(0,0,650,75), minimized:false);
+keypad.w = Window.new("Bloom Keypad", keypad.sizes.full).background_(Color.cyan);
 keypad.view = View.new(keypad.w, 650@1000);
 keypad.view.addFlowLayout(5@5, 5@5);
 
@@ -336,6 +327,7 @@ down          save
 up            pull
 left/right    navigate
 shift l/r     navigate and play
+~     minimize window
 ";
 
 /*
@@ -480,7 +472,14 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $; } { "*randomize channels".postln; b.randChans.report;  }
 	{ char == $' } { "*cycle channels".postln; b.cycleChans.report; }
 	{ char == $: } { "*chan <<".postln;b.dropChan.report; }
-	{ char == $" } { "*chan >>".postln;b.addChan.report; }
+
+
+	// window size
+
+	{ char == $~ } { if (keypad.sizes.minimized,
+		{keypad.w.setTopLeftBounds(keypad.sizes.full); keypad.sizes.minimized = false},
+		{keypad.w.setTopLeftBounds(keypad.sizes.small); keypad.sizes.minimized = true})
+	}
 
 	// playback
 
@@ -584,6 +583,9 @@ keypad.text2.keyDownAction = keypad.text1.keyDownAction;
 
 keypad.w.front;
 
+keypad.text1.focus;
+
+
 keypad.actions = ();
 keypad.actions.back = {arg modifier;
 	i = max(0, (i - 1));			// go back one
@@ -633,3 +635,9 @@ Archive.global.put(\bloomSo, g);
 
 g = Archive.global.at(\bloomOct5);
 g.postcs;
+
+
+z = StaticText.new
+z.hasFocus
+z.canFocus_(true)
+z.focus(true)
