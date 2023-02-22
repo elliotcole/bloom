@@ -1,5 +1,3 @@
-
-
 (
 var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings;
 
@@ -16,8 +14,8 @@ g = List.newClear(1);
 keypad = ();
 settings = (
 	quantize:8,
-	quantizeOptions:Routine{loop {[[4,4],[4,3],[3,5],[3,6],[3,2],[4,7],[3,7]].do{|q| q.yield}}},
-	maxChannels:1,
+	quantizeOptions:Routine{loop {[4,3,2,1,8,7,6,5].do{|q| q.yield}}},
+	maxChannels:3,
 	pulsarBaseRate:8,
 	nilSpacePauseDur:2,
 	legato: 2,
@@ -176,7 +174,7 @@ looper.updateBloom = {arg self;	self.bloom = b; "update looper".postln};
 Pdef(\looper, Pbind(
 	\type, \midi,
 	\midiout, Bloom.midiOut,
-	\midinote, Prout { loop { looper.bloom.notes.do {|note| note.yield} } },
+	\midinote, Prout { loop { looper.bloom.notes.do {|note| note.yield}; b.resolveFixed; } },
 	\dur, Prout { loop { looper.bloom.timeIntervals.do {|time| time.yield} } },
 	\amp, Prout { loop { looper.bloom.velocities.do {|vel| vel.linlin(0,127,0,1.0).yield} } },
 	\chan, Prout { loop { looper.bloom.chans.do {|chan|
@@ -270,7 +268,7 @@ W    remove doubles
 op-w wheels within wheels\n
 * Fission / Fusion *
 |    merge garden into b
-opt\ break b into garden
+opt| break b into garden
 ";
 
 keypad.text2 = StaticText(keypad.view, 300@980).canFocus_(true);
@@ -313,12 +311,13 @@ J    reduceScale\n
 * Playback *
 space play what's in the buffer
 shift-space play what's below
-,    loop what's here or buffer
-/    pulse what's here or buffer
+,    loop b
+/    start / update pulsar b
 .    stop looping or pulsing
 <    faster pulse
 >    slower pulse
-?    toggle single or whole garden
+?    pulse garden
+opt-,loop garden
 \\    toggle sustain pedal\n
 * Recording*
 `    record / stop\n
@@ -332,8 +331,6 @@ shift l/r     navigate and play
 
 /*
 so far unused letters
-Z - drop first?
-| - split and insert?
 6
 ^
 7
@@ -363,8 +360,8 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	("										" + modifiers).postln;
 	("										" + char).postln;
 	("										" + keycode).postln;
-	(" ").postln;
-	*/
+	(" ").postln;*/
+
 
 	case
 
@@ -381,7 +378,8 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 		chans = b.chans;
 		b.import(Bloom.new.seed(b.timeIntervals.size).applyScale(scale));
 		b.timeIntervals = times; b.velocities = vels; b.chans = chans; b.report  }
-	{ char == $b } { "*new bloom shape".postln; b.newShape.report }
+	{ char == $b } {
+		if (modifiers != settings.modifiers.option, {"*new bloom shape".postln; b.newShape.report}) }
 	{ char == $L } { "*new bloom from log".postln; b.fromLog;  }
 	{ char == $l } { "*save to log".postln; b.log;  }
 	{ char == $p } { "*push".postln; b.push;  }
@@ -428,7 +426,9 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $d } { "*braid".postln; b.braid; b.report }
 	{ char == $D } { "*pyramid".postln; b.pyramid; b.report }
 	{ char == $q } { ("*quantize [%]").format(settings.quantize).postln; b.quantize(settings.quantize); b.report }
-	{ char == $Q } { var nextQ = settings.quantizeOptions.next; settings.quantize = nextQ; ("*quantize [%]").format(nextQ).postln; b.quantize(settings.quantize); b.report }
+	{ char == $Q } { var nextQ = settings.quantizeOptions.next, example; settings.quantize = nextQ;
+		example = b.timeIntervals.collect{|time| time.softRound(nextQ.reciprocal, 0, 1)};
+		("*(q to apply) quantize [1/%]: %").format(nextQ, example).postln;}
 	{ char == ${ } { "*shorten times".postln; b.timeIntervals = b.timeIntervals.drop(-1); b.report }
 	{ char == $} } { "*lengthen times".postln; b.timeIntervals = b.timeIntervals.add(b.timeIntervals.choose); b.report  }
 	{ char == $_ } { "*shorten velocities".postln; b.velocities = b.velocities.drop(-1); b.report }
@@ -472,6 +472,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $; } { "*randomize channels".postln; b.randChans.report;  }
 	{ char == $' } { "*cycle channels".postln; b.cycleChans.report; }
 	{ char == $: } { "*chan <<".postln;b.dropChan.report; }
+	{ char == $" } { "*chan >>".postln;b.addChan.report; }
 
 
 	// window size
@@ -488,12 +489,12 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $/ } {if (pulsar.isItPlaying, {}, {pulsar.go}); pulsar.updateBloom; }
 	{ char == $< } { var newRate = pulsar.pulsar.rate - 0.25; "*pulse rate %".format(newRate).postln;
 		pulsar.pulsar.rate = newRate;  }
-	{ char == $> } { var newRate = pulsar.pulsar.rate.rate + 0.25; "*pulse rate %".format(newRate).postln;
+	{ char == $> } { var newRate = pulsar.pulsar.rate + 0.25; "*pulse rate %".format(newRate).postln;
 		pulsar.pulsar.rate = newRate;  }
 
 	{ char == $\\ } { if (pedals.outs[0].state, {pedals.up; "*pedal up".postln;}, {pedals.down; "*pedal down".postln}); }
 
-	{ char == $` } { if (b.isRecording, {b.rstop}, {b.record}); }
+	{ char == $` } { if (b.isRecording == true, {b.rstop}, {b.record}); }
 
 	{ keycode == 43 && modifiers == settings.modifiers.option } {
 		if (Tdef(\gardenLooper).isPlaying,
@@ -507,10 +508,9 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 			{Tdef(\gardenPulsar).play; "pulsing garden".postln;})
 	} // option /
 
-	{ char == $| } {"merging garden".postln; b.fromListOfBlooms(g)}
+	{ char == $| } {"merging garden >> b".postln; b.fromListOfBlooms(g)}
 
-	{ keycode == 42 && modifiers == settings.modifiers.option } {
-		"curdling garden".postln; g = b.curdle(0.2)}
+	{ keycode == 42 && modifiers == settings.modifiers.option } { "curdling b >> garden".postln; g = g.insert(i, b.curdle(0.2)).flatten;}
 
 	{ keycode == 49 && modifiers == 0} { "- play b -".postln; if (b.isKindOf(Bloom), {b.play;}, {}); "		".postln; } //space
 
