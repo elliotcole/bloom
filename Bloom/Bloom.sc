@@ -29,7 +29,6 @@ Bloom {
 	var <>fixedDurMode;
 	var <>fixedGrid;
 	var <>quant;
-	var <quantFractions;
 	var <>logName = \blooms, <saved, <>stack;
 	var <>verbose = true;
 	var savedTimeIntervals; // could be replaced with push/pop
@@ -119,7 +118,6 @@ Bloom {
 		fixedDur = bloom.fixedDur; fixedDurMode = bloom.fixedDurMode;
 		fixedGrid = bloom.fixedGrid;
 		quant = bloom.quant;
-		quantFractions = bloom.quantFractions;
 		logName = bloom.logName; saved = bloom.saved;
 		verbose = bloom.verbose;
 
@@ -438,7 +436,7 @@ Bloom {
 		// leaves upward motion as leaps, fills in downward leaps
 	}
 
-	thicken {|percentNew = 0.5|
+	thicken {|percentNew = 0.5|  // very slow with long blooms -- the applyScale?
 		var thickener = Bloom.new.seed(this.notes.size * percentNew);
 		var scale;
 		if (appliedScale.notNil, {scale = appliedScale}, {scale = this.asScale});
@@ -931,49 +929,11 @@ Bloom {
 		this.slide(windowLength);
 	}
 
-	quantize {|grid = 4, strength = 1| // grid can be a list
-		// write one that makes two blooms - one for each denominator.  pull out the polyrhythm.  and scale up!  4 is not quarter note, its quarter beat
-		var temp, temp2, diff, newabs, length, targetlength;
-		var margin;
-		var grid1, grid2, q1, q2;
-		grid1 = List.new; grid2 = List.new;
-		if (grid.isArray, {q1 = grid[0]; q2 = grid[1]});
-		if (grid.isNumber, {q1 = grid; q2 = grid});
-
-		margin = q1.max(q2);
-
-		this.absTime.do{|each, i|
-			temp = each.snap(q1.reciprocal, margin, strength);
-			temp2 = each.snap(q2.reciprocal, margin, strength);
-			if ( (each - temp).abs < (each-temp2).abs,  // if temp is closer than temp2
-				{ 	grid1.add(temp);
-					grid2.add(0)
-				},
-				{ 	grid2.add(temp2);
-					grid1.add(0)
-			})
-		};
-
-		newabs = grid1 + grid2;
-
-		this.setRelTime(newabs);
-
-		length = timeIntervals.sum;					// true length of bloom
-		targetlength = length.snap(1, 1, 1);	// nearest beat division
-
-		if (length > targetlength, { targetlength = targetlength + 1; });
-
-		timeIntervals.putLast(timeIntervals.last + (targetlength - timeIntervals.sum));	// make up the shortfall
-
-		quantFractions = (grid1 + grid2).asFraction;
-		quantFractions[0] = 0;
-
-		// formatting:
-		quantFractions = quantFractions.collect {|fraction|
-			if (fraction == 0, {"0"}, {
-				"%/%".format(fraction[0],fraction[1]);
-			});
-		}.asString;
+	quantize {|grid = 4, margin = 0, strength = 1.0|
+		if (grid.isKindOf(Collection), {grid = grid[0].lcm(grid[1])});
+		timeIntervals = timeIntervals.collect{|time|
+			time.softRound(grid.reciprocal, margin, strength)
+		}
 	}
 
 	wrapTime{|list|
@@ -1830,7 +1790,6 @@ Bloom {
 		this.reportVelocities(lengths);
 		this.reportTimes(lengths);
 		this.reportChans(lengths);
-		this.reportQ(lengths);
 		this.reportScale(lengths);
 		this.reportName(lengths);
 		"".postln;
@@ -1839,8 +1798,7 @@ Bloom {
 
 
 	generateStringLengths {
-		var tempQ, longestList, roundedTimes;
-		if (quantFractions == nil, {tempQ = []}, {tempQ = quantFractions});
+		var longestList, roundedTimes;
 		longestList = [notes.size, timeIntervals.size, velocities.size].maxItem;
 		longestList = Array.fill(longestList, {1});
 		roundedTimes = timeIntervals.round(0.3);
@@ -1886,13 +1844,6 @@ Bloom {
 			{ name = keyRoot.spell + this.scale.name}
 		);
 		(("scale:").leftJustify(15) + scale.degrees.spell + name).postln;
-	}
-
-	reportQ {|blockWidthArray = 4|
-		if (quantFractions.notNil, {
-			var qArray = quantFractions.replace("[", "").replace("]", "").split($,);
-			(("in beat:").leftJustify(15) ++ qArray.asJustifiedString(blockWidthArray)).postln;
-		})
 	}
 
 
@@ -2078,20 +2029,6 @@ Bloom {
 		velocities = longest.collect {|i| velocities.wrapAt(i)};
 		timeIntervals = longest.collect {|i| timeIntervals.wrapAt(i)};
 		chans = longest.collect {|i| chans.wrapAt(i)};
-	}
-
-	checkQ {
-		var qAsFloats, isQCorrect;
-		if (quantFractions.notNil, {
-			qAsFloats = quantFractions.interpret;
-			if (qAsFloats.round(0.001) != this.absTime.round(0.001),
-				// the quantized times sometimes have infinitessimal fractions for some reason
-				{
-					quantFractions = nil;
-					//"striking q".postln
-				}
-			)
-		})
 	}
 
 	checkScale {
