@@ -486,9 +486,13 @@ b.quantize(4, 0.5) // quantize to quarter-beats but snap only halfway to ideal p
 ::
 
 argument::grid
-can be a single value or an Array of two values.
+can be a single value or an Collection of two values.
+
+argument::margin
+values closer to grid than margin will be skipped (see .softRound)
+
 argument:: strength
-determines the degree to which the number will be changed.  1 will snap each value perfectly to the denominator, 0 will change no values.
+determines the degree to which the number will be changed.  1 will snap each value perfectly to the grid, 0 will change no values.
 
 METHOD::wrapTime
 applies a rhythmic pattern across the Bloom by wrapping a list of timeIntervals
