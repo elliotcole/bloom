@@ -3,7 +3,7 @@ var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings;
 
 MIDIClient.init;
 Bloom.midiOut_(MIDIOut.newByName("IAC Driver", "Bus 1").latency(0.01));
-Bloom.midiIn_(MIDIIn.findPort("Moog One","Moog One."));
+Bloom.midiIn_(MIDIIn.findPort("Moog Matriarch","Moog Matriarch"));
 MIDIIn.connectAll;
 Bloom.maxChan = 6;
 
@@ -35,22 +35,13 @@ l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).defaultQuant_
 
 // Settings
 
-// telescoping drums
-// 36-55 ableton 16 drum rack BUT wrapping is continuous by pitch class, so top of range not always expressed
 Bloom.defaultLowestPossibleNote_(40);
 Bloom.defaultHighestPossibleNote_(104);
 Bloom.defaultFixedGrid_(nil);
 Bloom.defaultFixedDurMode_(\scale);
 Bloom.defaultFixedDur_(nil);
 Bloom.defaultFixedScale_(nil);
-/*
-// pianoland
-Bloom.defaultLowestPossibleNote_(20);
-Bloom.defaultHighestPossibleNote_(100);
-Bloom.defaultFixedGrid_(nil);
-Bloom.defaultFixedDur_(nil);
-Bloom.defaultFixedDurMode_(\scale);
-*/
+
 
 b = Bloom.new.verbose_(true);
 
@@ -85,12 +76,6 @@ keypad.toggles.fixedDurAmount = EZSlider.new(keypad.toggles.view, Rect(0,0,100, 
 .action_({|ez| b.fixedDur = ez.value; Bloom.defaultFixedDur = ez.value})
 .value_(2)
 .visible_(false);
-
-/*keypad.toggles.fixedDurAmount = Slider.new(keypad.toggles.view, Rect(0,0,100, 15))
-.step_(0.5)
-.action_({|ez| b.fixedDur = ez.value; Bloom.defaultFixedDur = ez.value})
-.value_(2)
-.visible_(false);*/
 
 keypad.toggles.fixedDurMode = EZPopUpMenu.new(keypad.toggles.view, 120@15, label: "mode", labelWidth: 40).items_(['scale' -> {b.fixedDurMode_(\scale); Bloom.defaultFixedDurMode_(\scale)},
 	'trim' -> {b.fixedDurMode_(\trim); Bloom.defaultFixedDurMode_(\trim)}])
@@ -142,7 +127,7 @@ keypad.toggles.drumRange = Button.new(keypad.toggles.view, 50@15)
 .action_({arg choice, range;
 	case
 	{choice.value == 0} {range = [40,108]}
-	{choice.value == 1} {range = [36,55]}
+	{choice.value == 1} {range = [36,51]}
 	{choice.value == 2} {range = [0,127]};
 	keypad.toggles.range.value_(range);
 	keypad.toggles.range.doAction;
@@ -184,14 +169,6 @@ Pdef(\looper, Pbind(
 	\legato, Pfunc{looper.legato},
 ));
 
-
-/*
-Tdef(\looper, {
-	loop {
-		b.playWait;
-	}
-});
-*/
 
 looper.legato = settings.legato;
 
@@ -339,12 +316,6 @@ so far unused letters
 *
 ?
 
-functions i want to squeeze in
-
-negative harmony
-
-fixedDur toggle
-
 */
 
 
@@ -474,7 +445,6 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $: } { "*chan <<".postln;b.dropChan.report; }
 	{ char == $" } { "*chan >>".postln;b.addChan.report; }
 
-
 	// window size
 
 	{ char == $~ } { if (keypad.sizes.minimized,
@@ -584,7 +554,6 @@ keypad.text2.keyDownAction = keypad.text1.keyDownAction;
 keypad.w.front;
 
 keypad.text1.focus;
-
 
 keypad.actions = ();
 keypad.actions.back = {arg modifier;
