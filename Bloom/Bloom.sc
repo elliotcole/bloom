@@ -577,7 +577,7 @@ Bloom {
 
 	trimToDur {|dur = 4|
 		var total = 0, n = 0, excess;
-		if (dur.isNil, {}, {
+		if (dur.isKindOf(Number), {
 			if (dur <= timeIntervals.sum, {
 				while ({total < dur}, {
 					total = timeIntervals.at(n) + total;
@@ -1785,7 +1785,6 @@ Bloom {
 
 		lengths = this.generateStringLengths + 1;
 
-		this.checkQ(lengths);
 		this.reportNotes(lengths);
 		this.reportVelocities(lengths);
 		this.reportTimes(lengths);
