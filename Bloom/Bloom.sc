@@ -404,7 +404,7 @@ Bloom {
 			this.addOne
 		},
 		{
-			newNote = round(exprand(lowestPossibleNote,highestPossibleNote));
+			newNote = round(rrand(lowestPossibleNote,highestPossibleNote));
 			newNote = newNote.nearestInScale(scale);
 			this.addOne(newNote);
 		})
