@@ -6,3 +6,6 @@ To install, download the Bloom folder and put it in your SuperCollider User Supp
 
 To read the in-IDE helpfile, type Bloom and press Command-D.
 
+The Keystroke Controller is the easiest way to work with Blooms. To use it, open from /Tools and run.
+
+(To run a block of code in Supercollider, click inside a parenthesed area and press command-enter.)
