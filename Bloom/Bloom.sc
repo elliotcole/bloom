@@ -1804,7 +1804,7 @@ Bloom {
 		roundedTimes = timeIntervals.round(0.3);
 		^longestList.collect {|note, i|
 			var array, sizes;
-			array = [notes.at(i), velocities.at(i), roundedTimes.at(i), chans.at(i), tempQ.at(i)];
+			array = [notes.at(i), velocities.at(i), roundedTimes.at(i), chans.at(i)];
 			sizes = array.collect {|item| item.asString.size}.maxItem;
 			sizes;
 		};
