@@ -1,26 +1,45 @@
+/*
+
+ISSUES
+clock should be a setting
+GardenLooper sometimes jumps the gun ... could be quant related? there should be no quant
+newbloom same scale same shape -- super inefficient with long blooms. it's the applyScale... something about it
+
+write: brownian motion velocities' for long fast flows
+
+*/
+
+// fresh start
+(
+b = Bloom.new.verbose_(true);
+g = List.newClear(1);
+)
+
+
+
 (
 var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings;
 
 MIDIClient.init;
-Bloom.midiOut_(MIDIOut.newByName("IAC Driver", "Bus 1").latency(0.01));
-Bloom.midiIn_(MIDIIn.findPort("Moog Matriarch","Moog Matriarch"));
+Bloom.midiOut_(MIDIOut.newByName("IAC Driver", "Bus 1"));
+Bloom.midiIn_(MIDIIn.findPort("HYDRASYNTH EXPLORER", "HYDRASYNTH EXPLORER"));
 MIDIIn.connectAll;
-Bloom.maxChan = 5; // add channel range selector to UI
+Bloom.maxChan = 10; // add channel range selector to UI
 
 
 Window.closeAll;
-g = List.newClear(1);
 
 keypad = ();
 settings = (
 	quantize:8,
 	quantizeOptions:Routine{loop {[4,3,2,1,8,7,6,5].do{|q| q.yield}}},
 	maxChannels:3,
-	pulsarBaseRate:8,
-	nilSpacePauseDur:2,
-	legato: 2,
+	pulsarBaseRate:4,
+	nilSpacePauseDur:1,
+	legato: 1,
 	modifiers:(leftShift:131072, leftShiftArrow:2228224, option:524288),
 	tempo:1,
+	globalQuant: 4
 );
 
 ////// Bloom Prototype //////
@@ -29,9 +48,10 @@ settings = (
 
 // default or
 TempoClock.default.tempo = settings.tempo;
+Server.default.latency_(0);
 
 // Ableton Link (optional)
-l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).defaultQuant_([1,0,0]);
+l = LinkClock(1).latency_(Server.default.latency); Bloom.clock_(l).defaultQuant_(settings.globalQuant);
 
 // Settings
 
@@ -41,11 +61,9 @@ Bloom.defaultFixedGrid_(nil);
 Bloom.defaultFixedDurMode_(\scale);
 Bloom.defaultFixedDur_(nil);
 Bloom.defaultFixedScale_(nil);
+Bloom.defaultSustain_(nil);
+Bloom.defaultLegato_(settings.legato);
 
-
-b = Bloom.new.verbose_(true);
-
-b.sustain = 2;
 
 keypad.sizes = (full: Rect(0,0, 650, 1200), small: Rect(0,0,650,75), minimized:false);
 keypad.w = Window.new("Bloom Keypad", keypad.sizes.full).background_(Color.cyan);
@@ -148,7 +166,8 @@ pulsar.isItPlaying = {arg self; self.pulsar.isPlaying};
 
 looper = ();
 looper.pdef = Pdef(\looper);
-looper.go = {Pdef(\looper).play; "start looper".postln};
+looper.pdef.clock = l;
+looper.go = {Pdef(\looper).play(quant: settings.globalQuant); "start looper".postln};
 looper.end = {Pdef(\looper).stop; "stop looper".postln};
 looper.isItPlaying = {arg self; self.pdef.isPlaying};
 looper.bloom = b;
@@ -166,20 +185,24 @@ Pdef(\looper, Pbind(
 		if (chan.isKindOf(SimpleNumber), {chan.yield});
 		if (chan.isKindOf(SequenceableCollection), {chan[0].yield});
 	} } },
-	\legato, Pfunc{looper.legato},
+	\legato, Pfunc{settings.legato},
 ));
 
-
-looper.legato = settings.legato;
 
 Tdef(\gardenLooper, {
 	var bloomsInGarden = g.select{|i| i.isKindOf(Bloom)};
 	if (bloomsInGarden.isEmpty, {"no blooms in garden".postln},
 		{loop {	g.do {|location|
-			if (location.isKindOf(Bloom), {location.playWait}, {settings.nilSpacePauseDur.wait})
+			var bloom = location.deepCopy;
+			if (bloom.isKindOf(Bloom), {
+				bloom.quant = 0;
+				bloom.playWait},
+			{var waitTime = settings.nilSpacePauseDur;
+				waitTime.postln;
+				waitTime.wait;})
 		}}}
 	)
-});
+}).quant(settings.globalQuant);
 
 Tdef(\gardenPulsar, {
 	var bloomsInGarden = g.select{|i| i.isKindOf(Bloom)};
@@ -191,8 +214,6 @@ Tdef(\gardenPulsar, {
 	)
 });
 
-
-looper.legato = 2;
 
 keypad.text1 = StaticText(keypad.view, 300@1200).canFocus_(true);
 keypad.text1.align = \topLeft;
@@ -274,14 +295,17 @@ I    invert around mean
 3    transpose down step
 4    transpose up step
 v    pivot around highest
-V    pivot around loudest\n
+V    pivot around loudest
+#    resolve chord\n
 * Diatonicism *
 k    chooseScale
 K    slantScale
 j    lift scale
-J    reduceScale\n
+J    reduceScale
+$    flatten\n
 * Multichannel *
-;    randomize channels
+;    randomize a channel
+opt-; randomize all
 '    cycle channels
 :    drop channel
 \"    add channel\n
@@ -293,8 +317,8 @@ shift-space play what's below
 .    stop looping or pulsing
 <    faster pulse
 >    slower pulse
-?    pulse garden
-opt-,loop garden
+opt-/ pulse garden
+opt-, loop garden
 \\    toggle sustain pedal\n
 * Recording*
 `    record / stop\n
@@ -423,6 +447,8 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 		b.velocities = [100] ++ (30 ! (b.notes.size)); b.report
 	}
 	{ char == $W } { "*remove doubles".postln; b.removeDoubles; b.report}
+	{ char == $# } { "*resolve intervals".postln; b.resolve; b.report}
+
 
 	// chords
 
@@ -435,15 +461,20 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 
 	{ char == $k } { "*applying nearest scale".postln; b.chooseScale; b.report }
 	{ char == $K } { "*applying slant scale".postln; b.slantScale; b.report }
-	{ char == $j } { "*lift scale".postln; if(g[i].isKindOf(Bloom), {b.applyScale(g[i].scale)}, {}); }
+	{ char == $j } { "*lift scale".postln; if(g[i].isKindOf(Bloom), {b.applyScale(g[i].scale).report}, {}); }
 	{ char == $J } { "*simplifying the scale".postln; b.reduceScale; b.report }
+	{ char == $$} {"*flattening a scale degree".postln;
+		b.flatten;
+	}
 
 	// channels
 
-	{ char == $; } { "*randomize channels".postln; b.randChans.report;  }
+	{ char == $; } { "*one random channel".postln; b.oneRandChan.report;  }
+	{ keycode == 41 && modifiers == settings.modifiers.option} {"*randomize all channels".postln;
+		b.randChans.report; }
 	{ char == $' } { "*cycle channels".postln; b.cycleChans.report; }
 	{ char == $: } { "*chan <<".postln;b.dropChan.report; }
-	{ char == $" } { "*chan >>".postln;b.addChan.report; }
+	{ char == $" } { "*chan >>".postln;b.recycleChan.report; }
 
 	// window size
 
@@ -455,11 +486,13 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	// playback
 
 	{ char == $, } {if (looper.isItPlaying, {}, {looper.go}); looper.updateBloom;  }
-	{ char == $. } {if (looper.isItPlaying, {looper.end}); if (pulsar.isItPlaying, {pulsar.end}) }
+	{ char == $. } {
+		if (looper.isItPlaying, {looper.end});
+		if (pulsar.isItPlaying, {pulsar.end});}
 	{ char == $/ } {if (pulsar.isItPlaying, {}, {pulsar.go}); pulsar.updateBloom; }
-	{ char == $< } { var newRate = pulsar.pulsar.rate - 0.25; "*pulse rate %".format(newRate).postln;
+	{ char == $< } { var newRate = pulsar.pulsar.rate - 1; "*pulse rate %".format(newRate).postln;
 		pulsar.pulsar.rate = newRate;  }
-	{ char == $> } { var newRate = pulsar.pulsar.rate + 0.25; "*pulse rate %".format(newRate).postln;
+	{ char == $> } { var newRate = pulsar.pulsar.rate + 1; "*pulse rate %".format(newRate).postln;
 		pulsar.pulsar.rate = newRate;  }
 
 	{ char == $\\ } { if (pedals.outs[0].state, {pedals.up; "*pedal up".postln;}, {pedals.down; "*pedal down".postln}); }
@@ -501,6 +534,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 		if(g[i].class == Bloom,
 			{ b = g[i].deepCopy;
 				("lifting Bloom from slot " + i + "into the buffer").postln;
+				looper.updateBloom;
 				b.report;},
 			{"nothing here".postln;})
 	}
@@ -593,6 +627,8 @@ keypad.actions.forward = {arg modifier;
 
 keypad.query = {g.do({|each, iter| ("[" + iter + "] ").postln;
 	if (each.isKindOf(Bloom), {each.report}, {"(empty)".postln; })})};
+
+Bloom.midiOut.latency_(0.0); // must be at the bottom so the midi has a bit of time to initialize
 
 
 )
