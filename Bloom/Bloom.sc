@@ -375,8 +375,14 @@ Bloom {
 	addOne {|noteOrList = nil|
 		if (noteOrList == nil, {
 			notes = notes.add(rrand(20,100));  // create random entry
-			velocities = velocities.add(velocities[velocities.size.rand]);  // use a vel and time from somewhere
-			timeIntervals = timeIntervals.add(timeIntervals[timeIntervals.size.rand]);
+
+			if (velocities.size <= notes.size, {
+				velocities = velocities.add(velocities[velocities.size.rand]);  // use a vel and time from somewhere
+			});
+
+			if (timeIntervals.size <= notes.size, {
+				timeIntervals = timeIntervals.add(timeIntervals[timeIntervals.size.rand]);
+			});
 		});
 
 		if (noteOrList.isKindOf(SimpleNumber),
@@ -441,7 +447,7 @@ Bloom {
 		var scale;
 		if (appliedScale.notNil, {scale = appliedScale}, {scale = this.asScale});
 		//scale.postln;
-		thickener.applyScale(scale);
+		thickener.applyScale(scale).softer;
 		//this.wrapToNotes;
 		this.blend(thickener);
 		this.enforceRange;
@@ -701,8 +707,12 @@ Bloom {
 	// CHANNELS
 
 	addChan {chans = chans.add((maxChan + 1).rand);}
+	recycleChan {chans = chans.add(chans.choose)}
 	dropChan {if (chans.size > 1, {chans = chans.drop(-1)});}
 	randChans {chans = chans.collect{(maxChan+1).rand};}
+	oneRandChan {
+		chans[chans.size.rand] = (maxChan+1).rand;
+	}
 	sortChans {chans = chans.sort;}
 	cycleChans {chans = chans.collect{|chan| (chan+1).wrap(0, maxChan)};}
 
@@ -1192,6 +1202,11 @@ Bloom {
 		this.applyScale(newScale);
 	}
 
+	lower {
+		var i = notes.size.rand;
+
+		notes[i] = notes[i] - 1;
+	}
 
 
 
