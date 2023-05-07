@@ -13,18 +13,18 @@ write: brownian motion velocities' for long fast flows
 (
 b = Bloom.new.verbose_(true);
 g = List.newClear(1);
+i = 0;			// "here" index for array g.  ALWAYS INDEX (ie starts with 0)
 )
 
 
-
 (
-var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings;
+var copybuffer, newBloom, keypad, pulsar, looper, pedals, settings, recorder;
 
 MIDIClient.init;
 Bloom.midiOut_(MIDIOut.newByName("IAC Driver", "Bus 1"));
-Bloom.midiIn_(MIDIIn.findPort("HYDRASYNTH EXPLORER", "HYDRASYNTH EXPLORER"));
+Bloom.midiIn_(MIDIIn.findPort("Prophet 5/10", "Prophet 5/10"));
 MIDIIn.connectAll;
-Bloom.maxChan = 10; // add channel range selector to UI
+Bloom.maxChan = 8; // add channel range selector to UI
 
 
 Window.closeAll;
@@ -34,12 +34,12 @@ settings = (
 	quantize:8,
 	quantizeOptions:Routine{loop {[4,3,2,1,8,7,6,5].do{|q| q.yield}}},
 	maxChannels:3,
-	pulsarBaseRate:4,
+	pulsarBaseRate:8,
 	nilSpacePauseDur:1,
 	legato: 1,
 	modifiers:(leftShift:131072, leftShiftArrow:2228224, option:524288),
 	tempo:1,
-	globalQuant: 4
+	globalQuant: 2
 );
 
 ////// Bloom Prototype //////
@@ -64,6 +64,9 @@ Bloom.defaultFixedScale_(nil);
 Bloom.defaultSustain_(nil);
 Bloom.defaultLegato_(settings.legato);
 
+b.sustain = Bloom.defaultSustain;
+b.legato = Bloom.defaultLegato;
+
 
 keypad.sizes = (full: Rect(0,0, 650, 1200), small: Rect(0,0,650,75), minimized:false);
 keypad.w = Window.new("Bloom Keypad", keypad.sizes.full).background_(Color.cyan);
@@ -83,15 +86,18 @@ keypad.toggles.fixedDur = CheckBox(keypad.toggles.view,Rect(0,0,70,15))
 	if (box.value, {var amountBox = keypad.toggles.fixedDurAmount;
 		amountBox.visible_(true).valueAction_(b.dur);
 		keypad.toggles.fixedDurMode.visible_(true);
+		keypad.text1.focus;
 	}, {
 		keypad.toggles.fixedDurAmount.visible_(false);
 		b.fixedDur = false; Bloom.defaultFixedDur = false;
-		keypad.toggles.fixedDurMode.visible_(false);} )
+		keypad.toggles.fixedDurMode.visible_(false);
+		keypad.text1.focus;
+	} )
 })
 .canFocus_(false);
 
 keypad.toggles.fixedDurAmount = EZSlider.new(keypad.toggles.view, Rect(0,0,100, 15), controlSpec: ControlSpec.new(0.5, 8, step: 0.5,units: "beats"), labelHeight: 15)
-.action_({|ez| b.fixedDur = ez.value; Bloom.defaultFixedDur = ez.value})
+.action_({|ez| b.fixedDur = ez.value; Bloom.defaultFixedDur = ez.value; keypad.text1.focus;})
 .value_(2)
 .visible_(false);
 
@@ -106,7 +112,12 @@ keypad.toggles.fixedGrid = CheckBox(keypad.toggles.view,Rect(0,0,70,15))
 	if (box.value, {var amountBox = keypad.toggles.fixedGridSize;
 		amountBox.visible_(true).valueAction_(amountBox.value)}, {
 		keypad.toggles.fixedGridSize.visible_(false);
-		b.fixedGrid = false; Bloom.defaultFixedGrid = false} )
+		b.fixedGrid = false; Bloom.defaultFixedGrid = false;
+		keypad.text1.focus;
+
+	};
+
+	)
 })
 .canFocus_(false);
 keypad.toggles.fixedGridSize = EZNumber.new(keypad.toggles.view, Rect(0,0,15, 15), controlSpec: ControlSpec.new(2, 12, step: 1))
@@ -122,10 +133,12 @@ keypad.toggles.fixedScale = CheckBox(keypad.toggles.view,Rect(0,0,70,15))
 			b.applyScale(b.scale);
 			b.fixedScale_(b.scale);
 			Bloom.defaultFixedScale_(b.scale);
+			keypad.text1.focus;
 	)},
 	{text.visible_(false).string_("");
 		b.fixedScale_(false);
 		Bloom.defaultFixedScale_(false);
+		keypad.text1.focus;
 })})
 .canFocus_(false);
 keypad.toggles.scaleText = StaticText.new(keypad.toggles.view, 120@15).visible_(false);
@@ -137,7 +150,10 @@ keypad.toggles.range = EZRanger.new(keypad.toggles.view, 450@15, "Compass", Cont
 	if (range.hi - range.lo < 12, {range.hi = range.lo + 12});
 	Bloom.defaultLowestPossibleNote = range.lo; b.lowestPossibleNote = range.lo;
 	Bloom.defaultHighestPossibleNote = range.hi; b.highestPossibleNote = range.hi;
-	b.compass(range.lo, range.hi)}
+	b.compass(range.lo, range.hi);
+	keypad.text1.focus;
+};
+
 );
 
 keypad.toggles.drumRange = Button.new(keypad.toggles.view, 50@15)
@@ -149,17 +165,18 @@ keypad.toggles.drumRange = Button.new(keypad.toggles.view, 50@15)
 	{choice.value == 2} {range = [0,127]};
 	keypad.toggles.range.value_(range);
 	keypad.toggles.range.doAction;
+	keypad.text1.focus;
 });
 
 pedals = ();
 pedals.outs = Bloom.maxChan.collect{|x| Pedal.new(x, Bloom.midiOut)};
-pedals.up = {arg self; self.outs.do{|pedal| pedal.up}; "pedals up"};
-pedals.down = {arg self; self.outs.do{|pedal| pedal.down}; "pedals down"};
+pedals.up = {arg self; self.outs.do{|pedal| pedal.up}; "pedals up".postln};
+pedals.down = {arg self; self.outs.do{|pedal| pedal.down}; "pedals down".postln};
 
 pulsar = ();
 pulsar.pulsar = Bloom.new.pulse(settings.pulsarBaseRate);
 pulsar.pulsar.stop;
-pulsar.updateBloom = {arg self; self.pulsar.pulsingBloom = b.deepCopy.verbose_(false); "update pulsar".postln};
+pulsar.updateBloom = {arg self; self.pulsar.pulsingBloom = b.verbose_(false); "update pulsar".postln};
 pulsar.go = {arg self; self.pulsar.start; "start pulsar".postln};
 pulsar.end = {arg self; self.pulsar.stop; "stop pulsar".postln};
 pulsar.isItPlaying = {arg self; self.pulsar.isPlaying};
@@ -267,6 +284,11 @@ op-w wheels within wheels\n
 * Fission / Fusion *
 |    merge garden into b
 opt| break b into garden
+
+?    query
+~    free piano w/ bloom chans
+opt-` bloom piano
+`    record / stop
 ";
 
 keypad.text2 = StaticText(keypad.view, 300@980).canFocus_(true);
@@ -320,14 +342,12 @@ shift-space play what's below
 opt-/ pulse garden
 opt-, loop garden
 \\    toggle sustain pedal\n
-* Recording*
-`    record / stop\n
 * Sequencing *
 down          save
 up            pull
 left/right    navigate
 shift l/r     navigate and play
-~     minimize window
+6     minimize window
 ";
 
 /*
@@ -346,8 +366,6 @@ so far unused letters
 
 
 
-b = Bloom.new.seed;
-i = 0;			// "here" index for array g.  ALWAYS INDEX (ie starts with 0)
 
 
 keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
@@ -375,7 +393,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 		b.timeIntervals = times; b.velocities = vels; b.chans = chans; b.report  }
 	{ char == $b } {
 		if (modifiers != settings.modifiers.option, {"*new bloom shape".postln; b.newShape.report}) }
-	{ char == $L } { "*new bloom from log".postln; b.fromLog;  }
+	{ char == $L } { "*new bloom from log".postln; b.fromLog; b.legato = Bloom.defaultLegato; b.sustain = Bloom.defaultSustain;  }
 	{ char == $l } { "*save to log".postln; b.log;  }
 	{ char == $p } { "*push".postln; b.push;  }
 	{ char == $P } { "*pop".postln; b.pop;  }
@@ -394,8 +412,8 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $h } { "*thin".postln; b.thin.report;  }
 	{ char == $g } { "*gap".postln; b.gap.report;  }
 	{ char == $G } { "*ungap".postln; b.unGap.report;  }
-	{ char == $] } { "*slower".postln; b.slower; b.report;  }
-	{ char == $[ } { "*faster".postln; b.faster; b.report; }
+	{ char == $] } { "*slower".postln; b.slower(1.1); b.report;  }
+	{ char == $[ } { "*faster".postln; b.faster(1.1); b.report; }
 	{ char == $- } { "*softer".postln; b.softer; b.report; }
 	{ char == $= } { "*louder".postln; b.louder; b.report; }
 	{ char == $y } { "*average time".postln; b.avgTime.report;  }
@@ -429,6 +447,8 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $_ } { "*shorten velocities".postln; b.velocities = b.velocities.drop(-1); b.report }
 	{ char == $+ } { "*lengthen velocities".postln; b.velocities = b.velocities.add(b.velocities.choose); b.report }
 
+	{ char == $? } { b.report }
+
 	// pitch
 	{ char == $e } { "*shear".postln; b.shear; b.report }
 	{ char == $E } { "*center range".postln; b.compass(48, 72); b.report }
@@ -453,7 +473,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	// chords
 
 	{ char == $c } { "*clump chords".postln; b.chordsRandShorten; b.report}
-	{ char == $C } { "*flatten".postln; b.flattenChords; b.report}
+	{ char == $C } { "*flatten chords".postln; b.flattenChords; b.report}
 	{ char == $5 } { "*harmonize some".postln; b.harmonize([1,3,5], 0.22); b.report}
 	{ char == $% } { "*harmonize efficiently".postln; b.harmonize([1,3,5]); b.report}
 
@@ -469,7 +489,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 
 	// channels
 
-	{ char == $; } { "*one random channel".postln; b.oneRandChan.report;  }
+	{ char == $; } { "*random increments".postln; b.incrementSomeChans.report;  }
 	{ keycode == 41 && modifiers == settings.modifiers.option} {"*randomize all channels".postln;
 		b.randChans.report; }
 	{ char == $' } { "*cycle channels".postln; b.cycleChans.report; }
@@ -478,7 +498,7 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 
 	// window size
 
-	{ char == $~ } { if (keypad.sizes.minimized,
+	{ char == $6 } { if (keypad.sizes.minimized,
 		{keypad.w.setTopLeftBounds(keypad.sizes.full); keypad.sizes.minimized = false},
 		{keypad.w.setTopLeftBounds(keypad.sizes.small); keypad.sizes.minimized = true})
 	}
@@ -495,9 +515,20 @@ keypad.text1.keyDownAction = { arg view,char,modifiers,unicode,keycode;
 	{ char == $> } { var newRate = pulsar.pulsar.rate + 1; "*pulse rate %".format(newRate).postln;
 		pulsar.pulsar.rate = newRate;  }
 
-	{ char == $\\ } { if (pedals.outs[0].state, {pedals.up; "*pedal up".postln;}, {pedals.down; "*pedal down".postln}); }
+	{ char == $\\ } { if (pedals.outs[0].state, {pedals.up;}, {pedals.down;}) }
 
-	{ char == $` } { if (b.isRecording == true, {b.rstop}, {b.record}); }
+	// recorders and players
+
+	{ char == $` } {
+		if (recorder.class != Bloom, {recorder = Bloom.new});
+		if (recorder.isRecording == true, {recorder.rstop; b = recorder.deepCopy}, {recorder.record});
+
+	}
+
+	{ char == $~ } { keypad.live_channel_refractor.toggle.value }
+	{ (keycode == 50) && (modifiers == settings.modifiers.option)} {keypad.bloom_piano.toggle.value;}
+
+	// loopers
 
 	{ keycode == 43 && modifiers == settings.modifiers.option } {
 		if (Tdef(\gardenLooper).isPlaying,
@@ -623,6 +654,142 @@ keypad.actions.forward = {arg modifier;
 	)
 };
 
+keypad.live_channel_refractor = ();
+keypad.live_channel_refractor.isOn = false;
+
+
+keypad.live_channel_refractor.on = {
+	keypad.live_channel_refractor.isOn = true;
+	"piano activated".postln;
+	(
+		~chan_loop = Routine{
+			loop {
+				b.chans.do{|note| note.yield}
+			}
+		};
+
+		~refractor_held_note_map = ();
+
+		MIDIdef.noteOn(\player, {arg velocity, input_note, chan, src;
+			var output_note = input_note;
+			var output_chan = ~chan_loop.next;
+			var output_vel = velocity;
+
+			Bloom.midiOut.noteOn(output_chan, output_note, output_vel);
+			//"note on: chan % note % vel %".format(output_chan, output_note, output_vel).postln;
+			~refractor_held_note_map.put(input_note.asSymbol, (note: output_note, chan: output_chan))
+		}, srcID: Bloom.midiIn.uid);
+
+		MIDIdef.noteOff(\player_off, {arg velocity, input_note, chan, src;
+			var output_note = ~refractor_held_note_map[input_note.asSymbol][\note];
+			var output_chan = ~refractor_held_note_map[input_note.asSymbol][\chan];
+			Bloom.midiOut.noteOff(output_chan, output_note, velocity);
+			//"note off: chan % note % vel %".format(output_chan, output_note, velocity).postln;
+			~refractor_held_note_map.removeAt(input_note.asSymbol)
+		}, srcID: Bloom.midiIn.uid);
+
+		MIDIdef.cc(\player_pedal, {arg i, j, chan, src;
+			"pedal".postln;
+			i.postln;
+			if (i != 0, {pedals.down});
+			if (i == 0, {pedals.up});
+		}, 64, srcID: Bloom.midiIn.uid)
+)};
+
+keypad.live_channel_refractor.off = {
+	"piano off".postln;
+	keypad.live_channel_refractor.isOn = false;
+	MIDIdef(\player).free;
+	MIDIdef(\player_off).free;
+	MIDIdef(\player_pedal).free;
+};
+
+keypad.live_channel_refractor.toggle = {
+	if (keypad.live_channel_refractor.isOn, {
+		keypad.live_channel_refractor.off.value
+	}, {
+		keypad.live_channel_refractor.on.value
+	})
+};
+
+keypad.bloom_piano = ();
+keypad.bloom_piano.isOn = false;
+
+
+keypad.bloom_piano.on = {
+	keypad.bloom_piano.isOn = true;
+	"bloom piano activated".postln;
+	keypad.bloom_piano.note_loop = Routine{
+		loop {
+			b.notes.do{|note|
+				note.yield
+			}
+		}
+	};
+
+	keypad.bloom_piano.vel_loop = Routine{
+		loop {
+			b.velocities.do{|vel|
+				vel.yield
+			}
+		}
+	};
+
+	keypad.bloom_piano.chan_loop = Routine{
+		loop {
+			b.chans.do{|note| note.yield}
+		}
+	};
+	(
+
+		~bloom_piano_held_note_map = ();
+
+		MIDIdef.noteOn(\player, {arg velocity, input_note, chan, src;
+			var output_note = keypad.bloom_piano.note_loop.next;
+			var output_chan = keypad.bloom_piano.chan_loop.next;
+			var output_vel = velocity;
+			var octave_shift = (input_note / 12).trunc - 5 * 12;
+			var vel_scale = 3;
+
+			output_note = (output_note) + octave_shift;
+			//output_vel = output_vel / vel_scale;
+
+			Bloom.midiOut.noteOn(output_chan, output_note, output_vel);
+			"note on: chan % note % vel %".format(output_chan, output_note, output_vel).postln;
+			~bloom_piano_held_note_map.put(input_note.asSymbol, (note: output_note, chan: output_chan))
+		}, srcID: Bloom.midiIn.uid);
+
+		MIDIdef.noteOff(\player_off, {arg velocity, input_note, chan, src;
+			var output_note = ~bloom_piano_held_note_map[input_note.asSymbol][\note];
+			var output_chan = ~bloom_piano_held_note_map[input_note.asSymbol][\chan];
+			Bloom.midiOut.noteOff(output_chan, output_note, velocity);
+			//"note off: chan % note % vel %".format(output_chan, output_note, velocity).postln;
+			~bloom_piano_held_note_map.removeAt(input_note.asSymbol)
+		}, srcID: Bloom.midiIn.uid);
+
+		MIDIdef.cc(\player_pedal, {arg i, j, chan, src;
+			"pedal".postln;
+			i.postln;
+			if (i != 0, {pedals.down});
+			if (i == 0, {pedals.up});
+		}, 64, srcID: Bloom.midiIn.uid)
+)};
+
+keypad.bloom_piano.off = {
+	"piano off".postln;
+	keypad.bloom_piano.isOn = false;
+	MIDIdef(\player).free;
+	MIDIdef(\player_off).free;
+	MIDIdef(\player_pedal).free;
+};
+
+keypad.bloom_piano.toggle = {
+	if (keypad.bloom_piano.isOn, {
+		keypad.bloom_piano.off.value
+	}, {
+		keypad.bloom_piano.on.value
+	})
+};
 
 
 keypad.query = {g.do({|each, iter| ("[" + iter + "] ").postln;
