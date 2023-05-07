@@ -713,6 +713,11 @@ Bloom {
 	oneRandChan {
 		chans[chans.size.rand] = (maxChan+1).rand;
 	}
+	incrementSomeChans {|prob=0.2|
+		chans = chans.collect {|chan|
+			if (coin(prob), {(chan + 1).wrap(0, maxChan)}, {chan})
+		}
+	}
 	sortChans {chans = chans.sort;}
 	cycleChans {chans = chans.collect{|chan| (chan+1).wrap(0, maxChan)};}
 
@@ -1202,6 +1207,8 @@ Bloom {
 		this.applyScale(newScale);
 	}
 
+
+
 	lower {
 		var i = notes.size.rand;
 
@@ -1432,6 +1439,12 @@ Bloom {
 		chans = chans.flat;
 		this.restoreTimeIntervals;
 		this.wrapToNotes;
+	}
+
+	removeChords {
+		notes = notes.collect {|note|
+			[note].flat[0]
+		}
 	}
 
 	extractChords {
@@ -2216,7 +2229,7 @@ Chord[slot] : Array {
 		var key, root, nearestOptions;
 		root = this.trunc(stepsPerOctave);
 		key = this % stepsPerOctave;
-		nearestOptions = (key.nearestInListWithOptions(scale) + root).allTuples.sort({|a, b|
+		nearestOptions = (key.nearestInListWithOptions(scale) + root).allTuples.sort({|a, b| // probably inefficient. slow with large sets. rethink.
 			a.histo.count{|item| item == 1} > b.histo.count{|item| item == 1}
 		});
 		^nearestOptions.first;
