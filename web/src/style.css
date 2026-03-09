@@ -1,0 +1,23 @@
+/* Bloom Web — minimal global styles (layout is in index.html inline styles) */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0a0a0f;
+  color: #ccc;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 2px;
+}
