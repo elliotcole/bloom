@@ -1,8 +1,8 @@
 // Visual theme definitions — shared by all visualization modes
 
 export type VizMode =
-  | 'radial' | 'piano' | 'orbit' | 'waterfall'
-  | 'tonal' | 'helix' | 'particles' | 'oscilloscope' | 'skyline';
+  | 'radial' | 'piano' | 'orbit'
+  | 'tonal' | 'set' | 'helix';
 
 export type ThemeId = 'dark' | 'phosphor' | 'ink' | 'uv' | 'minimal';
 

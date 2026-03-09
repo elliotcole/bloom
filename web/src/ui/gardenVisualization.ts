@@ -3,8 +3,8 @@
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import {
-  drawRadialAt, drawPianoAt, drawOrbitAt, drawWaterfallSnapshot,
-  drawTonalAt, drawHelixAt, drawOscilloscopeAt, drawSkylineAt, drawParticlesBg,
+  drawRadialAt, drawPianoAt, drawOrbitAt,
+  drawTonalAt, drawSetAt, drawHelixAt,
   THEMES,
 } from './visualization';
 import type { VizMode, ThemeId, Theme } from './visualization';
@@ -213,7 +213,6 @@ export class GardenVisualization {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.clip();
 
-    const nowMs = performance.now();
     const mode = this._mode;
     const d = r * 2; // diameter
 
@@ -225,25 +224,16 @@ export class GardenVisualization {
         drawPianoAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, false, 0, theme);
         break;
       case 'orbit':
-        drawOrbitAt(ctx, cx, cy, r, bloom, [], theme, nowMs);
-        break;
-      case 'waterfall':
-        drawWaterfallSnapshot(ctx, cx - r, cy - r, d, d, bloom, [], theme);
+        drawOrbitAt(ctx, cx, cy, r, bloom, [], theme, 0);
         break;
       case 'tonal':
         drawTonalAt(ctx, cx, cy, r, bloom, [], theme);
         break;
+      case 'set':
+        drawSetAt(ctx, cx, cy, r, bloom, [], theme);
+        break;
       case 'helix':
         drawHelixAt(ctx, cx, cy, r, bloom, [], theme);
-        break;
-      case 'particles':
-        drawParticlesBg(ctx, cx - r, cy - r, d, d, bloom, theme);
-        break;
-      case 'oscilloscope':
-        drawOscilloscopeAt(ctx, cx, cy, d, d, bloom, [], theme, nowMs);
-        break;
-      case 'skyline':
-        drawSkylineAt(ctx, cx, cy, d, d, bloom, [], theme);
         break;
     }
 
@@ -309,13 +299,10 @@ export class GardenVisualization {
           drawPianoAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, false, 0, theme);
           break;
         }
-        case 'orbit': drawOrbitAt(actx, cx, cy, minDim * 0.45, bloom, [], theme, performance.now()); break;
-        case 'waterfall': drawWaterfallSnapshot(actx, 0, 0, w, h, bloom, [], theme); break;
+        case 'orbit': drawOrbitAt(actx, cx, cy, minDim * 0.45, bloom, [], theme, 0); break;
         case 'tonal': drawTonalAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
+        case 'set': drawSetAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'helix': drawHelixAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
-        case 'particles': drawParticlesBg(actx, 0, 0, w, h, bloom, theme); break;
-        case 'oscilloscope': drawOscilloscopeAt(actx, cx, cy, w * 0.95, h * 0.80, bloom, [], theme, performance.now()); break;
-        case 'skyline': drawSkylineAt(actx, cx, cy, w * 0.95, h * 0.82, bloom, [], theme); break;
       }
     };
 
