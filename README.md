@@ -1,15 +1,37 @@
 # bloom
 
-Bloom is a model for a musical object that can be transformed. It is a general tool that can be used in computer-aided composition, generative music, live coding, building interactive systems, and more. I developed it for my personal use, and it is the subject of my PhD disseration "Composing with Blooms."
+Bloom is a model for a musical object that can be transformed. It is a general tool that can be used in computer-aided composition, generative music, live coding, building interactive systems, and more. I developed it for my personal use, and it is the subject of my PhD dissertation "Composing with Blooms."
 
-To install:
-1) download the Bloom folder
-2) if you don't have SuperCollider, download it from https://supercollider.github.io and drag to your Applications folder and open.
-3) In SuperCollider: File Menu > Open User Support Directory
-4) In that directory, put the entire Bloom folder into the folder 'Extensions.' If you have no Extensions folder, create one (with a capital E).
+## Repository Structure
 
-To read the helpfile, type Bloom into a SuperCollider document and press Command-D.
+- **`supercollider/`** — The original SuperCollider implementation
+- **`web/`** — A web-based version built with TypeScript
+- **`dissertation/`** — PhD dissertation: "Composing with Blooms"
 
-The Keystroke Controller is the easiest way to work with Blooms. To use it, open from /Tools and run.
+---
 
-(To run a block of code in Supercollider, click inside a parenthesed area and press command-enter.)
+## SuperCollider
+
+### Installation
+1. Download or clone this repository
+2. If you don't have SuperCollider, download it from https://supercollider.github.io and drag it to your Applications folder
+3. In SuperCollider: File Menu > Open User Support Directory
+4. Copy the `supercollider/Bloom` folder into the `Extensions` folder in that directory (create it with a capital E if it doesn't exist)
+
+### Usage
+- To read the helpfile, type `Bloom` into a SuperCollider document and press Command-D
+- The Keystroke Controller is the easiest way to work with Blooms — open `supercollider/Tools/bloom keystroke controller.scd` and run it
+- To run a block of code in SuperCollider, click inside a parenthesized area and press Command-Enter
+
+---
+
+## Web Version
+
+A browser-based implementation of Bloom built with TypeScript and Vite.
+
+### Setup
+```
+cd web
+npm install
+npm run dev
+```
