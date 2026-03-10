@@ -3,8 +3,8 @@
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import {
-  drawRadialAt, drawPianoAt, drawOrbitAt,
-  drawTonalAt, drawSetAt, drawHelixAt,
+  drawRadialAt, drawPianoAt, drawSpanAt, drawDeepAt, drawOrbitAt,
+  drawTonalAt, drawSpiralAt, drawSetAt, drawHelixAt,
   THEMES,
 } from './visualization';
 import type { VizMode, ThemeId, Theme } from './visualization';
@@ -189,7 +189,6 @@ export class GardenVisualization {
     if (!bloom) {
       ctx.save();
       ctx.strokeStyle = isCurrent ? 'rgba(255,255,255,0.22)' : theme.grid;
-      if (theme.id === 'ink') ctx.strokeStyle = isCurrent ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)';
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 4]);
       ctx.beginPath();
@@ -229,11 +228,20 @@ export class GardenVisualization {
       case 'tonal':
         drawTonalAt(ctx, cx, cy, r, bloom, [], theme);
         break;
+      case 'spiral':
+        drawSpiralAt(ctx, cx, cy, r, bloom, [], theme);
+        break;
       case 'set':
         drawSetAt(ctx, cx, cy, r, bloom, [], theme);
         break;
       case 'helix':
         drawHelixAt(ctx, cx, cy, r, bloom, [], theme);
+        break;
+      case 'span':
+        drawSpanAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
+        break;
+      case 'deep':
+        drawDeepAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
         break;
     }
 
@@ -301,8 +309,23 @@ export class GardenVisualization {
         }
         case 'orbit': drawOrbitAt(actx, cx, cy, minDim * 0.45, bloom, [], theme, 0); break;
         case 'tonal': drawTonalAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
+        case 'spiral': drawSpiralAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'set': drawSetAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'helix': drawHelixAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
+        case 'span': {
+          const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
+          const uh = minDim * 0.50;
+          const uw = Math.min(uh * asp, w * 0.97);
+          drawSpanAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, 0, theme, false);
+          break;
+        }
+        case 'deep': {
+          const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
+          const uh = minDim * 0.50;
+          const uw = Math.min(uh * asp, w * 0.97);
+          drawDeepAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, 0, theme, false);
+          break;
+        }
       }
     };
 

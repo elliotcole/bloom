@@ -2,9 +2,9 @@
 
 export type VizMode =
   | 'radial' | 'piano' | 'orbit'
-  | 'tonal' | 'set' | 'helix';
+  | 'tonal' | 'spiral' | 'set' | 'helix' | 'span' | 'deep';
 
-export type ThemeId = 'dark' | 'phosphor' | 'ink' | 'uv' | 'minimal';
+export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal';
 
 export interface Theme {
   id: ThemeId;
@@ -74,24 +74,64 @@ const PHOSPHOR: Theme = {
   grid: 'rgba(57,255,20,0.07)',
 };
 
-// ─── Ink (light / paper) ─────────────────────────────────────────────────────
-const INK: Theme = {
-  id: 'ink',
-  bg: '#f5f0e8',
+// ─── Ember (firelight) ────────────────────────────────────────────────────────
+const EMBER: Theme = {
+  id: 'ember',
+  bg: '#080400',
+  noteHsla(pc, vel, flash) {
+    const h = (pc * 22 + 10) % 75; // reds → oranges → yellows
+    const t = vel / 127;
+    return [h, 85 + t * 15, 32 + t * 36 + flash * 28, t * 0.55 + 0.20 + flash * 0.38];
+  },
+  lineAlpha: f => 0.07 + f * 0.28,
+  polyFill: f => [`rgba(255,140,0,${0.10 + f * 0.10})`, `rgba(180,60,0,${0.03 + f * 0.04})`],
+  glowScale: 1.8,
+  strokeOnly: false,
+  scanlines: false,
+  blendMode: 'source-over',
+  accent: '#ff8800',
+  text: 'rgba(255,160,30,0.35)',
+  grid: 'rgba(255,90,0,0.06)',
+};
+
+// ─── Arctic (ice / glacier) ───────────────────────────────────────────────────
+const ARCTIC: Theme = {
+  id: 'arctic',
+  bg: '#010912',
+  noteHsla(pc, vel, flash) {
+    const h = (pc * 30 + 160) % 360; // hue wheel rotated into cool range
+    const t = vel / 127;
+    return [h, 70 + t * 25 + flash * 15, 44 + t * 24 + flash * 28, t * 0.50 + 0.22 + flash * 0.38];
+  },
+  lineAlpha: f => 0.08 + f * 0.28,
+  polyFill: f => [`rgba(0,200,255,${0.10 + f * 0.08})`, `rgba(0,100,200,${0.03 + f * 0.03})`],
+  glowScale: 0.8,
+  strokeOnly: false,
+  scanlines: false,
+  blendMode: 'screen',
+  accent: '#00ccff',
+  text: 'rgba(100,220,255,0.30)',
+  grid: 'rgba(0,180,255,0.06)',
+};
+
+// ─── Solar (max-saturation full-spectrum, additive) ───────────────────────────
+const SOLAR: Theme = {
+  id: 'solar',
+  bg: '#050501',
   noteHsla(pc, vel, flash) {
     const h = pc * 30;
     const t = vel / 127;
-    return [h, 15 + t * 35, 8 + t * 22 + flash * 5, 0.30 + t * 0.55 + flash * 0.15];
+    return [h, 100, 50 + t * 18 + flash * 22, t * 0.60 + 0.22 + flash * 0.35];
   },
-  lineAlpha: f => 0.10 + f * 0.15,
-  polyFill: f => [`rgba(20,40,80,${0.07 + f * 0.06})`, `rgba(20,40,80,${0.02 + f * 0.02})`],
-  glowScale: 0,
+  lineAlpha: f => 0.10 + f * 0.40,
+  polyFill: f => [`rgba(255,255,100,${0.08 + f * 0.10})`, `rgba(255,200,0,${0.02 + f * 0.04})`],
+  glowScale: 2.2,
   strokeOnly: false,
   scanlines: false,
-  blendMode: 'multiply',
-  accent: '#2244aa',
-  text: 'rgba(20,20,20,0.28)',
-  grid: 'rgba(20,20,20,0.07)',
+  blendMode: 'screen',
+  accent: '#ffee00',
+  text: 'rgba(255,240,80,0.32)',
+  grid: 'rgba(255,220,0,0.05)',
 };
 
 // ─── UV / Blacklight ─────────────────────────────────────────────────────────
@@ -134,7 +174,9 @@ const MINIMAL: Theme = {
 };
 
 // ─── Exports ─────────────────────────────────────────────────────────────────
-export const THEMES: Record<ThemeId, Theme> = { dark: DARK, phosphor: PHOSPHOR, ink: INK, uv: UV, minimal: MINIMAL };
+export const THEMES: Record<ThemeId, Theme> = {
+  dark: DARK, phosphor: PHOSPHOR, ember: EMBER, arctic: ARCTIC, solar: SOLAR, uv: UV, minimal: MINIMAL,
+};
 
 export function getTheme(id: ThemeId): Theme {
   return THEMES[id] ?? THEMES.dark;

@@ -75,19 +75,6 @@
         z-index: 999;
       }
 
-      /* Ink / paper */
-      body[data-theme="ink"] { background: #f5f0e8; color: #444; }
-      body[data-theme="ink"] #header { background: #ede8e0; border-color: #ccc; }
-      body[data-theme="ink"] #header h1 { color: #888; }
-      body[data-theme="ink"] #settings-bar { background: #e8e3db; border-color: #ccc; color: #555; }
-      body[data-theme="ink"] #footer { background: #ede8e0; border-color: #ccc; color: #999; }
-      body[data-theme="ink"] #garden-area { background: #ede8e0; border-color: #ccc; }
-      body[data-theme="ink"] #canvas-area { background: #f5f0e8; }
-      body[data-theme="ink"] select,
-      body[data-theme="ink"] input[type="number"],
-      body[data-theme="ink"] button:not(#help-full *) { background: #e0dbd3; border-color: #bbb; color: #555; }
-      body[data-theme="ink"] .midi-status.ok { color: #228844; }
-      body[data-theme="ink"] .s-sep { color: #bbb; }
 
       /* UV / blacklight */
       body[data-theme="uv"] { background: #08000f; color: #cc88ff; }
@@ -353,6 +340,116 @@
       }
       .hf-body b { color: #9bc; font-weight: normal; }
 
+      /* ─── Bloom Editor ──────────────────────────────────────────────────────── */
+      #bloom-editor {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.72);
+        z-index: 300;
+        align-items: center;
+        justify-content: center;
+      }
+      #bloom-editor.open { display: flex; }
+
+      #be-box {
+        background: #0e0e1a;
+        border: 1px solid #2a2a44;
+        padding: 16px 20px 14px;
+        width: min(560px, 92vw);
+        max-height: 88vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 11px;
+      }
+      .be-title { font-size: 12px; color: #778; letter-spacing: 1px; }
+      .be-hint  { color: #445; font-size: 10px; margin-left: 8px; }
+      .be-row   { display: flex; gap: 12px; align-items: flex-start; }
+      .be-lbl   { flex: 0 0 110px; font-size: 10px; color: #667; line-height: 1.6; padding-top: 3px; }
+      .be-sub   { font-size: 9px; color: #445; }
+      .be-ta, .be-inp {
+        flex: 1;
+        background: #090912;
+        border: 1px solid #1e1e36;
+        color: #aab;
+        font-family: inherit;
+        font-size: 11px;
+        padding: 4px 6px;
+        resize: vertical;
+        outline: none;
+        line-height: 1.5;
+      }
+      .be-inp { resize: none; height: 24px; padding-top: 3px; padding-bottom: 3px; }
+      .be-ta:focus, .be-inp:focus { border-color: #44588a; }
+      .be-status { font-size: 10px; min-height: 14px; color: transparent; }
+      .be-status--err { color: #a55; }
+      .be-status--ok  { color: #5a9; }
+      .be-btns { display: flex; gap: 8px; }
+      .be-btns button {
+        background: transparent;
+        border: 1px solid #252540;
+        color: #667;
+        font-family: inherit;
+        font-size: 11px;
+        padding: 3px 10px;
+        cursor: pointer;
+      }
+      .be-btns button:hover { color: #aab; border-color: #4455aa; }
+
+      /* ─── Command Palette ───────────────────────────────────────────────────── */
+      #cmd-palette {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 400;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 16vh;
+      }
+      #cmd-palette.open { display: flex; }
+
+      #cp-box {
+        background: #0c0c18;
+        border: 1px solid #2a2a44;
+        width: min(500px, 92vw);
+        padding: 10px 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .cp-hint { font-size: 9px; color: #445; }
+      .cp-input {
+        background: #07070f;
+        border: 1px solid #252540;
+        color: #9ab;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 7px 10px;
+        outline: none;
+        width: 100%;
+      }
+      .cp-input:focus { border-color: #44588a; }
+      .cp-suggest { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+      .cp-sug {
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        color: #556;
+      }
+      .cp-sug:hover, .cp-sug.active { background: #14142a; }
+      .cp-sug-name  { flex: 0 0 130px; color: #7ab; }
+      .cp-sug.active .cp-sug-name { color: #acd; }
+      .cp-sug-desc  { font-size: 10px; color: #445; }
+      .cp-status { font-size: 10px; min-height: 13px; color: transparent; }
+      .cp-status--err { color: #a55; }
+      .cp-status--ok  { color: #5a9; }
+
     </style>
   </head>
   <body>
@@ -365,13 +462,18 @@
         <option value="piano">✦ field</option>
         <option value="orbit">⊙ orbit</option>
         <option value="tonal">⬡ tonal</option>
+        <option value="spiral">🌀 spiral</option>
         <option value="set">⬡ set</option>
         <option value="helix">⌀ helix</option>
+        <option value="span">⊞ span</option>
+        <option value="deep">◆ deep</option>
       </select>
       <select id="viz-theme-select" title="visual theme">
         <option value="dark">◼ dark</option>
         <option value="phosphor">▣ phosphor</option>
-        <option value="ink">○ ink</option>
+        <option value="ember">🔥 ember</option>
+        <option value="arctic">❄ arctic</option>
+        <option value="solar">☀ solar</option>
         <option value="uv">◈ uv</option>
         <option value="minimal">□ minimal</option>
       </select>
@@ -431,6 +533,22 @@
         <label title="highest MIDI channel (0-based) for channel operations">maxChan
           <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
         </label>
+      </span>
+      <span class="s-sep">|</span>
+      <!-- Graph display -->
+      <span class="s-group">
+        <label title="show axis labels in graph views (field, span, deep)">axis
+          <input type="checkbox" id="show-axis">
+        </label>
+        <label title="show pitch+octave label next to each note in all views">notes
+          <input type="checkbox" id="show-note-labels">
+        </label>
+      </span>
+      <span class="s-sep">|</span>
+      <!-- Save / load -->
+      <span class="s-group">
+        <button class="s-btn" id="save-garden" title="save garden to JSON (ctrl+s)">⬇ save</button>
+        <button class="s-btn" id="load-garden" title="load garden from JSON (ctrl+o)">⬆ load</button>
       </span>
     </div>
 
@@ -527,7 +645,9 @@ Del  clear slot
 shift ← →  navigate + play
 
 <b>View</b>
-\    toggle console
+\      toggle console
+opt-e  edit bloom
+cmd-k  command palette
 </div>
 
     <div id="help-full">
@@ -637,7 +757,9 @@ shift ← →  navigate + play
           </div>
           <div class="hf-sec">
             <div class="hf-h">View</div>
-            <div class="hf-body"><b>\</b>    toggle console</div>
+            <div class="hf-body"><b>\</b>       toggle console
+<b>opt-e</b>    edit bloom
+<b>cmd-k</b>    command palette</div>
           </div>
         </div>
       </div>

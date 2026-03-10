@@ -2,7 +2,6 @@
 
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
-import { wrapAt } from '../lib/arrays';
 import { spellOctave } from '../lib/numbers';
 
 const MAX_HISTORY = 50;
@@ -44,11 +43,16 @@ export class Display {
         : spellOctave(note as number),
     );
 
-    const velStrs = notes.map((_, i) => String(wrapAt(bloom.velocities, i)));
-    const timeStrs = notes.map((_, i) =>
-      String(Math.round(wrapAt(bloom.timeIntervals, i) * 100) / 100),
-    );
-    const chanStrs = notes.map((_, i) => String(wrapAt(bloom.chans, i)));
+    // Show raw arrays — different lengths are intentional (polyrhythm)
+    const N = notes.length;
+    const velStrs  = bloom.velocities.map(v => String(v));
+    const timeStrs = bloom.timeIntervals.map(t => String(Math.round(t * 100) / 100));
+    const chanStrs = bloom.chans.map(c => String(c));
+
+    // Add length annotation on the label when arrays are shorter than notes
+    const velLabel  = `vel${bloom.velocities.length    < N ? `(${bloom.velocities.length})`    : ''}:`;
+    const timeLabel = `time${bloom.timeIntervals.length < N ? `(${bloom.timeIntervals.length})` : ''}:`;
+    const chanLabel = `chan${bloom.chans.length         < N ? `(${bloom.chans.length})`         : ''}:`;
 
     const scale = bloom.scale;
     const scaleName = bloom.appliedScale
@@ -60,9 +64,9 @@ export class Display {
 
     const lines = [
       `notes:  ${noteStrs.join('  ')}`,
-      `vel:    ${velStrs.join('  ')}`,
-      `time:   ${timeStrs.join('  ')}`,
-      `chan:    ${chanStrs.join('  ')}`,
+      `${velLabel.padEnd(8)}${velStrs.join('  ')}`,
+      `${timeLabel.padEnd(8)}${timeStrs.join('  ')}`,
+      `${chanLabel.padEnd(8)}${chanStrs.join('  ')}`,
       `scale:  ${scaleStr}   dur: ${dur}b`,
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,

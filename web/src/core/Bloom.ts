@@ -153,10 +153,7 @@ export class Bloom {
     if (this.nest) {
       const flat = flatNotes(this.notes) as number[];
       this.notes = matchNesting(flat, this.nest);
-      const flatV = [...this.velocities];
-      this.velocities = flatNotes(matchNesting(flatV, this.nest) as NoteArray) as number[];
-      const flatC = [...this.chans];
-      this.chans = flatNotes(matchNesting(flatC, this.nest) as NoteArray) as number[];
+      // velocities/chans stay at their original lengths — wrapAt handles cycling at playback
       this.nest = null;
     }
   }
@@ -308,7 +305,6 @@ export class Bloom {
     this.notes = perfectShuffle(this.notes) as NoteArray;
     this.timeIntervals = perfectShuffle(this.timeIntervals);
     this.velocities = perfectShuffle(this.velocities);
-    this.wrapToNotes();
     return this;
   }
 
@@ -632,7 +628,6 @@ export class Bloom {
     this.notes = sputterArr(this.notes, probability) as NoteArray;
     this.velocities = sputterArr(this.velocities, probability);
     this.timeIntervals = sputterArr(this.timeIntervals, probability);
-    this.wrapToNotes();
     return this;
   }
 
@@ -779,7 +774,6 @@ export class Bloom {
     if (this.timeIntervals.length % 2 !== 0) newTime.push(this.timeIntervals[this.timeIntervals.length - 1]);
     this.timeIntervals = newTime;
 
-    this.wrapToNotes();
     return this;
   }
 
@@ -1144,7 +1138,6 @@ export class Bloom {
       wrapAt(this.savedTimeIntervals ?? this.timeIntervals, i),
     );
     this.velocities = groups.map((_, i) => wrapAt(this.velocities, i));
-    this.wrapToNotes();
     return this;
   }
 
@@ -1159,7 +1152,6 @@ export class Bloom {
     }
     this.notes = groups;
     this.velocities = groups.map((_, i) => wrapAt(this.velocities, i));
-    this.wrapToNotes();
     return this;
   }
 
@@ -1173,7 +1165,6 @@ export class Bloom {
       return Array.isArray(item) ? base : base;
     });
     this.velocities = this.notes.map((_, i) => wrapAt(this.velocities, i));
-    this.wrapToNotes();
     return this;
   }
 
@@ -1181,7 +1172,6 @@ export class Bloom {
     this.flattenChords();
     const groups = curdleArr(this.notes as NoteVal[], probability);
     this.notes = groups.map(g => (g.length === 1 ? g[0] : g)) as NoteArray;
-    this.wrapToNotes();
     return this;
   }
 
@@ -1190,7 +1180,6 @@ export class Bloom {
     this.velocities = flatNotes(this.velocities as unknown as NoteArray) as number[];
     this.chans = flatNotes(this.chans as unknown as NoteArray) as number[];
     this.restoreTimeIntervals();
-    this.wrapToNotes();
     return this;
   }
 
@@ -1329,12 +1318,7 @@ export class Bloom {
 
     this.notes = newNotes as NoteArray;
     this.notes = matchNesting(flatNotes(this.notes) as number[], originalNotes);
-    this.velocities = flatNotes(
-      matchNesting(this.velocities, originalNotes) as unknown as NoteArray,
-    ) as number[];
-    this.chans = flatNotes(
-      matchNesting(this.chans, originalNotes) as unknown as NoteArray,
-    ) as number[];
+    // velocities/chans keep their original lengths — wrapAt handles cycling at playback
 
     return this;
   }

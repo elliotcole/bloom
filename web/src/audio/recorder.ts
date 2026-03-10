@@ -12,7 +12,6 @@ interface CapturedNote {
 }
 
 let _recording = false;
-let _startMs = 0;
 let _captured: CapturedNote[] = [];
 
 function _handler(data: Uint8Array, atMs: number): void {
@@ -31,12 +30,12 @@ function _handler(data: Uint8Array, atMs: number): void {
 
 export function startRecording(): void {
   _recording = true;
-  _startMs = performance.now();
   _captured = [];
   onMidiMessage(_handler);
 }
 
 export function stopRecording(bloom: Bloom): void {
+  const stopMs = performance.now(); // capture before unregistering handler
   offMidiMessage(_handler);
   _recording = false;
   if (_captured.length === 0) return;
@@ -47,11 +46,15 @@ export function stopRecording(bloom: Bloom): void {
   bloom.velocities = _captured.map(e => e.vel);
   bloom.chans = _captured.map(e => e.chan);
 
-  // timeInterval[i] = gap from previous note-on (first = gap from recording start)
-  bloom.timeIntervals = _captured.map((e, i) => {
-    const prevMs = i === 0 ? _startMs : _captured[i - 1].onTimeMs;
-    return Math.max(0.01, (e.onTimeMs - prevMs) / msPerBeat);
-  });
+  // timeInterval[i] = gap from note[i] to note[i+1].
+  // Clock starts on the first note-on (dead time before playing is ignored).
+  // Last note measures to the moment recording was stopped (second ` tap).
+  const intervals: number[] = [];
+  for (let i = 0; i < _captured.length; i++) {
+    const nextMs = i < _captured.length - 1 ? _captured[i + 1].onTimeMs : stopMs;
+    intervals.push(Math.max(0.01, (nextMs - _captured[i].onTimeMs) / msPerBeat));
+  }
+  bloom.timeIntervals = intervals;
 
   bloom.enforceRange();
 }

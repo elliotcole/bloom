@@ -5,12 +5,15 @@ import { Bloom, BloomDefaults } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
+import { saveGarden, loadGarden } from './io/garden-io';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
 import type { VizMode, ThemeId } from './ui/theme';
 import { Display } from './ui/display';
 import type { KeyHandlerState } from './ui/keys';
 import { createKeyHandler } from './ui/keys';
+import { BloomEditor } from './ui/bloomEditor';
+import { CommandPalette } from './ui/commandPalette';
 
 async function main() {
   // ─── DOM refs ───────────────────────────────────────────────────────────────
@@ -75,6 +78,99 @@ async function main() {
   }
   consoleToggleBtn?.addEventListener('click', toggleConsole);
 
+  // ─── Bloom editor ────────────────────────────────────────────────────────────
+  function refreshAll(b: Bloom, msg = '') {
+    viz.setBloom(b);
+    gardenViz.update(garden);
+    display.update(b, garden, msg);
+  }
+
+  const bloomEditor = new BloomEditor((b) => refreshAll(b, 'edited'));
+
+  // ─── Command palette ──────────────────────────────────────────────────────────
+  const commandPalette = new CommandPalette(
+    () => bloom,
+    (b) => refreshAll(b, ''),
+  );
+
+  // Register commands
+  (function registerCommands() {
+    const reg = commandPalette.register.bind(commandPalette);
+
+    // Mutation
+    reg('mutate',    'mutate notes (diatonic)',   b => b.mutateNotesD());
+    reg('mutateC',   'mutate notes (chromatic)',  b => b.mutateNotes());
+    reg('mutateT',   'mutate time',               b => b.mutateTime());
+    reg('mutateV',   'mutate velocities',         b => b.mutateVelocities());
+
+    // Randomize
+    reg('scramble',  'scramble note order',       b => b.scramble());
+    reg('shuffle',   'perfect shuffle',           b => b.shuffle());
+
+    // Density
+    reg('thicken',   'add similar notes',         b => b.thicken(0.3));
+    reg('thin',      'remove random notes',       b => b.thin());
+    reg(['gap', 'addgap'],    'insert time gap',  b => b.gap());
+    reg('ungap',     'remove time gap',           b => b.unGap());
+
+    // Tempo / dynamics
+    reg(['slower', 'slow'], 'stretch time intervals', b => b.slower());
+    reg(['faster', 'fast'], 'compress time intervals', b => b.faster());
+    reg(['softer', 'soft'], 'reduce velocities',   b => b.softer());
+    reg(['louder', 'loud'], 'increase velocities', b => b.louder());
+    reg(['avgtime', 'even'], 'even out time intervals', b => b.avgTime());
+
+    // Extend / contract
+    reg('droplast',  'drop last note',            b => b.dropLast());
+    reg('addone',    'add one random note',       b => b.addOne());
+    reg(['addinscale', 'adddiatonic'], 'add note in scale', b => b.addOneInScale());
+
+    // Rotate
+    reg('rotatenotes', 'rotate notes array',      b => b.rotateNotes(1));
+    reg('rotatevel',   'rotate velocities',       b => b.rotateVelocities(1));
+    reg('rotatetime',  'rotate time intervals',   b => b.rotateTime(1));
+    reg('rotatechan',  'rotate channels',         b => b.rotateChans(1));
+
+    // Patterning
+    reg('stutter',   'stutter pattern',           b => b.stutter());
+    reg('sputter',   'sputter pattern',           b => b.sputter());
+    reg('spray',     'spray pattern',             b => b.spray());
+    reg('ratchet',   'ratchet rhythm',            b => b.ratchet());
+    reg('mirror',    'mirror notes',              b => b.mirror());
+    reg('braid',     'braid pattern',             b => b.braid());
+    reg('pyramid',   'pyramid pattern',           b => b.pyramid());
+    reg('quantize',  'quantize to grid (4)',      b => b.quantize(4));
+    reg('shear',     'shear pitches',             b => b.shear());
+    reg('removedoubles', 'remove double notes',   b => b.removeDoubles());
+    reg('drawcurves', 'draw curves diatonic',     b => b.drawCurvesD(10));
+
+    // Pitch
+    reg(['invert', 'inv'],     'invert pitches',       b => b.invert());
+    reg(['invertmean', 'invm'], 'invert around mean',  b => b.invertMean());
+    reg('up1',   'transpose up 1 semitone',            b => b.transpose(1));
+    reg('down1', 'transpose down 1 semitone',          b => b.transpose(-1));
+    reg('up12',  'transpose up 1 octave',              b => b.transpose(12));
+    reg('down12', 'transpose down 1 octave',           b => b.transpose(-12));
+    reg('step+', 'diatonic step up',                   b => b.dTranspose(1));
+    reg('step-', 'diatonic step down',                 b => b.dTranspose(-1));
+    reg('pivot',  'pivot to highest note',             b => b.pivot());
+    reg('pivotL', 'pivot to loudest note',             b => b.pivotLoudest());
+
+    // Scale
+    reg(['choosescale', 'scale'], 'snap to nearest scale', b => b.chooseScale());
+    reg('slant',   'slant scale',                     b => b.slantScale());
+    reg('reduce',  'reduce scale degrees',            b => b.reduceScale());
+
+    // Chords
+    reg(['chords', 'clump'],    'clump into chords',  b => b.chordsRandShorten());
+    reg(['flattenchords', 'flatten'], 'flatten chords', b => b.flattenChords());
+
+    // Shape
+    reg(['newshape', 'shape'], 'new bloom shape',     b => b.newShape());
+    reg('push',    'push bloom to stack',             b => b.push());
+    reg('pop',     'pop bloom from stack',            b => b.pop());
+  })();
+
   // ─── Key handler ─────────────────────────────────────────────────────────────
   const fullHelpEl = document.getElementById('help-full') as HTMLElement;
   let showFullHelp = false;
@@ -106,11 +202,15 @@ async function main() {
     consoleClearFn: () => display.clear(),
     pedalDown: false,
     recordDotEl,
+    editorOpenFn:  () => bloomEditor.open(bloom),
+    paletteOpenFn: () => commandPalette.open(),
   };
 
   const { onKey } = createKeyHandler(keyState);
 
   window.addEventListener('keydown', (e) => {
+    // Don't send keystrokes to bloom when editor or palette is open
+    if (bloomEditor.isOpen() || commandPalette.isOpen()) return;
     keyState.out = midiState.selectedOutput;
     onKey(e);
   });
@@ -290,6 +390,18 @@ async function main() {
     bloom.fixedScale = fixedScaleEnabledCb.checked ? bloom.scale : false;
   });
 
+  // Show axis (field / span / deep)
+  const showAxisCb = document.getElementById('show-axis') as HTMLInputElement;
+  showAxisCb?.addEventListener('change', () => {
+    viz.setShowAxis(showAxisCb.checked);
+  });
+
+  // Show note labels (all views)
+  const showNoteLabelsCb = document.getElementById('show-note-labels') as HTMLInputElement;
+  showNoteLabelsCb?.addEventListener('change', () => {
+    viz.setShowNoteLabels(showNoteLabelsCb.checked);
+  });
+
   // Max channels
   const maxChanInput = document.getElementById('max-chan-input') as HTMLInputElement;
   maxChanInput?.addEventListener('change', () => {
@@ -297,6 +409,30 @@ async function main() {
     if (!isNaN(v) && v >= 0 && v <= 15) {
       Bloom.maxChan = v;
     }
+  });
+
+  // ─── Save / load garden ───────────────────────────────────────────────────────
+  function doSave() {
+    saveGarden(bloom, garden);
+    display.setStatus('saved');
+  }
+
+  function doLoad() {
+    loadGarden(bloom, garden, (err) => {
+      if (err) { display.setStatus(err); return; }
+      if (viz) viz.setBloom(bloom);
+      if (gardenViz) gardenViz.update(garden);
+      display.update(bloom, garden, 'loaded');
+    });
+  }
+
+  document.getElementById('save-garden')?.addEventListener('click', doSave);
+  document.getElementById('load-garden')?.addEventListener('click', doLoad);
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); doSave(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); doLoad(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); commandPalette.open(); }
   });
 
   console.log('Bloom Web ready.');

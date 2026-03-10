@@ -3,6 +3,7 @@
 import { Bloom } from '../core/Bloom';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
+import { wrapAt } from '../lib/arrays';
 
 // ─── BPM state ────────────────────────────────────────────────────────────────
 
@@ -92,33 +93,42 @@ interface LoopState {
   out: MidiOutput;
   intervalId: ReturnType<typeof setInterval>;
   nextEventTime: number; // ms absolute
-  eventIndex: number;
-  events: ReturnType<Bloom['toEvents']>; // refreshed at each cycle boundary
+  /** Persistent counter across loop boundaries — each list wraps at its own length */
+  globalTick: number;
   onNoteOn?: (index: number) => void;
+  /** Called at the start of every notes cycle with the effective vel/time/chan arrays for that cycle */
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[]) => void;
   onLoop?: () => void;
 }
 
 let _loop: LoopState | null = null;
 
+/** Build the N effective values for the upcoming notes cycle starting at `tick` */
+function buildCycleSlice(
+  arr: number[], tick: number, N: number,
+): number[] {
+  return Array.from({ length: N }, (_, i) => wrapAt(arr, tick + i));
+}
+
 export function startLooper(
   bloom: Bloom,
   out: MidiOutput,
   onNoteOn?: (index: number) => void,
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[]) => void,
   onLoop?: () => void,
 ): void {
   stopLooper();
 
-  const events = bloom.toEvents();
-  if (events.length === 0) return;
+  if (bloom.notes.length === 0) return;
 
   const state: LoopState = {
     bloom,
     out,
     intervalId: 0 as unknown as ReturnType<typeof setInterval>,
     nextEventTime: performance.now(),
-    eventIndex: 0,
-    events,
+    globalTick: 0,
     onNoteOn,
+    onCycleUpdate,
     onLoop,
   };
 
@@ -127,40 +137,54 @@ export function startLooper(
     const horizon = now + LOOKAHEAD_MS;
 
     while (state.nextEventTime < horizon) {
-      const ev = state.events[state.eventIndex];
-      const notes = Array.isArray(ev.note) ? ev.note as number[] : [ev.note as number];
-      const vel = ev.velocity;
-      const chan = ev.chan;
+      const b = state.bloom;
+      if (b.notes.length === 0) break;
+
+      // Each list cycles at its own independent rate via globalTick
+      const noteIdx = state.globalTick % b.notes.length;
+
+      // At the start of each notes cycle: update the display + fire onLoop
+      if (noteIdx === 0) {
+        const N = b.notes.length;
+        if (state.onCycleUpdate) {
+          state.onCycleUpdate(
+            buildCycleSlice(b.velocities,    state.globalTick, N),
+            buildCycleSlice(b.timeIntervals, state.globalTick, N),
+            buildCycleSlice(b.chans,         state.globalTick, N),
+          );
+        }
+        if (state.globalTick > 0) state.onLoop?.();
+      }
+
+      const noteVal = b.notes[noteIdx];
+      const notes = Array.isArray(noteVal) ? noteVal as number[] : [noteVal as number];
+      const vel  = wrapAt(b.velocities,    state.globalTick);
+      const time = wrapAt(b.timeIntervals, state.globalTick);
+      const chan = wrapAt(b.chans,         state.globalTick);
+
       const atMs = state.nextEventTime;
-      const legato = state.bloom.legato;
-      const sustain = state.bloom.sustain;
-      const gateMs = sustain !== null
-        ? beatsToMs(sustain)
-        : beatsToMs(ev.time * legato);
+      const legato = b.legato;
+      const sustain = b.sustain;
+      const gateMs = sustain !== null ? beatsToMs(sustain) : beatsToMs(time * legato);
 
       if (vel > 0) {
         notes.forEach(n => {
           if (n < 0 || n > 127) return;
           noteOn(out, chan, n, vel, atMs);
-          setTimeout(() => noteOff(out, chan, n, atMs + Math.max(10, gateMs)), atMs - now + Math.max(10, gateMs));
+          setTimeout(
+            () => noteOff(out, chan, n, atMs + Math.max(10, gateMs)),
+            atMs - now + Math.max(10, gateMs),
+          );
         });
       }
 
       // Fire visual callback at actual note-on time
-      const noteIdx = state.eventIndex;
+      const tickSnap = noteIdx;
       const visualDelay = Math.max(0, atMs - now);
-      setTimeout(() => state.onNoteOn?.(noteIdx), visualDelay);
+      setTimeout(() => state.onNoteOn?.(tickSnap), visualDelay);
 
-      state.eventIndex++;
-      if (state.eventIndex >= state.events.length) {
-        state.eventIndex = 0;
-        // Refresh events from current bloom at cycle boundary
-        const next = state.bloom.toEvents();
-        if (next.length > 0) state.events = next;
-        state.onLoop?.();
-      }
-
-      state.nextEventTime += beatsToMs(ev.time);
+      state.globalTick++;
+      state.nextEventTime += beatsToMs(time);
     }
   }, TICK_MS);
 

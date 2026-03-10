@@ -43,11 +43,15 @@ export interface KeyHandlerState {
   consoleClearFn: (() => void) | null;
   pedalDown: boolean;
   recordDotEl: HTMLElement | null;
+  editorOpenFn: (() => void) | null;
+  paletteOpenFn: (() => void) | null;
 }
 
 export function createKeyHandler(state: KeyHandlerState) {
   let _previewResetId: ReturnType<typeof setTimeout> | null = null;
   let _lastEscapeTime = 0;
+  /** Temporary bloom used for loop-cycle display; reused across cycles to avoid allocation */
+  let _loopDisplayBloom: Bloom | null = null;
 
   function refresh(msg = '') {
     // Cancel any in-progress garden preview
@@ -82,6 +86,13 @@ export function createKeyHandler(state: KeyHandlerState) {
     const alt = e.altKey;
     const b = state.bloom;
     const g = state.garden;
+
+    // ─── Editor / Palette ─────────────────────────────────────────────────────
+    if (alt && e.code === 'KeyE') {
+      e.preventDefault();
+      state.editorOpenFn?.();
+      return;
+    }
 
     // ─── Storage ─────────────────────────────────────────────────────────────
     if (ch === 'n' && !shift && !alt) {
@@ -160,7 +171,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('mutate time');
       return;
     }
-    if (ch === 't' && alt) {
+    if (e.code === 'KeyT' && !shift && alt) {
       status('sort time');
       b.timeIntervals = [...b.timeIntervals].sort((a, v) => a - v);
       refresh('sort time');
@@ -468,9 +479,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('drawCurvesD');
       return;
     }
-    if (ch === 'w' && alt) {
+    if (e.code === 'KeyW' && !shift && alt) {
       status('wheels within wheels');
-      b.velocities = [100, ...Array(b.notes.length - 1).fill(30)];
+      b.velocities = [100, ...Array(b.notes.length).fill(30)];  // N+1 vels for N notes → accent shifts each cycle
       refresh('wheels within wheels');
       return;
     }
@@ -554,7 +565,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('fromListOfBlooms');
       return;
     }
-    if (ch === '|' && alt) {
+    if (e.code === 'Backslash' && shift && alt) {
       status('curdle b >> garden');
       const pieces = b.curdle(0.2);
       pieces.forEach((piece, i) => {
@@ -590,12 +601,27 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (ch === ',' && !alt) {
-      if (!isLooping()) startLooper(b, state.out!, idx => state.viz?.activateNote(idx));
+      if (!isLooping()) {
+        startLooper(
+          b,
+          state.out!,
+          idx => state.viz?.activateNote(idx),
+          (vel, time, chan) => {
+            // Reuse a single display bloom; import notes/scale from the live bloom each cycle
+            if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
+            _loopDisplayBloom.import(state.bloom);
+            _loopDisplayBloom.velocities    = vel;
+            _loopDisplayBloom.timeIntervals = time;
+            _loopDisplayBloom.chans         = chan;
+            state.viz?.setBloom(_loopDisplayBloom);
+          },
+        );
+      }
       updateLooper(b);
       status('looping');
       return;
     }
-    if (ch === ',' && alt) {
+    if (e.code === 'Comma' && !shift && alt) {
       e.preventDefault();
       if (!state.out) { status('No MIDI output'); return; }
       if (isGardenLooping()) {
@@ -620,7 +646,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       status(`pulsar [${getPulsarRate()}b]`);
       return;
     }
-    if (ch === '/' && alt) {
+    if (e.code === 'Slash' && !shift && alt) {
       e.preventDefault();
       if (!state.out) { status('No MIDI output'); return; }
       if (isGardenPulsing()) {
@@ -723,6 +749,14 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // ─── View ─────────────────────────────────────────────────────────────────
+    if (ch === 'l' && !shift && !alt) {
+      const next = state.viz?.toggleNoteLabels() ?? false;
+      const cb = document.getElementById('show-note-labels') as HTMLInputElement | null;
+      if (cb) cb.checked = next;
+      status(next ? 'labels on' : 'labels off');
+      return;
+    }
+
     if (ch === '\\') {
       state.consoleToggleFn?.();
       return;
