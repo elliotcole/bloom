@@ -1,4 +1,4 @@
-// Manual bloom editor — open with Option+E, Ctrl+Enter to apply, Esc to close
+// Manual bloom editor — open with Option+E, Shift+Enter to apply, Esc to close
 
 import { Bloom } from '../core/Bloom';
 import type { NoteVal } from '../lib/arrays';
@@ -152,7 +152,7 @@ export class BloomEditor {
 
     ov.innerHTML = `
       <div id="be-box">
-        <div class="be-title">edit bloom <span class="be-hint">ctrl+↵ apply · esc close</span></div>
+        <div class="be-title">edit bloom <span class="be-hint">shift+↵ apply · esc close</span></div>
         <div class="be-row">
           <div class="be-lbl">notes<br><span class="be-sub">MIDI 0–127, C4, Eb5, [C4 E4 G4]</span></div>
           <textarea id="be-notes" class="be-ta" rows="3" spellcheck="false"></textarea>
@@ -175,7 +175,7 @@ export class BloomEditor {
         </div>
         <div id="be-status" class="be-status"></div>
         <div class="be-btns">
-          <button id="be-apply">apply (ctrl+↵)</button>
+          <button id="be-apply">apply (shift+↵)</button>
           <button id="be-close">close (esc)</button>
         </div>
       </div>
@@ -197,7 +197,7 @@ export class BloomEditor {
     // Keyboard shortcuts inside modal
     ov.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.stopPropagation(); this._apply(); }
+      if (e.shiftKey && e.key === 'Enter') { e.stopPropagation(); this._apply(); }
     });
 
     return ov;

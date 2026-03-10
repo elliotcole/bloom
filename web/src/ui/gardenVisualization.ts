@@ -21,7 +21,7 @@ export class GardenVisualization {
   private animCanvas: HTMLCanvasElement;
 
   private garden: Garden | null = null;
-  private _mode: VizMode = 'radial';
+  private _mode: VizMode = 'deep';
   private _theme: Theme = THEMES.dark;
   private visibleCount = 5;
 
@@ -216,7 +216,7 @@ export class GardenVisualization {
     const d = r * 2; // diameter
 
     switch (mode) {
-      case 'radial':
+      case 'flower':
         drawRadialAt(ctx, cx, cy, r, bloom, [], theme);
         break;
       case 'piano':
@@ -299,7 +299,7 @@ export class GardenVisualization {
       const minDim = Math.min(w, h);
       const mode = this._mode;
       switch (mode) {
-        case 'radial': drawRadialAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
+        case 'flower': drawRadialAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
         case 'piano': {
           const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
           const uh = minDim * 0.50;

@@ -66,7 +66,15 @@ export function drawRadialAt(
   const notes = bloom.notes;
   const n = notes.length;
   const times = notes.map((_, i) => wrapAt(bloom.timeIntervals, i));
-  const maxTime = Math.max(...times, 0.01);
+  const totalTime = times.reduce((s, t) => s + t, 0) || 1;
+
+  // Cumulative-time angles: arc between petals is proportional to each note's time interval
+  let cumTime = 0;
+  const noteAngles = times.map(t => {
+    const a = (cumTime / totalTime) * Math.PI * 2 - Math.PI / 2;
+    cumTime += t;
+    return a;
+  });
 
   ctx.globalCompositeOperation = theme.blendMode;
 
@@ -75,14 +83,13 @@ export function drawRadialAt(
     const chordNotes = Array.isArray(noteVal) ? (noteVal as number[]) : [noteVal as number];
     const flash = flashValues[i] ?? 0;
     const vel = wrapAt(bloom.velocities, i);
-    const time = wrapAt(bloom.timeIntervals, i);
 
     chordNotes.forEach((pitch, ci) => {
-      const angle = ((i / n) * Math.PI * 2) - Math.PI / 2 + ci * 0.05;
-      const baseLength = (pitch / 127) * radius * 0.8 + radius * 0.08;
-      const baseHW = (time / maxTime) * 16 + 4;
-      const length = baseLength + flash * radius * 0.18;
-      const halfW = baseHW + flash * 8;
+      const angle = noteAngles[i] + ci * 0.05;
+      const baseLength = (pitch / 127) * radius * 0.8 + radius * 0.08; // pitch → length
+      const baseHW = (vel / 127) * 16 + 4;                              // velocity → width
+      const length = baseLength + flash * radius * 0.05;                // 5% flash boost
+      const halfW = baseHW + flash * 2;
 
       const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
 
@@ -132,7 +139,7 @@ export function drawRadialAt(
       const nv = notes[i];
       const cns = Array.isArray(nv) ? (nv as number[]) : [nv as number];
       cns.forEach((pitch, ci) => {
-        const angle = ((i / n) * Math.PI * 2) - Math.PI / 2 + ci * 0.05;
+        const angle = noteAngles[i] + ci * 0.05;
         const len = (pitch / 127) * radius * 0.8 + radius * 0.08;
         labels.push({ x: cx + Math.cos(angle) * len, y: cy + Math.sin(angle) * len, label: pitchName(pitch) });
       });
@@ -1381,7 +1388,7 @@ export class BloomVisualization {
   private ctx: CanvasRenderingContext2D;
   private animationId: number | null = null;
   private bloom: Bloom | null = null;
-  private _mode: VizMode = 'radial';
+  private _mode: VizMode = 'deep';
   private _theme: Theme = THEMES.dark;
   private _showAxis = false;
   private _showNoteLabels = false;
@@ -1448,7 +1455,7 @@ export class BloomVisualization {
 
   /** @deprecated — use setMode() instead; kept for callers that used toggleMode() */
   toggleMode(): VizMode {
-    const ORDER: VizMode[] = ['radial', 'piano', 'span', 'deep', 'orbit', 'tonal', 'spiral', 'set', 'helix'];
+    const ORDER: VizMode[] = ['deep', 'flower', 'piano', 'span', 'orbit', 'tonal', 'spiral', 'set', 'helix'];
     const next = ORDER[(ORDER.indexOf(this._mode) + 1) % ORDER.length];
     this.setMode(next);
     return this._mode;
@@ -1522,7 +1529,7 @@ export class BloomVisualization {
     const minDim = Math.min(W, H);
 
     switch (this._mode) {
-      case 'radial':
+      case 'flower':
         drawRadialAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
 
