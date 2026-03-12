@@ -3,8 +3,9 @@
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import {
-  drawRadialAt, drawPianoAt, drawSpanAt, drawDeepAt, drawOrbitAt,
+  drawRadialAt, drawFieldAt, drawDeepAt, drawOrbitAt,
   drawTonalAt, drawSpiralAt, drawSetAt, drawHelixAt,
+  drawScoreAt,
   THEMES,
 } from './visualization';
 import type { VizMode, ThemeId, Theme } from './visualization';
@@ -219,8 +220,8 @@ export class GardenVisualization {
       case 'flower':
         drawRadialAt(ctx, cx, cy, r, bloom, [], theme);
         break;
-      case 'piano':
-        drawPianoAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, false, 0, theme);
+      case 'field':
+        drawFieldAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
         break;
       case 'orbit':
         drawOrbitAt(ctx, cx, cy, r, bloom, [], theme, 0);
@@ -237,11 +238,11 @@ export class GardenVisualization {
       case 'helix':
         drawHelixAt(ctx, cx, cy, r, bloom, [], theme);
         break;
-      case 'span':
-        drawSpanAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
-        break;
       case 'deep':
         drawDeepAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
+        break;
+      case 'score':
+        drawScoreAt(ctx, cx - r, cy - r, d, d, bloom, [], theme, false, true);
         break;
     }
 
@@ -300,11 +301,11 @@ export class GardenVisualization {
       const mode = this._mode;
       switch (mode) {
         case 'flower': drawRadialAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
-        case 'piano': {
+        case 'field': {
           const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
           const uh = minDim * 0.50;
           const uw = Math.min(uh * asp, w * 0.97);
-          drawPianoAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, false, 0, theme);
+          drawFieldAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, 0, theme, false);
           break;
         }
         case 'orbit': drawOrbitAt(actx, cx, cy, minDim * 0.45, bloom, [], theme, 0); break;
@@ -312,13 +313,6 @@ export class GardenVisualization {
         case 'spiral': drawSpiralAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'set': drawSetAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'helix': drawHelixAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
-        case 'span': {
-          const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
-          const uh = minDim * 0.50;
-          const uw = Math.min(uh * asp, w * 0.97);
-          drawSpanAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, 0, theme, false);
-          break;
-        }
         case 'deep': {
           const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
           const uh = minDim * 0.50;

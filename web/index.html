@@ -40,8 +40,8 @@
         padding: 2px 4px;
         font-family: inherit;
       }
-      /* Viz mode + theme selects */
-      #viz-mode-select, #viz-theme-select {
+      /* Viz mode select */
+      #viz-mode-select {
         background: #1a1a22;
         color: #666;
         border: 1px solid #333;
@@ -50,7 +50,18 @@
         font-family: inherit;
         cursor: pointer;
       }
-      #viz-mode-select:hover, #viz-theme-select:hover { color: #aaa; border-color: #555; }
+      #viz-mode-select:hover { color: #aaa; border-color: #555; }
+      /* Reset camera button (shown only in deep/spiral modes) */
+      #reset-camera {
+        background: transparent;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 7px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      #reset-camera:hover { color: #aaa; border-color: #555; }
 
       /* ─── Theme skins (applied via body[data-theme="..."]) ─────────────────── */
 
@@ -450,6 +461,33 @@
       .cp-status--err { color: #a55; }
       .cp-status--ok  { color: #5a9; }
 
+      /* ─── Demo mode toast ───────────────────────────────────────────────────── */
+      #demo-toast {
+        display: none;
+        position: absolute;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        pointer-events: none;
+        z-index: 50;
+        white-space: nowrap;
+      }
+      #demo-toast-key {
+        font-size: 80px;
+        font-weight: bold;
+        color: rgba(255, 255, 255, 0.92);
+        line-height: 1;
+        letter-spacing: -2px;
+        text-shadow: 0 2px 24px rgba(80, 140, 255, 0.45);
+      }
+      #demo-toast-cmd {
+        font-size: 22px;
+        color: rgba(160, 190, 255, 0.82);
+        margin-top: 8px;
+        letter-spacing: 0.06em;
+      }
+
     </style>
   </head>
   <body>
@@ -457,26 +495,18 @@
       <h1>BLOOM</h1>
       <span id="midi-status" class="midi-status">initializing…</span>
       <select id="midi-select"></select>
-      <select id="viz-mode-select" title="visualization mode">
-        <option value="deep" selected>◆ deep</option>
-        <option value="flower">✿ flower</option>
-        <option value="piano">✦ field</option>
+      <select id="viz-mode-select" title="visualization mode (opt+1–9)">
+        <option value="deep"   selected>◆ deep</option>
+        <option value="field">⊞ field</option>
         <option value="orbit">⊙ orbit</option>
+        <option value="score">𝄞 score</option>
         <option value="tonal">⬡ tonal</option>
-        <option value="spiral">🌀 spiral</option>
         <option value="set">⬡ set</option>
+        <option value="spiral">🌀 spiral</option>
         <option value="helix">⌀ helix</option>
-        <option value="span">⊞ span</option>
+        <option value="flower">✿ flower</option>
       </select>
-      <select id="viz-theme-select" title="visual theme">
-        <option value="dark">◼ dark</option>
-        <option value="phosphor">▣ phosphor</option>
-        <option value="ember">🔥 ember</option>
-        <option value="arctic">❄ arctic</option>
-        <option value="solar">☀ solar</option>
-        <option value="uv">◈ uv</option>
-        <option value="minimal">□ minimal</option>
-      </select>
+      <button id="reset-camera" title="reset camera view" style="display:none">⊹ reset view</button>
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
@@ -537,11 +567,29 @@
       <span class="s-sep">|</span>
       <!-- Graph display -->
       <span class="s-group">
-        <label title="show axis labels in graph views (field, span, deep)">axis
+        <label title="show axis labels in graph views (field, deep)">axis
           <input type="checkbox" id="show-axis">
         </label>
         <label title="show pitch+octave label next to each note in all views">notes
           <input type="checkbox" id="show-note-labels">
+        </label>
+        <label title="display keystroke and command name on screen (demo/presentation mode)">demo
+          <input type="checkbox" id="demo-mode">
+        </label>
+      </span>
+      <span class="s-sep">|</span>
+      <!-- Color skin -->
+      <span class="s-group">
+        <label>skin
+          <select id="viz-theme-select">
+            <option value="dark">◼ dark</option>
+            <option value="phosphor">▣ phosphor</option>
+            <option value="ember">🔥 ember</option>
+            <option value="arctic">❄ arctic</option>
+            <option value="solar">☀ solar</option>
+            <option value="uv">◈ uv</option>
+            <option value="minimal">□ minimal</option>
+          </select>
         </label>
       </span>
       <span class="s-sep">|</span>
@@ -556,6 +604,10 @@
       <div id="viz-area">
         <canvas id="bloom-canvas"></canvas>
         <div id="console-overlay"></div>
+        <div id="demo-toast">
+          <div id="demo-toast-key"></div>
+          <div id="demo-toast-cmd"></div>
+        </div>
       </div>
       <div id="garden-area">
         <!-- #garden-canvas and #garden-zoom injected by GardenVisualization -->

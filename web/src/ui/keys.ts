@@ -15,6 +15,7 @@ import { startRecording, stopRecording, isRecording } from '../audio/recorder';
 import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
+import type { VizMode } from './theme';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
 
@@ -45,11 +46,12 @@ export interface KeyHandlerState {
   recordDotEl: HTMLElement | null;
   editorOpenFn: (() => void) | null;
   paletteOpenFn: (() => void) | null;
+  /** Called when opt+1–9 changes the visualization mode. */
+  setVizModeFn: ((mode: VizMode) => void) | null;
 }
 
 export function createKeyHandler(state: KeyHandlerState) {
   let _previewResetId: ReturnType<typeof setTimeout> | null = null;
-  let _lastEscapeTime = 0;
   /** Temporary bloom used for loop-cycle display; reused across cycles to avoid allocation */
   let _loopDisplayBloom: Bloom | null = null;
 
@@ -86,6 +88,22 @@ export function createKeyHandler(state: KeyHandlerState) {
     const alt = e.altKey;
     const b = state.bloom;
     const g = state.garden;
+
+    // ─── Visualization mode  (opt+1 … opt+9) ─────────────────────────────────
+    if (alt && !shift && e.code.startsWith('Digit')) {
+      const n = parseInt(e.code.slice(5), 10);   // 'Digit3' → 3
+      if (n >= 1 && n <= 9) {
+        e.preventDefault();
+        const VIZ_ORDER: VizMode[] = [
+          'deep', 'field', 'orbit', 'score',
+          'tonal', 'set', 'spiral', 'helix', 'flower',
+        ];
+        const mode = VIZ_ORDER[n - 1];
+        state.setVizModeFn?.(mode);
+        status(`view: ${mode}`);
+        return;
+      }
+    }
 
     // ─── Editor / Palette ─────────────────────────────────────────────────────
     if (alt && e.code === 'KeyE') {
@@ -252,27 +270,31 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     // ─── Blending ─────────────────────────────────────────────────────────────
     if (ch === 'x' && !shift) {
+      status('interlace');
       const src = g.current;
-      if (src) { b.interlace(src); status('interlace'); refresh('interlace'); }
-      else status('no bloom in slot');
+      if (src) { b.interlace(src); refresh('interlace'); }
+      else state.display?.setStatus('no bloom in slot');
       return;
     }
     if (ch === 'X' && shift) {
+      status('blend');
       const src = g.current;
-      if (src) { b.blend(src); status('blend'); refresh('blend'); }
-      else status('no bloom in slot');
+      if (src) { b.blend(src); refresh('blend'); }
+      else state.display?.setStatus('no bloom in slot');
       return;
     }
     if (ch === 'f' && !shift) {
+      status('lift shape');
       const src = g.current;
-      if (src) { b.applyShape(src); status('lift shape'); refresh('lift shape'); }
-      else status('no bloom in slot');
+      if (src) { b.applyShape(src); refresh('lift shape'); }
+      else state.display?.setStatus('no bloom in slot');
       return;
     }
     if (ch === 'F' && shift) {
+      status('cast');
       const src = g.current;
-      if (src) { b.cast(src); status('cast'); refresh('cast'); }
-      else status('no bloom in slot');
+      if (src) { b.cast(src); refresh('cast'); }
+      else state.display?.setStatus('no bloom in slot');
       return;
     }
 
@@ -520,9 +542,10 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (ch === 'j' && !shift) {
+      status('lift scale');
       const src = g.current;
-      if (src) { b.applyScale(src.scale); status('lift scale'); refresh('lift scale'); }
-      else status('no bloom in slot');
+      if (src) { b.applyScale(src.scale); refresh('lift scale'); }
+      else state.display?.setStatus('no bloom in slot');
       return;
     }
     if (ch === 'J' && shift) {
@@ -769,15 +792,8 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (e.code === 'Escape') {
       state.fullHelpCloseFn?.();
-      const now = Date.now();
-      const doubleTap = (now - _lastEscapeTime) < 300;
-      _lastEscapeTime = now;
-      if (doubleTap) {
-        state.consoleClearFn?.();
-        state.consoleShowFn?.();
-      } else {
-        state.consoleToggleFn?.();
-      }
+      state.consoleClearFn?.();
+      state.consoleShowFn?.();
       return;
     }
   }

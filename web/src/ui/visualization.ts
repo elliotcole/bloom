@@ -5,14 +5,29 @@ import { wrapAt, flatNotes } from '../lib/arrays';
 import { beatsToMs } from '../audio/scheduler';
 import { THEMES, getTheme } from './theme';
 import type { VizMode, ThemeId, Theme } from './theme';
+import { drawNotehead, drawSharp, drawFlat } from './glyphs';
 
 export type { VizMode, ThemeId, Theme };
 export { THEMES, getTheme };
+
+// ─── Camera ────────────────────────────────────────────────────────────────────
+export interface CameraParams {
+  azimuth: number;   // radians, horizontal rotation; default 0
+  elevation: number; // radians, vertical tilt; default 0
+}
+export const DEFAULT_CAMERA: CameraParams = { azimuth: 0, elevation: 0 };
 
 // ─── Small helpers ─────────────────────────────────────────────────────────────
 
 function pc(note: number): number { return ((Math.round(note) % 12) + 12) % 12; }
 function clamp(v: number, lo: number, hi: number): number { return v < lo ? lo : v > hi ? hi : v; }
+
+// Extract RGB from a theme css colour string and reapply a specific alpha.
+// Handles rgba(r,g,b,a) and rgb(r,g,b) formats used throughout theme.ts.
+function withAlpha(cssColor: string, alpha: number): string {
+  const m = cssColor.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : cssColor;
+}
 
 // ─── Note label helpers ───────────────────────────────────────────────────────
 
@@ -25,13 +40,15 @@ function pitchName(midi: number): string {
 type NoteLabel = { x: number; y: number; label: string };
 
 // Renders pitch-name labels radially outward from `center`.
-// `offset` = extra px past the note position toward the outside of the shape.
+// `offset` = gap in px beyond the dot edge toward the outside of the shape.
+// `dotRadius` = radius of the dot at each label position; label is placed dotRadius+offset px from center.
 function overlayNoteLabels(
   ctx: CanvasRenderingContext2D,
   labels: NoteLabel[],
   center: { x: number; y: number },
   theme: Theme,
   offset = 14,
+  dotRadius = 0,
 ): void {
   if (labels.length === 0) return;
   ctx.save();
@@ -42,13 +59,14 @@ function overlayNoteLabels(
   ctx.fillStyle = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
     : theme.id === 'uv'       ? 'rgba(200,100,255,0.55)'
     :                            'rgba(255,255,255,0.40)';
+  const dist = dotRadius + offset;
   for (const { x, y, label } of labels) {
     const dx = x - center.x;
     const dy = y - center.y;
     const d = Math.hypot(dx, dy);
     const nx = d > 0.5 ? dx / d : 0;
     const ny = d > 0.5 ? dy / d : -1;
-    ctx.fillText(label, x + nx * offset, y + ny * offset);
+    ctx.fillText(label, x + nx * dist, y + ny * dist);
   }
   ctx.restore();
 }
@@ -141,7 +159,8 @@ export function drawRadialAt(
       cns.forEach((pitch, ci) => {
         const angle = noteAngles[i] + ci * 0.05;
         const len = (pitch / 127) * radius * 0.8 + radius * 0.08;
-        labels.push({ x: cx + Math.cos(angle) * len, y: cy + Math.sin(angle) * len, label: pitchName(pitch) });
+        // Petal is drawn along local Y after ctx.rotate(angle), so world tip = (cx - sin*len, cy + cos*len)
+        labels.push({ x: cx - Math.sin(angle) * len, y: cy + Math.cos(angle) * len, label: pitchName(pitch) });
       });
     }
     overlayNoteLabels(ctx, labels, { x: cx, y: cy }, theme, 12);
@@ -177,10 +196,13 @@ export function drawPianoAt(
   const minNote = Math.max(0, rawMin - margin);
   const maxNote = Math.min(127, rawMax + margin);
   const noteSpan = maxNote - minNote || 12;
-  const totalTime = bloom.timeIntervals.reduce((a, b) => a + b, 0) || 1;
+  // Anchor x-axis to note onsets: first note at left, last note at right
+  let _tLast = 0;
+  for (let i = 0; i < n - 1; i++) _tLast += wrapAt(bloom.timeIntervals, i);
+  const timeScale = n > 1 && _tLast > 0 ? _tLast : 1;
 
   const noteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
-  const timeToX = (t: number) => PX + (t / totalTime) * PW;
+  const timeToX = (t: number) => n > 1 ? PX + (t / timeScale) * PW : PX + PW * 0.5;
 
   // Octave guide lines
   if (showLabels) {
@@ -328,7 +350,7 @@ export function drawPianoAt(
     if (labels.length > 0) {
       const shapeCx = labels.reduce((a, l) => a + l.x, 0) / labels.length;
       const shapeCy = labels.reduce((a, l) => a + l.y, 0) / labels.length;
-      overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 14);
+      overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 8, 5);
     }
   }
 }
@@ -339,7 +361,7 @@ export function drawPianoAt(
 // bloom.highestPossibleNote — so transposing visibly moves dots up and down
 // within a stable, compass-defined frame of reference.
 
-export function drawSpanAt(
+export function drawFieldAt(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number,
   bloom: Bloom,
@@ -363,10 +385,13 @@ export function drawSpanAt(
   const minNote = bloom.lowestPossibleNote;
   const maxNote = bloom.highestPossibleNote;
   const noteSpan = maxNote - minNote || 12;
-  const totalTime = bloom.timeIntervals.reduce((a, b) => a + b, 0) || 1;
+  // Anchor x-axis to note onsets: first note at left, last note at right
+  let _tLast = 0;
+  for (let i = 0; i < n - 1; i++) _tLast += wrapAt(bloom.timeIntervals, i);
+  const timeScale = n > 1 && _tLast > 0 ? _tLast : 1;
 
   const noteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
-  const timeToX = (t: number) => PX + (t / totalTime) * PW;
+  const timeToX = (t: number) => n > 1 ? PX + (t / timeScale) * PW : PX + PW * 0.5;
 
   // Octave guide lines + labels
   if (showLabels) {
@@ -514,7 +539,7 @@ export function drawSpanAt(
     if (labels.length > 0) {
       const shapeCx = labels.reduce((a, l) => a + l.x, 0) / labels.length;
       const shapeCy = labels.reduce((a, l) => a + l.y, 0) / labels.length;
-      overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 14);
+      overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 8, 5);
     }
   }
 }
@@ -536,6 +561,7 @@ export function drawDeepAt(
   theme: Theme = THEMES.dark,
   showLabels = false,
   showNoteLabels = false,
+  camera: CameraParams = DEFAULT_CAMERA,
 ): void {
   const notes = bloom.notes;
   const n = notes.length;
@@ -551,18 +577,29 @@ export function drawDeepAt(
   const minNote = bloom.lowestPossibleNote;
   const maxNote = bloom.highestPossibleNote;
   const noteSpan = maxNote - minNote || 12;
-  const totalTime = bloom.timeIntervals.reduce((a, b) => a + b, 0) || 1;
+  // Anchor x-axis to note onsets: first note at left, last note at right
+  let _tLast = 0;
+  for (let i = 0; i < n - 1; i++) _tLast += wrapAt(bloom.timeIntervals, i);
+  const timeScale = n > 1 && _tLast > 0 ? _tLast : 1;
 
-  const noteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
-  const timeToX = (t: number) => PX + (t / totalTime) * PW;
+  const midY = PY + PH * 0.5;
+  const elevCos = Math.cos(camera.elevation);
+  const elevSin = Math.sin(camera.elevation);
+  const _baseNoteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
+  // pitch contributes cos(elevation) to Y; velocity depth contributes sin(elevation) to Y
+  // so top-down view (elevation→π/2) maps Z (vel) onto the screen's Y axis
+  const noteToY = (p: number) => midY + (_baseNoteToY(p) - midY) * elevCos;
+  const depthToY = (vel: number) => elevSin * (vel / 127 - 0.5) * PH;
+  const timeToX = (t: number) => n > 1 ? PX + (t / timeScale) * PW : PX + PW * 0.5;
   const midX = PX + PW * 0.5;
+  const vpX = midX + Math.sin(camera.azimuth) * PW * 0.45;
 
   // 3D perspective helpers
   // vel=127 → zNorm=1 (close), vel=0 → zNorm=0 (far)
   const proj3d = (baseX: number, vel: number) => {
     const zNorm = vel / 127;
-    // X converges toward midX for far notes (vanishing point)
-    const projX = midX + (baseX - midX) * (0.80 + 0.20 * zNorm);
+    // X converges toward camera vanishing point
+    const projX = vpX + (baseX - vpX) * (0.80 + 0.20 * zNorm);
     // Dot scale: far=small, close=large
     const dotScale = 0.70 + zNorm * 0.90;   // 0.70 → 1.60
     // Alpha multiplier: far=faint, close=vivid
@@ -584,6 +621,56 @@ export function drawDeepAt(
       ctx.stroke();
       ctx.fillStyle = theme.text;
       ctx.fillText(`C${Math.floor(note / 12) - 1}`, PX - 6, gy + 3);
+    }
+  }
+
+  // ── Perspective depth reference box ──────────────────────────────────────────
+  // Each face lives at a fixed velocity (depth). depthToY() offsets Y so the box
+  // shears correctly when elevation ≠ 0 — matching how note positions are computed.
+  {
+    const pjX = (bx: number, vel: number) => vpX + (bx - vpX) * (0.80 + 0.20 * (vel / 127));
+    const yAt  = (pitch: number, vel: number) => noteToY(pitch) + depthToY(vel);
+    const fL = PX, fR = PX + PW;                      // front face (vel=127) X
+    const bL = pjX(PX, 0), bR = pjX(PX + PW, 0);     // back face (vel=0) X
+
+    const yTN = yAt(maxNote, 127), yBN = yAt(minNote, 127); // near (front) top/bottom
+    const yTF = yAt(maxNote,   0), yBF = yAt(minNote,   0); // far (back)  top/bottom
+
+    ctx.strokeStyle = theme.grid;
+    ctx.lineWidth = 0.8;
+
+    // Front face (vel=127, nearest)
+    ctx.beginPath();
+    ctx.moveTo(fL, yTN); ctx.lineTo(fR, yTN); ctx.lineTo(fR, yBN); ctx.lineTo(fL, yBN);
+    ctx.closePath(); ctx.stroke();
+
+    // Back face (vel=0, farthest)
+    ctx.beginPath();
+    ctx.moveTo(bL, yTF); ctx.lineTo(bR, yTF); ctx.lineTo(bR, yBF); ctx.lineTo(bL, yBF);
+    ctx.closePath(); ctx.stroke();
+
+    // 4 corner depth rails (near → far)
+    ctx.beginPath(); ctx.moveTo(fL, yTN); ctx.lineTo(bL, yTF); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fR, yTN); ctx.lineTo(bR, yTF); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fL, yBN); ctx.lineTo(bL, yBF); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fR, yBN); ctx.lineTo(bR, yBF); ctx.stroke();
+
+    // Intermediate depth planes at vel=42 and vel=85
+    for (const vel of [42, 85]) {
+      const mL = pjX(fL, vel), mR = pjX(fR, vel);
+      const yTM = yAt(maxNote, vel), yBM = yAt(minNote, vel);
+      ctx.beginPath(); ctx.moveTo(mL, yTM); ctx.lineTo(mR, yTM); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mL, yBM); ctx.lineTo(mR, yBM); ctx.stroke();
+    }
+
+    // Vertical time dividers at 1/4, 1/2, 3/4 across each depth face
+    for (let d = 1; d <= 3; d++) {
+      const tx = fL + (PW / 4) * d;
+      const bx = pjX(tx, 0);
+      ctx.beginPath(); ctx.moveTo(tx, yTN); ctx.lineTo(tx, yBN); ctx.stroke(); // front
+      ctx.beginPath(); ctx.moveTo(bx, yTF); ctx.lineTo(bx, yBF); ctx.stroke(); // back
+      ctx.beginPath(); ctx.moveTo(tx, yTN); ctx.lineTo(bx, yTF); ctx.stroke(); // top rail
+      ctx.beginPath(); ctx.moveTo(tx, yBN); ctx.lineTo(bx, yBF); ctx.stroke(); // bottom rail
     }
   }
 
@@ -609,10 +696,10 @@ export function drawDeepAt(
 
     // Centroid at average pitch
     const avgPitch = chordNotes.reduce((a, b) => a + b, 0) / chordNotes.length;
-    centroids.push({ x: projX, y: noteToY(avgPitch), zNorm });
+    centroids.push({ x: projX, y: noteToY(avgPitch) + depthToY(vel), zNorm });
 
     chordNotes.forEach(pitch => {
-      instances.push({ pitch, vel, flash, projX, projY: noteToY(pitch), dotScale, depthAlpha, zNorm });
+      instances.push({ pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
     });
 
     t += wrapAt(bloom.timeIntervals, i);
@@ -709,11 +796,222 @@ export function drawDeepAt(
     }));
     const shapeCx = labels.reduce((a, l) => a + l.x, 0) / labels.length;
     const shapeCy = labels.reduce((a, l) => a + l.y, 0) / labels.length;
-    overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 14);
+    overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 8, 7);
   }
 }
 
-// ─── 3. Orbit ─────────────────────────────────────────────────────────────────
+// ─── 3. Grand Staff Score ─────────────────────────────────────────────────────
+// Pitch-only grand staff: solid noteheads + accidentals, no rhythmic values.
+// Notes spread left → right by onset time. Uses Canvas 2D throughout.
+
+export function drawScoreAt(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  bloom: Bloom,
+  flashValues: number[] = [],
+  theme: Theme = THEMES.dark,
+  showLabels = false,
+  compact = false,          // garden mode: no clefs/brace, staff fills the slot
+): void {
+  const notes = bloom.notes;
+  const n = notes.length;
+
+  // ── Staff layout ─────────────────────────────────────────────────────────────
+  // LINE_SPACING = gap between adjacent staff lines.
+  // HALF = one diatonic step = LINE_SPACING / 2.
+  // Grand staff spans 10 LINE_SPACINGs total (pos −10 → +10).
+  // compact: size freely to fill the slot height; full view: clamp to readable range.
+  const LINE_SPACING = compact ? h / 12.5 : clamp(h / 18, 10, 20);
+  const HALF = LINE_SPACING / 2;
+
+  // Y anchor: staffPos 0 = Middle C, at vertical centre of box.
+  const staffCenterY = y + h * 0.5;
+  const posToY = (p: number) => staffCenterY - p * HALF;
+
+  // ── Dynamic staff width ────────────────────────────────────────────────────
+  // Staff scales with note count so sparse blooms cluster in the centre and
+  // dense ones expand toward the canvas edges — mirroring the deep view.
+  const LEFT_MARGIN  = compact ? LINE_SPACING * 0.5  : LINE_SPACING * 7.0;
+  const RIGHT_MARGIN = compact ? LINE_SPACING * 0.5  : LINE_SPACING * 4.0;
+  const INNER_PAD    = compact ? LINE_SPACING * 1.0  : LINE_SPACING * 5.0;
+  const NOTE_SLOT    = compact ? LINE_SPACING * 2.5  : LINE_SPACING * 4.5;
+  const overhead    = LEFT_MARGIN + RIGHT_MARGIN + INNER_PAD * 2;
+  const rawNoteW    = n > 1 ? (n - 1) * NOTE_SLOT : NOTE_SLOT * 2;
+  const noteW       = clamp(rawNoteW, NOTE_SLOT * 2, w - overhead);
+  const totalW      = noteW + overhead;
+  // Centre the grand-staff block within the canvas.
+  const blockX  = x + (w - totalW) / 2;
+  const staffX1 = blockX + LEFT_MARGIN;
+  const staffX2 = staffX1 + INNER_PAD + noteW + INNER_PAD;
+  const NOTE_X1 = staffX1 + INNER_PAD;
+
+  // Notehead geometry — small and flat like Crumb's hand-engraved noteheads.
+  const NH_W    = LINE_SPACING * 0.54;   // semi-major (horizontal) — used for ledger + accidental x-offset
+  const LEDGER_W = NH_W * 2.5;           // half-width of ledger lines
+
+  // Single unified colour — notation view is monochrome.
+  const scoreCol = withAlpha(theme.text, 0.70);
+
+  // ── Draw staff lines & barlines ──────────────────────────────────────────────
+  ctx.save();
+  ctx.lineWidth = 0.7;   // hairline — matches Crumb's manuscript weight
+  for (const pos of [2, 4, 6, 8, 10, -2, -4, -6, -8, -10]) {
+    ctx.strokeStyle = scoreCol;
+    ctx.beginPath();
+    ctx.moveTo(staffX1, posToY(pos));
+    ctx.lineTo(staffX2, posToY(pos));
+    ctx.stroke();
+  }
+
+  // Vertical barlines (left + right of each staff section).
+  ctx.strokeStyle = scoreCol;
+  ctx.lineWidth = 1.0;
+  ctx.beginPath(); ctx.moveTo(staffX1, posToY(10)); ctx.lineTo(staffX1, posToY(2));  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(staffX2, posToY(10)); ctx.lineTo(staffX2, posToY(2));  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(staffX1, posToY(-2)); ctx.lineTo(staffX1, posToY(-10)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(staffX2, posToY(-2)); ctx.lineTo(staffX2, posToY(-10)); ctx.stroke();
+
+  if (!compact) {
+    // Brace — slender bracket joining both staves.
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(staffX1 - 3, posToY(10));
+    ctx.lineTo(staffX1 - 3, posToY(-10));
+    ctx.stroke();
+
+    // ── Clef glyphs (font-rendered, sitting on the staff) ─────────────────────
+    const clefX  = staffX1 + LINE_SPACING * 0.3;
+    const clefFS = LINE_SPACING * 4;
+    ctx.fillStyle = scoreCol;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `${clefFS}px 'Bravura', serif`;
+    ctx.fillText('\u{1D11E}', clefX, posToY(4)  - LINE_SPACING * 0.2);
+    ctx.fillText('\u{1D122}', clefX, posToY(-4) - LINE_SPACING * 0.2);
+  }
+
+  ctx.restore();
+
+  if (n === 0) return;
+
+  // ── Pitch → staff-position mapping ───────────────────────────────────────────
+  // staffPos 0 = C4 (Middle C).  Diatonic steps, signed from C4.
+  const CHROMA_DIAT  = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // chroma → diatonic index
+  const NEEDS_SHARP  = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]; // 1 = ♯ required
+
+  function midiToStaff(midi: number): { pos: number; acc: string | null } {
+    const pc_ = ((Math.round(midi) % 12) + 12) % 12;
+    const oct  = Math.floor(midi / 12) - 1;           // C4 is octave 4
+    return {
+      pos: CHROMA_DIAT[pc_] + 7 * (oct - 4),
+      acc: NEEDS_SHARP[pc_] ? '♯' : null,
+    };
+  }
+
+  // Returns extra ledger-line positions for a note outside its staff.
+  // Treble staff spans pos 2–10; Bass staff spans pos −2–−10.
+  // Middle-C zone (pos ≤ 0) is handled by the treble branch (pos ≥ 0 → treble).
+  function ledgerLines(pos: number, isTreble: boolean): number[] {
+    const out: number[] = [];
+    const isEven = (pos & 1) === 0;
+    if (isTreble) {
+      if (pos > 10) {
+        // Above F5: ledger at 12, 14, … up to note's even position.
+        for (let l = 12; l <= (isEven ? pos : pos - 1); l += 2) out.push(l);
+      } else if (pos <= 0) {
+        // At/below Middle C: ledger at 0, −2, … down to note's even position.
+        for (let l = 0; l >= (isEven ? pos : pos + 1); l -= 2) out.push(l);
+      }
+    } else {
+      // Bass: only needs ledgers below G2 (pos < −10).
+      if (pos < -10) {
+        for (let l = -12; l >= (isEven ? pos : pos + 1); l -= 2) out.push(l);
+      }
+    }
+    return out;
+  }
+
+  // ── Time → X mapping ─────────────────────────────────────────────────────────
+  let tLast = 0;
+  for (let i = 0; i < n - 1; i++) tLast += wrapAt(bloom.timeIntervals, i);
+  const timeScale   = n > 1 && tLast > 0 ? tLast : 1;
+  const onsetToX    = (t: number) =>
+    n > 1 ? NOTE_X1 + (t / timeScale) * noteW : NOTE_X1 + noteW * 0.5;
+
+  // ── Draw notes ────────────────────────────────────────────────────────────────
+  ctx.save();
+
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    const noteVal = notes[i];
+    const pitches: number[] = Array.isArray(noteVal) ? (noteVal as number[]) : [noteVal as number];
+    const flash = flashValues[i] ?? 0;
+    const nx    = onsetToX(t);
+
+    // Detect adjacent-interval pairs within this chord (classic "second" displacement).
+    const sortedPos = pitches.map(p => midiToStaff(p).pos).sort((a, b) => a - b);
+    const shiftSet = new Set<number>();
+    for (let k = 0; k < sortedPos.length - 1; k++) {
+      if (sortedPos[k + 1] - sortedPos[k] === 1) shiftSet.add(sortedPos[k + 1]);
+    }
+
+    pitches.forEach(pitch => {
+      const { pos, acc } = midiToStaff(pitch);
+      const isTreble = pos >= 0;
+      const ny = posToY(pos);
+      const fx = shiftSet.has(pos) ? nx + NH_W * 1.9 : nx; // offset seconds
+
+      // Ledger lines.
+      ctx.strokeStyle = scoreCol;
+      ctx.lineWidth   = 0.9;
+      for (const lp of ledgerLines(pos, isTreble)) {
+        ctx.beginPath();
+        ctx.moveTo(fx - LEDGER_W, posToY(lp));
+        ctx.lineTo(fx + LEDGER_W, posToY(lp));
+        ctx.stroke();
+      }
+
+      // Accidental — Canvas-drawn sharp or flat (no font required).
+      if (acc === '♯') {
+        drawSharp(ctx, fx - NH_W - LINE_SPACING * 0.72, ny, LINE_SPACING, scoreCol);
+      } else if (acc === '♭') {
+        drawFlat(ctx, fx - NH_W - LINE_SPACING * 0.55, ny, LINE_SPACING, scoreCol);
+      }
+
+      // Notehead — Canvas-drawn solid ellipse, hand-engraved tilt.
+      drawNotehead(ctx, fx, ny, LINE_SPACING, scoreCol);
+
+      // Flash ring — thin circle that expands and fades on note-on.
+      if (flash > 0.01) {
+        const ringR = NH_W * (1.4 + (1 - flash) * 3.2);  // starts tight, expands outward
+        const ringA = flash * 0.75;                        // fades with flash
+        ctx.beginPath();
+        ctx.arc(fx, ny, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = withAlpha(theme.text, ringA);
+        ctx.lineWidth   = 0.9;
+        ctx.stroke();
+      }
+    });
+
+    // Optional pitch-name labels above/below the staff.
+    if (showLabels) {
+      ctx.font         = '8px monospace';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'center';
+      ctx.fillStyle    = withAlpha(theme.text, 0.55);
+      pitches.forEach(pitch => {
+        const { pos } = midiToStaff(pitch);
+        const labelY = pos >= 0 ? posToY(13) : posToY(-13);
+        ctx.fillText(pitchName(pitch), nx, labelY);
+      });
+    }
+
+    t += wrapAt(bloom.timeIntervals, i);
+  }
+  ctx.restore();
+}
+
+// ─── 4. Orbit ─────────────────────────────────────────────────────────────────
 
 export function drawOrbitAt(
   ctx: CanvasRenderingContext2D,
@@ -826,7 +1124,7 @@ export function drawOrbitAt(
         labels.push({ x: cx + Math.cos(angle) * r_orb, y: cy + Math.sin(angle) * r_orb, label: pitchName(pitch) });
       });
     }
-    overlayNoteLabels(ctx, labels, { x: cx, y: cy }, theme, 14);
+    overlayNoteLabels(ctx, labels, { x: cx, y: cy }, theme, 8, 11);
   }
 }
 
@@ -904,9 +1202,23 @@ export function drawTonalAt(
   }
 
   // Nodes
-  ctx.font = `${clamp(radius * 0.07, 8, 12)}px monospace`;
+  const fontSzT = clamp(radius * 0.07, 8, 12);
+  ctx.font = `${fontSzT}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+
+  const scalePCsT: Set<number> = bloom.appliedScale
+    ? new Set(bloom.appliedScale.degrees)
+    : new Set();
+  const scaleCircleColorT = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
+    : theme.id === 'uv' ? 'rgba(200,100,255,0.55)'
+    : 'rgba(255,255,255,0.55)';
+  const labelColorActive = theme.id === 'phosphor' ? 'rgba(57,255,20,0.90)'
+    : theme.id === 'uv' ? 'rgba(220,160,255,0.90)'
+    : 'rgba(255,255,255,0.85)';
+  const labelColorDim = theme.id === 'phosphor' ? 'rgba(57,255,20,0.40)'
+    : theme.id === 'uv' ? 'rgba(200,100,255,0.40)'
+    : 'rgba(255,255,255,0.38)';
 
   for (let p = 0; p < 12; p++) {
     const ang = fifthsAngle(p);
@@ -922,7 +1234,17 @@ export function drawTonalAt(
       ctx.beginPath();
       ctx.arc(nx, ny, nodeR * 0.45, 0, Math.PI * 2);
       ctx.stroke();
-      if (showNoteLabels) { ctx.fillStyle = theme.text; ctx.fillText(PC_NAMES[p], lx, ly); }
+      if (showNoteLabels) {
+        if (scalePCsT.has(p)) {
+          ctx.strokeStyle = scaleCircleColorT;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(lx, ly, fontSzT + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = scalePCsT.has(p) ? labelColorDim : theme.text;
+        ctx.fillText(PC_NAMES[p], lx, ly);
+      }
       continue;
     }
 
@@ -954,7 +1276,17 @@ export function drawTonalAt(
       ctx.fill();
     }
 
-    if (showNoteLabels) { ctx.fillStyle = theme.text; ctx.fillText(PC_NAMES[p], lx, ly); }
+    if (showNoteLabels) {
+      if (scalePCsT.has(p)) {
+        ctx.strokeStyle = scaleCircleColorT;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(lx, ly, fontSzT + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = labelColorActive;
+      ctx.fillText(PC_NAMES[p], lx, ly);
+    }
   }
 
   // Center dot
@@ -1032,9 +1364,23 @@ export function drawSetAt(
   }
 
   // Nodes
-  ctx.font = `${clamp(radius * 0.07, 8, 12)}px monospace`;
+  const fontSzS = clamp(radius * 0.07, 8, 12);
+  ctx.font = `${fontSzS}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+
+  const scalePCsS: Set<number> = bloom.appliedScale
+    ? new Set(bloom.appliedScale.degrees)
+    : new Set();
+  const scaleCircleColorS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
+    : theme.id === 'uv' ? 'rgba(200,100,255,0.55)'
+    : 'rgba(255,255,255,0.55)';
+  const labelColorActiveS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.90)'
+    : theme.id === 'uv' ? 'rgba(220,160,255,0.90)'
+    : 'rgba(255,255,255,0.85)';
+  const labelColorDimS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.40)'
+    : theme.id === 'uv' ? 'rgba(200,100,255,0.40)'
+    : 'rgba(255,255,255,0.38)';
 
   for (let p = 0; p < 12; p++) {
     const ang = chromaticAngle(p);
@@ -1049,7 +1395,17 @@ export function drawSetAt(
       ctx.beginPath();
       ctx.arc(nx, ny, nodeR * 0.45, 0, Math.PI * 2);
       ctx.stroke();
-      if (showNoteLabels) { ctx.fillStyle = theme.text; ctx.fillText(PC_NAMES[p], lx, ly); }
+      if (showNoteLabels) {
+        if (scalePCsS.has(p)) {
+          ctx.strokeStyle = scaleCircleColorS;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(lx, ly, fontSzS + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = scalePCsS.has(p) ? labelColorDimS : theme.text;
+        ctx.fillText(PC_NAMES[p], lx, ly);
+      }
       continue;
     }
 
@@ -1081,7 +1437,17 @@ export function drawSetAt(
       ctx.fill();
     }
 
-    if (showNoteLabels) { ctx.fillStyle = theme.text; ctx.fillText(PC_NAMES[p], lx, ly); }
+    if (showNoteLabels) {
+      if (scalePCsS.has(p)) {
+        ctx.strokeStyle = scaleCircleColorS;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(lx, ly, fontSzS + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = labelColorActiveS;
+      ctx.fillText(PC_NAMES[p], lx, ly);
+    }
   }
 
   // Center dot
@@ -1102,19 +1468,22 @@ export function drawSpiralAt(
   flashValues: number[] = [],
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
+  camera: CameraParams = DEFAULT_CAMERA,
 ): void {
   const loNote = bloom.lowestPossibleNote;
   const hiNote = bloom.highestPossibleNote;
   const noteRange = Math.max(1, hiNote - loNote);
 
   const rx = radius * 0.82;          // horizontal ellipse radius
-  const tilt = 0.28;                 // depth compression for 3D look
-  const ry = rx * tilt;              // vertical ellipse radius
   const vertSpan = radius * 1.65;    // total vertical extent
+  // Elevation shifts the view angle from the default side-on tilt
+  const baseViewAngle = Math.asin(0.28);
+  const viewAngle = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, baseViewAngle + camera.elevation));
+  const ry = rx * Math.abs(Math.sin(viewAngle));
 
   // Project a MIDI pitch + chromatic angle to 2D
   function project(midi: number): { x: number; y: number; sinT: number } {
-    const θ = chromaticAngle(((Math.round(midi) % 12) + 12) % 12);
+    const θ = chromaticAngle(((Math.round(midi) % 12) + 12) % 12) + camera.azimuth;
     const yNorm = (midi - loNote) / noteRange;
     const yOff = (yNorm - 0.5) * vertSpan;
     return {
@@ -1127,26 +1496,39 @@ export function drawSpiralAt(
   ctx.globalCompositeOperation = theme.blendMode;
 
   // ── Skeleton guide ──────────────────────────────────────────────────────────
-  // Octave rings (horizontal ellipses at each C boundary)
+  // Central vertical axis
+  ctx.strokeStyle = withAlpha(theme.text, 0.28);
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - vertSpan * 0.5);
+  ctx.lineTo(cx, cy + vertSpan * 0.5);
+  ctx.stroke();
+
+  // Octave rings — faint filled discs (establish horizontal plane) + stroked edge
   const loOct = Math.floor(loNote / 12);
   const hiOct = Math.ceil(hiNote / 12);
-  ctx.strokeStyle = theme.grid;
-  ctx.lineWidth = 0.5;
   for (let oct = loOct; oct <= hiOct; oct++) {
-    const cMidi = oct * 12; // C of that octave
+    const cMidi = oct * 12;
     if (cMidi < loNote - 6 || cMidi > hiNote + 6) continue;
     const yNorm = (cMidi - loNote) / noteRange;
     const ringY = cy - (yNorm - 0.5) * vertSpan;
     ctx.beginPath();
-    ctx.ellipse(cx, ringY, rx, ry, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, ringY, rx, ry, camera.azimuth, 0, Math.PI * 2);
+    ctx.fillStyle = withAlpha(theme.text, 0.05);   // subtle disc
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(theme.text, 0.28); // guide, not foreground
+    ctx.lineWidth = 1.1;
     ctx.stroke();
   }
-  // Vertical PC columns (one per pitch class)
+  // Vertical PC columns — structural reference, clearly secondary to notes
+  ctx.lineWidth = 0.8;
   for (let p = 0; p < 12; p++) {
-    const θ = chromaticAngle(p);
+    const θ = chromaticAngle(p) + camera.azimuth;
     const topY = cy - vertSpan * 0.5 + Math.sin(θ) * ry;
     const botY = cy + vertSpan * 0.5 + Math.sin(θ) * ry;
     const colX = cx + Math.cos(θ) * rx;
+    const isNatural = [0, 2, 4, 5, 7, 9, 11].includes(p);
+    ctx.strokeStyle = withAlpha(theme.text, isNatural ? 0.14 : 0.07);
     ctx.beginPath();
     ctx.moveTo(colX, topY);
     ctx.lineTo(colX, botY);
@@ -1195,15 +1577,15 @@ export function drawSpiralAt(
     // Adaptive step count: more steps for larger angular sweep
     const steps = Math.max(4, Math.ceil(Math.abs(Δθ) / Math.PI * 32));
 
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha(fEdge)})`;
-    ctx.lineWidth = 0.5 + fEdge * 2;
+    ctx.strokeStyle = `rgba(255,255,255,${Math.max(0.30, theme.lineAlpha(fEdge))})`;
+    ctx.lineWidth = 1.7 + fEdge * 3.5;
     ctx.beginPath();
     for (let s = 0; s <= steps; s++) {
       const t  = s / steps;
       const θt = θA + t * Δθ;
       const yt = yOffA + t * ΔyOff;
-      const px = cx + Math.cos(θt) * rx;
-      const py = (cy - yt) + Math.sin(θt) * ry;
+      const px = cx + Math.cos(θt + camera.azimuth) * rx;
+      const py = (cy - yt) + Math.sin(θt + camera.azimuth) * ry;
       if (s === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.stroke();
@@ -1374,7 +1756,7 @@ export function drawHelixAt(
       ps.forEach(pitch => labels.push({ x: pos.x, y: pos.y, label: pitchName(pitch) }));
       tl += wrapAt(bloom.timeIntervals, i);
     }
-    overlayNoteLabels(ctx, labels, { x: cx, y: cy }, theme, 14);
+    overlayNoteLabels(ctx, labels, { x: cx, y: cy }, theme, 8, 5);
   }
 }
 
@@ -1401,11 +1783,18 @@ export class BloomVisualization {
   // Orbit rotation state (constant autonomous spin)
   private _orbitRotation = 0;
 
+  // 3D camera state (deep and spiral modes)
+  private _camera: CameraParams = { azimuth: 0, elevation: 0 };
+  private _dragActive = false;
+  private _dragLastX = 0;
+  private _dragLastY = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this._setupResize();
     this._startLoop();
+    this._setupDrag();
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -1415,14 +1804,20 @@ export class BloomVisualization {
     this.petalFlash = new Array(bloom.notes.length).fill(0);
     this.playheadIndex = -1;
     this._beadActivatedAt = 0;
-    this._orbitRotation = 0;
+    // _orbitRotation intentionally NOT reset here — it only resets on mode change
   }
 
   setMode(mode: VizMode): void {
     if (this._mode !== mode) {
       this._mode = mode;
       this._orbitRotation = 0;
+      this._camera = { azimuth: 0, elevation: 0 };
     }
+    this.canvas.style.cursor = (mode === 'deep' || mode === 'spiral') ? 'grab' : '';
+  }
+
+  resetCamera(): void {
+    this._camera = { azimuth: 0, elevation: 0 };
   }
 
   setTheme(id: ThemeId): void {
@@ -1455,7 +1850,7 @@ export class BloomVisualization {
 
   /** @deprecated — use setMode() instead; kept for callers that used toggleMode() */
   toggleMode(): VizMode {
-    const ORDER: VizMode[] = ['deep', 'flower', 'piano', 'span', 'orbit', 'tonal', 'spiral', 'set', 'helix'];
+    const ORDER: VizMode[] = ['deep', 'flower', 'field', 'orbit', 'tonal', 'spiral', 'set', 'helix', 'score'];
     const next = ORDER[(ORDER.indexOf(this._mode) + 1) % ORDER.length];
     this.setMode(next);
     return this._mode;
@@ -1476,6 +1871,43 @@ export class BloomVisualization {
     };
     new ResizeObserver(apply).observe(this.canvas);
     apply();
+  }
+
+  // ─── 3D drag navigation ──────────────────────────────────────────────────────
+
+  private _setupDrag(): void {
+    const el = this.canvas;
+    // Initial cursor for default mode (deep)
+    if (this._mode === 'deep' || this._mode === 'spiral') el.style.cursor = 'grab';
+
+    el.addEventListener('mousedown', (e) => {
+      if (this._mode !== 'deep' && this._mode !== 'spiral') return;
+      this._dragActive = true;
+      this._dragLastX = e.clientX;
+      this._dragLastY = e.clientY;
+      el.style.cursor = 'grabbing';
+    });
+
+    el.addEventListener('mousemove', (e) => {
+      if (!this._dragActive) return;
+      const dx = e.clientX - this._dragLastX;
+      const dy = e.clientY - this._dragLastY;
+      this._camera.azimuth += dx * 0.008;
+      this._camera.elevation = Math.max(
+        -Math.PI / 2 + 0.05,
+        Math.min(Math.PI / 2 - 0.05, this._camera.elevation + dy * 0.006),
+      );
+      this._dragLastX = e.clientX;
+      this._dragLastY = e.clientY;
+    });
+
+    const endDrag = () => {
+      if (!this._dragActive) return;
+      this._dragActive = false;
+      el.style.cursor = (this._mode === 'deep' || this._mode === 'spiral') ? 'grab' : '';
+    };
+    el.addEventListener('mouseup', endDrag);
+    el.addEventListener('mouseleave', endDrag);
   }
 
   // ─── Animation loop ──────────────────────────────────────────────────────────
@@ -1533,21 +1965,6 @@ export class BloomVisualization {
         drawRadialAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
 
-      case 'piano': {
-        const dur = bloom.dur();
-        const aspect = Math.max(0.3, Math.min(20.0, dur / 2.0));
-        const unitH = minDim * 0.50;
-        const unitW = Math.min(unitH * aspect, W * 0.97);
-        let beadProgress = 0;
-        if (this.playheadIndex >= 0 && this._beadActivatedAt > 0) {
-          const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
-          beadProgress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
-        }
-        drawPianoAt(ctx, (W - unitW) / 2, (H - unitH) / 2, unitW, unitH,
-          bloom, this.petalFlash, this.playheadIndex, this._showAxis, beadProgress, theme, this._showNoteLabels);
-        break;
-      }
-
       case 'orbit':
         drawOrbitAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._orbitRotation, this._showNoteLabels);
         break;
@@ -1557,7 +1974,7 @@ export class BloomVisualization {
         break;
 
       case 'spiral':
-        drawSpiralAt(ctx, cx, cy, minDim * 0.44, bloom, this.petalFlash, theme, this._showNoteLabels);
+        drawSpiralAt(ctx, cx, cy, minDim * 0.44, bloom, this.petalFlash, theme, this._showNoteLabels, this._camera);
         break;
 
       case 'set':
@@ -1568,7 +1985,7 @@ export class BloomVisualization {
         drawHelixAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
 
-      case 'span': {
+      case 'field': {
         const dur = bloom.dur();
         const aspect = Math.max(0.3, Math.min(20.0, dur / 2.0));
         const unitH = minDim * 0.50;
@@ -1578,7 +1995,7 @@ export class BloomVisualization {
           const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
           beadProgress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
         }
-        drawSpanAt(ctx, (W - unitW) / 2, (H - unitH) / 2, unitW, unitH,
+        drawFieldAt(ctx, (W - unitW) / 2, (H - unitH) / 2, unitW, unitH,
           bloom, this.petalFlash, this.playheadIndex, beadProgress, theme, this._showAxis, this._showNoteLabels);
         break;
       }
@@ -1594,9 +2011,13 @@ export class BloomVisualization {
           beadProgress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
         }
         drawDeepAt(ctx, (W - unitW) / 2, (H - unitH) / 2, unitW, unitH,
-          bloom, this.petalFlash, this.playheadIndex, beadProgress, theme, this._showAxis, this._showNoteLabels);
+          bloom, this.petalFlash, this.playheadIndex, beadProgress, theme, this._showAxis, this._showNoteLabels, this._camera);
         break;
       }
+
+      case 'score':
+        drawScoreAt(ctx, 0, 0, W, H, bloom, this.petalFlash, theme, this._showNoteLabels);
+        break;
     }
 
     ctx.restore();

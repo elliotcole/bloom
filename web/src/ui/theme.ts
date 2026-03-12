@@ -1,8 +1,8 @@
 // Visual theme definitions — shared by all visualization modes
 
 export type VizMode =
-  | 'flower' | 'piano' | 'orbit'
-  | 'tonal' | 'spiral' | 'set' | 'helix' | 'span' | 'deep';
+  | 'flower' | 'field' | 'orbit'
+  | 'tonal' | 'spiral' | 'set' | 'helix' | 'deep' | 'score';
 
 export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal';
 

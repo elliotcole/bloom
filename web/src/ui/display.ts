@@ -9,12 +9,14 @@ const MAX_HISTORY = 50;
 export class Display {
   private el: HTMLElement;
   private history: string[] = [];
+  onStatus: ((msg: string) => void) | null = null;
 
   constructor(el: HTMLElement) {
     this.el = el;
   }
 
   update(bloom: Bloom | null, garden: Garden, status = ''): void {
+    if (status) this.onStatus?.(status);
     const text = this.buildText(bloom, garden, status);
     this.history.unshift(text);
     if (this.history.length > MAX_HISTORY) this.history.length = MAX_HISTORY;
@@ -22,6 +24,7 @@ export class Display {
   }
 
   setStatus(msg: string): void {
+    this.onStatus?.(msg);
     if (this.history.length === 0) return;
     const lines = this.history[0].split('\n');
     const statusIdx = lines.findIndex(l => l.startsWith('> '));

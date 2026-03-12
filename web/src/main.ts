@@ -204,6 +204,12 @@ async function main() {
     recordDotEl,
     editorOpenFn:  () => bloomEditor.open(bloom),
     paletteOpenFn: () => commandPalette.open(),
+    setVizModeFn: (mode) => {
+      viz.setMode(mode);
+      gardenViz.setMode(mode);
+      if (vizModeSelect) vizModeSelect.value = mode;
+      updateResetCameraVisibility(mode);
+    },
   };
 
   const { onKey } = createKeyHandler(keyState);
@@ -212,7 +218,10 @@ async function main() {
     // Don't send keystrokes to bloom when editor or palette is open
     if (bloomEditor.isOpen() || commandPalette.isOpen()) return;
     keyState.out = midiState.selectedOutput;
+    _pendingDemoKey = formatDemoKey(e);
+    _demoShownThisKey = false;
     onKey(e);
+    _pendingDemoKey = '';
   });
 
   window.addEventListener('beforeunload', () => {
@@ -224,11 +233,22 @@ async function main() {
   const vizModeSelect = document.getElementById('viz-mode-select') as HTMLSelectElement;
   const vizThemeSelect = document.getElementById('viz-theme-select') as HTMLSelectElement;
 
+  const resetCameraBtn = document.getElementById('reset-camera') as HTMLButtonElement;
+  const _3dModes = new Set<VizMode>(['deep', 'spiral']);
+
+  function updateResetCameraVisibility(mode: VizMode): void {
+    if (resetCameraBtn) resetCameraBtn.style.display = _3dModes.has(mode) ? '' : 'none';
+  }
+
   vizModeSelect?.addEventListener('change', () => {
     const mode = vizModeSelect.value as VizMode;
     viz.setMode(mode);
     gardenViz.setMode(mode);
+    updateResetCameraVisibility(mode);
   });
+
+  resetCameraBtn?.addEventListener('click', () => { viz.resetCamera(); });
+  updateResetCameraVisibility(viz.getMode());
 
   vizThemeSelect?.addEventListener('change', () => {
     const themeId = vizThemeSelect.value as ThemeId;
@@ -390,7 +410,70 @@ async function main() {
     bloom.fixedScale = fixedScaleEnabledCb.checked ? bloom.scale : false;
   });
 
-  // Show axis (field / span / deep)
+  // ─── Demo mode ────────────────────────────────────────────────────────────────
+  const demoToastEl   = document.getElementById('demo-toast')     as HTMLElement;
+  const demoToastKey  = document.getElementById('demo-toast-key') as HTMLElement;
+  const demoToastCmd  = document.getElementById('demo-toast-cmd') as HTMLElement;
+  let _demoMode = false;
+  let _demoFadeTimer:  ReturnType<typeof setTimeout> | null = null;
+  let _demoHideTimer:  ReturnType<typeof setTimeout> | null = null;
+
+  function showDemoToast(key: string, cmd: string) {
+    if (_demoFadeTimer !== null) { clearTimeout(_demoFadeTimer); _demoFadeTimer = null; }
+    if (_demoHideTimer !== null) { clearTimeout(_demoHideTimer); _demoHideTimer = null; }
+    demoToastKey.textContent = key;
+    demoToastCmd.textContent = cmd;
+    demoToastEl.style.transition = 'none';
+    demoToastEl.style.opacity = '1';
+    demoToastEl.style.display = 'block';
+    _demoFadeTimer = setTimeout(() => {
+      demoToastEl.style.transition = 'opacity 0.3s ease-out';
+      demoToastEl.style.opacity = '0';
+      _demoHideTimer = setTimeout(() => { demoToastEl.style.display = 'none'; }, 350);
+    }, 1500);
+  }
+
+  function formatDemoKey(e: KeyboardEvent): string {
+    const alt = e.altKey;
+    const shift = e.shiftKey;
+    if (e.code === 'Space')    return shift ? 'shift-space' : 'space';
+    if (e.code === 'ArrowUp')  return '↑';
+    if (e.code === 'ArrowDown')  return shift ? 'shift-↓' : '↓';
+    if (e.code === 'ArrowLeft')  return shift ? 'shift-←' : '←';
+    if (e.code === 'ArrowRight') return shift ? 'shift-→' : '→';
+    if (e.code === 'Enter')    return '↵';
+    if (e.code === 'Backspace' || e.code === 'Delete') return 'del';
+    if (e.code === 'Escape')   return 'esc';
+    if (e.code === 'KeyT' && alt)       return 'opt-t';
+    if (e.code === 'KeyW' && alt)       return 'opt-w';
+    if (e.code === 'KeyE' && alt)       return 'opt-e';
+    if (e.code === 'Comma' && alt)      return 'opt-,';
+    if (e.code === 'Slash' && alt)      return 'opt-/';
+    if (e.code === 'Backslash' && alt && shift) return 'opt-|';
+    return e.key;
+  }
+
+  // Fire demo toast on first status message per keypress
+  let _pendingDemoKey = '';
+  let _demoShownThisKey = false;
+  display.onStatus = (msg) => {
+    if (_demoMode && _pendingDemoKey && !_demoShownThisKey) {
+      _demoShownThisKey = true;
+      showDemoToast(_pendingDemoKey, msg);
+    }
+  };
+
+  const demoModeCb = document.getElementById('demo-mode') as HTMLInputElement;
+  demoModeCb?.addEventListener('change', () => {
+    _demoMode = demoModeCb.checked;
+    if (!_demoMode) {
+      if (_demoFadeTimer !== null) { clearTimeout(_demoFadeTimer); _demoFadeTimer = null; }
+      if (_demoHideTimer !== null) { clearTimeout(_demoHideTimer); _demoHideTimer = null; }
+      demoToastEl.style.display = 'none';
+    }
+  });
+
+  // Show axis (field / deep)
   const showAxisCb = document.getElementById('show-axis') as HTMLInputElement;
   showAxisCb?.addEventListener('change', () => {
     viz.setShowAxis(showAxisCb.checked);
