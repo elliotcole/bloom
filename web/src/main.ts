@@ -5,7 +5,7 @@ import { Bloom, BloomDefaults } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
-import { loadSynth, pianoOutput, setReverbMix, setReverbDecay } from './audio/synth';
+import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden } from './io/garden-io';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
@@ -432,6 +432,13 @@ async function main() {
   const fixedScaleEnabledCb = document.getElementById('fixed-scale-enabled') as HTMLInputElement;
   fixedScaleEnabledCb?.addEventListener('change', () => {
     bloom.fixedScale = fixedScaleEnabledCb.checked ? bloom.scale : false;
+  });
+
+  // Velocity ceiling
+  const velCeilingInput = document.getElementById('vel-ceiling') as HTMLInputElement;
+  velCeilingInput?.addEventListener('change', () => {
+    const v = parseInt(velCeilingInput.value);
+    if (!isNaN(v)) setVelocityCeiling(v);
   });
 
   // Reverb

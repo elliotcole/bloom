@@ -33,8 +33,8 @@ let _wet: Tone.Gain | null = null;
 let _loaded = false;
 let _loading = false;
 
-// Velocity scaling: map MIDI 0-127 to a narrower amplitude range
-const VEL_SCALE = 100 / 127;
+// Velocity ceiling: MIDI velocities are scaled so that 127 maps to this value
+let _velCeiling = 100;
 
 /** Resolves when the sampler is loaded and ready to play. */
 export function loadSynth(): Promise<void> {
@@ -86,6 +86,11 @@ export function setReverbMix(wet: number): void {
   _wet?.gain.rampTo(w, 0.05);
 }
 
+/** Set the velocity ceiling (0–127). MIDI vel 127 maps to this value. */
+export function setVelocityCeiling(ceiling: number): void {
+  _velCeiling = Math.max(0, Math.min(127, Math.round(ceiling)));
+}
+
 /** Set reverb decay time in seconds. Regenerates the impulse response. */
 export function setReverbDecay(seconds: number): void {
   if (!_reverb) return;
@@ -120,7 +125,7 @@ export const pianoOutput: MidiOutput = {
       // Note on — scale velocity to tame the Salamander samples
       ensureContext().then(() => {
         const name = midiToNoteName(note);
-        const amp = (vel / 127) * VEL_SCALE;
+        const amp = (vel / 127) * (_velCeiling / 127);
         _sampler!.triggerAttack(name, Tone.now(), amp);
       });
     } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
