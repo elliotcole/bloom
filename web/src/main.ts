@@ -5,6 +5,7 @@ import { Bloom, BloomDefaults } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
+import { loadSynth, pianoOutput } from './audio/synth';
 import { saveGarden, loadGarden } from './io/garden-io';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
@@ -40,16 +41,23 @@ async function main() {
   display.update(bloom, garden);
 
   // ─── MIDI ────────────────────────────────────────────────────────────────────
+  // Start loading piano samples immediately (non-blocking)
+  loadSynth();
+
   const midiState = await initMidi();
 
+  // Insert the built-in piano as the first available output
+  midiState.outputs.unshift(pianoOutput);
+  // Default to built-in piano if no output was auto-selected, or always on first load
+  if (!midiState.selectedOutput || midiState.selectedOutput !== pianoOutput) {
+    midiState.selectedOutput = pianoOutput;
+  }
+
   function updateMidiUi() {
-    if (!midiState.available) {
-      midiStatusEl.textContent = midiState.error ?? 'MIDI unavailable';
-      midiStatusEl.className = 'midi-status error';
-      return;
-    }
     midiSelectEl.innerHTML = '';
-    midiState.outputs.forEach(out => {
+    // Always include the built-in piano + any hardware MIDI outputs
+    const allOutputs = [pianoOutput, ...midiState.outputs.filter(o => o !== pianoOutput)];
+    allOutputs.forEach(out => {
       const opt = document.createElement('option');
       opt.value = out.name;
       opt.textContent = out.name;
@@ -57,8 +65,8 @@ async function main() {
       midiSelectEl.appendChild(opt);
     });
     midiStatusEl.textContent = midiState.selectedOutput
-      ? `MIDI: ${midiState.selectedOutput.name}`
-      : 'No MIDI outputs';
+      ? midiState.selectedOutput.name
+      : 'No outputs';
     midiStatusEl.className = midiState.selectedOutput ? 'midi-status ok' : 'midi-status';
   }
 
@@ -66,8 +74,12 @@ async function main() {
 
   midiSelectEl.addEventListener('change', () => {
     const name = midiSelectEl.value;
-    const found = midiState.outputs.find(o => o.name === name);
-    if (found) midiState.selectedOutput = found;
+    if (name === pianoOutput.name) {
+      midiState.selectedOutput = pianoOutput;
+    } else {
+      const found = midiState.outputs.find(o => o.name === name);
+      if (found) midiState.selectedOutput = found;
+    }
     updateMidiUi();
   });
 
@@ -177,10 +189,22 @@ async function main() {
   function toggleFullHelp() {
     showFullHelp = !showFullHelp;
     fullHelpEl.style.display = showFullHelp ? 'block' : 'none';
+    if (showFullHelp) dismissWelcomeHint();
   }
   function closeFullHelp() {
     if (showFullHelp) toggleFullHelp();
   }
+
+  // ─── Welcome hint ──────────────────────────────────────────────────────────
+  const welcomeHintEl = document.getElementById('welcome-hint') as HTMLElement;
+  let _hintDismissed = false;
+  function dismissWelcomeHint() {
+    if (_hintDismissed) return;
+    _hintDismissed = true;
+    welcomeHintEl.classList.add('hidden');
+    welcomeHintEl.addEventListener('transitionend', () => welcomeHintEl.remove(), { once: true });
+  }
+  setTimeout(dismissWelcomeHint, 20_000);
 
   const recordDotEl = document.getElementById('record-dot') as HTMLElement;
 

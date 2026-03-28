@@ -488,6 +488,20 @@
         letter-spacing: 0.06em;
       }
 
+      /* Welcome hint */
+      #welcome-hint {
+        text-align: center;
+        padding: 8px 0;
+        font-size: 13px;
+        color: #556;
+        letter-spacing: 0.08em;
+        transition: opacity 0.6s ease-out;
+      }
+      #welcome-hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
     </style>
   </head>
   <body>
@@ -599,6 +613,8 @@
         <button class="s-btn" id="load-garden" title="load garden from JSON (ctrl+o)">⬆ load</button>
       </span>
     </div>
+
+    <div id="welcome-hint">space to play. n for new. ? for more.</div>
 
     <main id="canvas-area">
       <div id="viz-area">
