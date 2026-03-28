@@ -5,7 +5,7 @@ import { Bloom, BloomDefaults } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
-import { loadSynth, pianoOutput } from './audio/synth';
+import { loadSynth, pianoOutput, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden } from './io/garden-io';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
@@ -432,6 +432,17 @@ async function main() {
   const fixedScaleEnabledCb = document.getElementById('fixed-scale-enabled') as HTMLInputElement;
   fixedScaleEnabledCb?.addEventListener('change', () => {
     bloom.fixedScale = fixedScaleEnabledCb.checked ? bloom.scale : false;
+  });
+
+  // Reverb
+  const reverbMixInput = document.getElementById('reverb-mix') as HTMLInputElement;
+  const reverbDecayInput = document.getElementById('reverb-decay') as HTMLInputElement;
+  reverbMixInput?.addEventListener('input', () => {
+    setReverbMix(parseFloat(reverbMixInput.value));
+  });
+  reverbDecayInput?.addEventListener('change', () => {
+    const v = parseFloat(reverbDecayInput.value);
+    if (!isNaN(v) && v >= 0.1) setReverbDecay(v);
   });
 
   // ─── Demo mode ────────────────────────────────────────────────────────────────

@@ -27,8 +27,14 @@ function midiToNoteName(midi: number): string {
 }
 
 let _sampler: Tone.Sampler | null = null;
+let _reverb: Tone.Reverb | null = null;
+let _dry: Tone.Gain | null = null;
+let _wet: Tone.Gain | null = null;
 let _loaded = false;
 let _loading = false;
+
+// Velocity scaling: map MIDI 0-127 to a narrower amplitude range
+const VEL_SCALE = 100 / 127;
 
 /** Resolves when the sampler is loaded and ready to play. */
 export function loadSynth(): Promise<void> {
@@ -42,22 +48,49 @@ export function loadSynth(): Promise<void> {
   }
   _loading = true;
 
+  // Signal chain: sampler → dry gain → destination
+  //                       → reverb → wet gain → destination
+  _dry = new Tone.Gain(0.6).toDestination();
+  _wet = new Tone.Gain(0.4).toDestination();
+  _reverb = new Tone.Reverb({ decay: 4, preDelay: 0.01 });
+
   return new Promise((resolve) => {
-    _sampler = new Tone.Sampler({
-      urls: SAMPLE_URLS,
-      baseUrl: BASE_URL,
-      release: 4, // long release for sustained piano feel
-      onload: () => {
-        _loaded = true;
-        _loading = false;
-        resolve();
-      },
-    }).toDestination();
+    _reverb!.generate().then(() => {
+      _sampler = new Tone.Sampler({
+        urls: SAMPLE_URLS,
+        baseUrl: BASE_URL,
+        release: 4,
+        onload: () => {
+          _loaded = true;
+          _loading = false;
+          resolve();
+        },
+      });
+      _sampler.connect(_dry!);
+      _sampler.connect(_reverb!);
+      _reverb!.connect(_wet!);
+    });
   });
 }
 
 export function isLoaded(): boolean {
   return _loaded;
+}
+
+// ─── Reverb controls ─────────────────────────────────────────────────────────
+
+/** Set dry/wet mix. 0 = fully dry, 1 = fully wet. */
+export function setReverbMix(wet: number): void {
+  const w = Math.max(0, Math.min(1, wet));
+  _dry?.gain.rampTo(1 - w, 0.05);
+  _wet?.gain.rampTo(w, 0.05);
+}
+
+/** Set reverb decay time in seconds. Regenerates the impulse response. */
+export function setReverbDecay(seconds: number): void {
+  if (!_reverb) return;
+  _reverb.decay = Math.max(0.1, seconds);
+  _reverb.generate();
 }
 
 // ─── MidiOutput adapter ──────────────────────────────────────────────────────
@@ -84,10 +117,10 @@ export const pianoOutput: MidiOutput = {
     const vel = data[2] ?? 0;
 
     if (status === 0x90 && vel > 0) {
-      // Note on
+      // Note on — scale velocity to tame the Salamander samples
       ensureContext().then(() => {
         const name = midiToNoteName(note);
-        const amp = vel / 127;
+        const amp = (vel / 127) * VEL_SCALE;
         _sampler!.triggerAttack(name, Tone.now(), amp);
       });
     } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
