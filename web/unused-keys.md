@@ -9,10 +9,10 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Bare keys (no modifier)
 
 **Letters**
-- `o`
+- *(none — `o` now toggles channel edit mode)*
 
 **Numbers**
-- `5`  `6`  `7`  `8`
+- *(none — `5` `6` `7` `8` now shape the intervals array)*
 
 ---
 
@@ -24,10 +24,6 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 **Symbol keys**
 - `#` (shift+3)
 - `$` (shift+4)
-- `%` (shift+5)
-- `^` (shift+6)
-- `&` (shift+7)
-- `*` (shift+8)
 
 ---
 

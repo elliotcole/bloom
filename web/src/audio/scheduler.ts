@@ -1,6 +1,7 @@
 // Playback scheduler — uses performance.now() + Web MIDI timestamps (no Tone.js Transport)
 
-import { Bloom } from '../core/Bloom';
+import { Bloom, ADDED_NOTE_VELOCITY } from '../core/Bloom';
+import type { IntervalVal } from '../core/Bloom';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
@@ -19,6 +20,11 @@ export function getBpm(): number {
 
 export function beatsToMs(beats: number): number {
   return (beats / _bpm) * 60_000;
+}
+
+/** Velocity of a note added by the intervals array */
+function addedVelocity(vel: number): number {
+  return Math.max(1, Math.round(vel * ADDED_NOTE_VELOCITY));
 }
 
 // ─── One-shot playback ────────────────────────────────────────────────────────
@@ -48,6 +54,7 @@ export function playOnce(
       : beatsToMs(ev.time * legato);
 
     const notes = Array.isArray(ev.note) ? ev.note as number[] : [ev.note as number];
+    const added = ev.added;
     const vel = ev.velocity;
     const chan = ev.chan;
     const onAt = cursor;
@@ -59,6 +66,10 @@ export function playOnce(
           if (n < 0 || n > 127) return;
           noteOn(out, chan, n, vel, now + onAt);
         });
+        added.forEach(n => {
+          if (n < 0 || n > 127) return;
+          noteOn(out, chan, n, addedVelocity(vel), now + onAt);
+        });
       }
       onNoteOn?.(i);
     }, onAt);
@@ -67,7 +78,7 @@ export function playOnce(
     // Schedule note-off(s)
     const offAt = onAt + Math.max(10, gateMs);
     const tOff = setTimeout(() => {
-      notes.forEach(n => {
+      [...notes, ...added].forEach(n => {
         if (n < 0 || n > 127 || vel === 0) return;
         noteOff(out, chan, n, now + offAt);
       });
@@ -97,16 +108,16 @@ interface LoopState {
   globalTick: number;
   onNoteOn?: (index: number) => void;
   /** Called at the start of every notes cycle with the effective vel/time/chan arrays for that cycle */
-  onCycleUpdate?: (vel: number[], time: number[], chan: number[]) => void;
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void;
   onLoop?: () => void;
 }
 
 let _loop: LoopState | null = null;
 
 /** Build the N effective values for the upcoming notes cycle starting at `tick` */
-function buildCycleSlice(
-  arr: number[], tick: number, N: number,
-): number[] {
+function buildCycleSlice<T>(
+  arr: T[], tick: number, N: number,
+): T[] {
   return Array.from({ length: N }, (_, i) => wrapAt(arr, tick + i));
 }
 
@@ -114,7 +125,7 @@ export function startLooper(
   bloom: Bloom,
   out: MidiOutput,
   onNoteOn?: (index: number) => void,
-  onCycleUpdate?: (vel: number[], time: number[], chan: number[]) => void,
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void,
   onLoop?: () => void,
 ): void {
   stopLooper();
@@ -138,7 +149,9 @@ export function startLooper(
 
     while (state.nextEventTime < horizon) {
       const b = state.bloom;
-      if (b.notes.length === 0) break;
+      // wrapAt throws on empty arrays — bail if any parallel array is empty
+      if (b.notes.length === 0 || b.velocities.length === 0
+        || b.timeIntervals.length === 0 || b.chans.length === 0) break;
 
       // Each list cycles at its own independent rate via globalTick
       const noteIdx = state.globalTick % b.notes.length;
@@ -151,6 +164,7 @@ export function startLooper(
             buildCycleSlice(b.velocities,    state.globalTick, N),
             buildCycleSlice(b.timeIntervals, state.globalTick, N),
             buildCycleSlice(b.chans,         state.globalTick, N),
+            buildCycleSlice(b.intervals.length > 0 ? b.intervals : [0], state.globalTick, N),
           );
         }
         if (state.globalTick > 0) state.onLoop?.();
@@ -158,6 +172,7 @@ export function startLooper(
 
       const noteVal = b.notes[noteIdx];
       const notes = Array.isArray(noteVal) ? noteVal as number[] : [noteVal as number];
+      const added = b.addedNotesAt(noteIdx, state.globalTick);
       const vel  = wrapAt(b.velocities,    state.globalTick);
       const time = wrapAt(b.timeIntervals, state.globalTick);
       const chan = wrapAt(b.chans,         state.globalTick);
@@ -168,14 +183,16 @@ export function startLooper(
       const gateMs = sustain !== null ? beatsToMs(sustain) : beatsToMs(time * legato);
 
       if (vel > 0) {
-        notes.forEach(n => {
+        const sound = (n: number, v: number) => {
           if (n < 0 || n > 127) return;
-          noteOn(out, chan, n, vel, atMs);
+          noteOn(out, chan, n, v, atMs);
           setTimeout(
             () => noteOff(out, chan, n, atMs + Math.max(10, gateMs)),
             atMs - now + Math.max(10, gateMs),
           );
-        });
+        };
+        notes.forEach(n => sound(n, vel));
+        added.forEach(n => sound(n, addedVelocity(vel)));
       }
 
       // Fire visual callback at actual note-on time

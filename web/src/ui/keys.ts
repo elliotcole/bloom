@@ -12,6 +12,7 @@ import {
 } from '../audio/scheduler';
 import { controlChange } from '../audio/midi';
 import { startRecording, stopRecording, isRecording } from '../audio/recorder';
+import { autosaveGarden } from '../io/garden-io';
 import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
@@ -63,6 +64,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (state.display) state.display.update(state.bloom, state.garden, msg);
     updateLooper(state.bloom);
     updatePulsar(state.bloom);
+    autosaveGarden(state.bloom, state.garden);
   }
 
   function play(bloom: Bloom, msg?: string) {
@@ -79,6 +81,108 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (state.display) state.display.setStatus(msg);
   }
 
+  // ─── Channel edit mode ──────────────────────────────────────────────────────
+  // Toggled with 'o'. Shaping keys are remapped to the chans array, mirroring
+  // their normal-mode meaning; playback / garden / view / push-pop pass through.
+  // Never persisted — always starts off.
+  let _chanMode = false;
+
+  function setChanMode(on: boolean) {
+    _chanMode = on;
+    state.viz?.setChanStrip(on);
+    document.body.classList.toggle('chan-mode', on);   // swaps the help overlay view
+    const badge = document.getElementById('chan-mode-badge');
+    if (badge) badge.classList.toggle('active', on);
+  }
+
+  /** Handle a key while in channel mode. Returns true if the key was consumed. */
+  function onChanKey(e: KeyboardEvent): boolean {
+    if (e.altKey) return false;   // all opt combos keep their normal meaning
+    const ch = e.key;
+    const shift = e.shiftKey;
+    const b = state.bloom;
+    const g = state.garden;
+
+    if (e.code === 'Escape') {
+      setChanMode(false);
+      status('channel mode off');
+      return true;
+    }
+
+    // Pass-through: playback, recording, pedal, merge, push/pop, view, help,
+    // and the normal-mode channel keys
+    const PASS = new Set([
+      ' ', ',', '.', '/', '<', '>', '~', '|', '`',
+      'p', 'P', 'l', '\\', '?', ';', "'", ':', '"', ')',
+    ]);
+    if (PASS.has(ch)) return false;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
+      return false;
+    }
+
+    const apply = (msg: string, fn: () => void) => {
+      status(`[ch] ${msg}`);
+      fn();
+      refresh(`[ch] ${msg}`);
+    };
+
+    if (ch === 'm' && !shift) { apply('mutate chans (palette)', () => b.mutateChansD()); return true; }
+    if (ch === 'M' && shift)  { apply('mutate chans (any)', () => b.mutateChans()); return true; }
+    if (ch === 's' && !shift) { apply('scramble chans', () => b.scrambleChans()); return true; }
+    if (ch === 'S' && shift)  { apply('shuffle chans', () => b.shuffleChans()); return true; }
+    if (ch === 'h' && !shift) { apply('thin palette', () => b.thinChanPalette()); return true; }
+    if (ch === 'H' && shift)  { apply('thicken palette', () => b.thickenChanPalette()); return true; }
+    if (ch === '-')           { apply('converge chans', () => b.convergeChans()); return true; }
+    if (ch === '=' || ch === '+') { apply('diverge chans', () => b.divergeChans()); return true; }
+    if (ch === 'y' && !shift) { apply('unify chans', () => b.unifyChans()); return true; }
+    if (ch === 'n' && !shift) { apply('new chans', () => b.newChans()); return true; }
+    if (ch === 'c' && !shift) { apply('clear chans (all 0)', () => b.clearChans()); return true; }
+    if (ch === '1' && !shift) { apply('shift chans -1', () => b.shiftChans(-1)); return true; }
+    if (ch === '2' && !shift) { apply('shift chans +1', () => b.shiftChans(1)); return true; }
+    if (ch === '3' && !shift) { apply('palette shift -1', () => b.dShiftChans(-1)); return true; }
+    if (ch === '4' && !shift) { apply('palette shift +1', () => b.dShiftChans(1)); return true; }
+    if (ch === 'i' && !shift) { apply('invert chans', () => b.invertChans()); return true; }
+    if (ch === 'I' && shift)  { apply('invert chans (modal)', () => b.invertChansModal()); return true; }
+    if (ch === 'e' && !shift) { apply('shear chans', () => b.shearChans()); return true; }
+    if (ch === 'w' && !shift) { apply('curve chans', () => b.curveChans()); return true; }
+    if (ch === 'q' && !shift) {
+      apply(`palette ≤ ${currentQuantize()}`, () => b.quantizeChanPalette(currentQuantize()));
+      return true;
+    }
+    if (ch === 'Q' && shift) {
+      const q = nextQuantize();
+      status(`[ch] (q to apply) palette ≤ ${q}`);
+      return true;
+    }
+    if (ch === 'u' && !shift) { apply('stutter chans', () => b.stutterChans()); return true; }
+    if (ch === 'U' && shift)  { apply('sputter chans', () => b.sputterChans()); return true; }
+    if (ch === 'R' && shift)  { apply('mirror chans', () => b.mirrorChans()); return true; }
+    if (ch === 'd' && !shift) { apply('braid chans', () => b.braidChans()); return true; }
+    if (ch === 'D' && shift)  { apply('pyramid chans', () => b.pyramidChans()); return true; }
+    if (ch === '9')           { apply('rotate chans <<', () => b.rotateChans(-1)); return true; }
+    if (ch === '0')           { apply('rotate chans >>', () => b.rotateChans(1)); return true; }
+    if (ch === 'z' && !shift) { apply('drop last chan', () => b.dropChan()); return true; }
+    if (ch === 'a' && !shift) { apply('add chan (palette)', () => b.recycleChan()); return true; }
+    if (ch === 'A' && shift)  { apply('add chan (any)', () => b.addChan()); return true; }
+    if (ch === 'x' && !shift) {
+      const src = g.current;
+      if (src) apply('lace chans with slot', () => b.laceChans(src));
+      else status('no bloom in slot');
+      return true;
+    }
+    if (ch === 'f' && !shift) {
+      const src = g.current;
+      if (src) apply('copy chans from slot', () => b.copyChans(src));
+      else status('no bloom in slot');
+      return true;
+    }
+
+    // Everything else is consumed with a hint, so normal-mode muscle memory
+    // can't accidentally mutate notes/time/velocities while sculpting channels
+    status('[ch] no channel analog — o or esc exits');
+    return true;
+  }
+
   function onKey(e: KeyboardEvent): void {
     // Ignore if modifier keys other than shift/option are active (e.g. Ctrl+R)
     if (e.ctrlKey || e.metaKey) return;
@@ -88,6 +192,18 @@ export function createKeyHandler(state: KeyHandlerState) {
     const alt = e.altKey;
     const b = state.bloom;
     const g = state.garden;
+
+    // ─── Channel edit mode toggle + dispatch ──────────────────────────────────
+    if (ch === 'o' && !shift && !alt) {
+      setChanMode(!_chanMode);
+      if (_chanMode && Bloom.maxChan === 0) {
+        status('channel mode — maxChan is 0, raise it in settings to hear channels');
+      } else {
+        status(_chanMode ? 'channel mode (o or esc exits)' : 'channel mode off');
+      }
+      return;
+    }
+    if (_chanMode && onChanKey(e)) return;
 
     // ─── Visualization mode  (opt+1 … opt+9) ─────────────────────────────────
     if (alt && !shift && e.code.startsWith('Digit')) {
@@ -581,6 +697,31 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
+    // ─── Intervals ────────────────────────────────────────────────────────────
+    // Notes added at playback; the bloom's own notes are untouched
+    if (!alt) {
+      const intervalKeys: Record<string, [string, () => void]> = {
+        '5': ['randomize intervals', () => b.randIntervals()],
+        '6': ['widen intervals', () => b.incrementIntervals(1)],
+        '^': ['narrow intervals', () => b.incrementIntervals(-1)],
+        '7': ['add interval', () => b.addInterval()],
+        '&': ['drop interval', () => b.dropInterval()],
+        '8': ['reset intervals', () => b.resetIntervals()],
+        '*': ['bake intervals into notes', () => b.bakeIntervals()],
+        '%': ['intervals', () => b.toggleIntervalsDiatonic()],
+      };
+      const hit = intervalKeys[ch];
+      if (hit) {
+        hit[1]();
+        const msg = ch === '%'
+          ? `intervals in ${b.intervalsDiatonic ? 'scale steps' : 'semitones'}`
+          : hit[0];
+        status(msg);
+        refresh(msg);
+        return;
+      }
+    }
+
     // ─── Fission / Fusion ─────────────────────────────────────────────────────
     if (ch === '|' && !alt) {
       status('merge garden >> b');
@@ -629,13 +770,14 @@ export function createKeyHandler(state: KeyHandlerState) {
           b,
           state.out!,
           idx => state.viz?.activateNote(idx),
-          (vel, time, chan) => {
+          (vel, time, chan, intervals) => {
             // Reuse a single display bloom; import notes/scale from the live bloom each cycle
             if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
             _loopDisplayBloom.import(state.bloom);
             _loopDisplayBloom.velocities    = vel;
             _loopDisplayBloom.timeIntervals = time;
             _loopDisplayBloom.chans         = chan;
+            _loopDisplayBloom.intervals     = intervals;
             state.viz?.setBloom(_loopDisplayBloom);
           },
         );

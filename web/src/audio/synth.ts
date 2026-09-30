@@ -31,46 +31,43 @@ let _reverb: Tone.Reverb | null = null;
 let _dry: Tone.Gain | null = null;
 let _wet: Tone.Gain | null = null;
 let _loaded = false;
-let _loading = false;
+let _loadPromise: Promise<void> | null = null;
 
 // Velocity ceiling: MIDI velocities are scaled so that 127 maps to this value
 let _velCeiling = 100;
 
-/** Resolves when the sampler is loaded and ready to play. */
+/** Resolves when the sampler is loaded and ready to play. Rejects if samples fail to load. */
 export function loadSynth(): Promise<void> {
-  if (_loaded && _sampler) return Promise.resolve();
-  if (_loading) {
-    return new Promise((resolve) => {
-      const check = setInterval(() => {
-        if (_loaded) { clearInterval(check); resolve(); }
-      }, 100);
-    });
-  }
-  _loading = true;
+  if (_loadPromise) return _loadPromise;
 
-  // Signal chain: sampler → dry gain → destination
-  //                       → reverb → wet gain → destination
-  _dry = new Tone.Gain(0.6).toDestination();
-  _wet = new Tone.Gain(0.4).toDestination();
-  _reverb = new Tone.Reverb({ decay: 4, preDelay: 0.01 });
+  _loadPromise = (async () => {
+    // Signal chain: sampler → dry gain → destination
+    //                       → reverb → wet gain → destination
+    _dry = new Tone.Gain(0.6).toDestination();
+    _wet = new Tone.Gain(0.4).toDestination();
+    _reverb = new Tone.Reverb({ decay: 4, preDelay: 0.01 });
+    await _reverb.generate();
 
-  return new Promise((resolve) => {
-    _reverb!.generate().then(() => {
+    await new Promise<void>((resolve, reject) => {
       _sampler = new Tone.Sampler({
         urls: SAMPLE_URLS,
         baseUrl: BASE_URL,
         release: 4,
-        onload: () => {
-          _loaded = true;
-          _loading = false;
-          resolve();
-        },
+        onload: resolve,
+        onerror: reject,
       });
       _sampler.connect(_dry!);
       _sampler.connect(_reverb!);
       _reverb!.connect(_wet!);
     });
-  });
+
+    _loaded = true;
+  })();
+
+  // Allow a retry after a failed load (e.g. network came back)
+  _loadPromise.catch(() => { _loadPromise = null; });
+
+  return _loadPromise;
 }
 
 export function isLoaded(): boolean {
@@ -108,13 +105,23 @@ async function ensureContext(): Promise<void> {
 }
 
 /**
+ * Convert a scheduler timestamp (performance.now()-based, possibly in the future)
+ * to Tone.js transport time. Without it, scheduled notes would fire up to a full
+ * lookahead window (~100ms) early.
+ */
+function toneTime(atMs?: number): number {
+  if (atMs === undefined) return Tone.now();
+  return Tone.now() + Math.max(0, (atMs - performance.now()) / 1000);
+}
+
+/**
  * A virtual MidiOutput that plays notes through the built-in piano sampler.
  * Parses raw MIDI bytes just like a hardware output would receive them.
  */
 export const pianoOutput: MidiOutput = {
   name: 'Built-in Piano',
 
-  send(data: number[]) {
+  send(data: number[], atMs?: number) {
     if (!_sampler || !_loaded) return;
 
     const status = data[0] & 0xf0;
@@ -126,16 +133,16 @@ export const pianoOutput: MidiOutput = {
       ensureContext().then(() => {
         const name = midiToNoteName(note);
         const amp = (vel / 127) * (_velCeiling / 127);
-        _sampler!.triggerAttack(name, Tone.now(), amp);
+        _sampler!.triggerAttack(name, toneTime(atMs), amp);
       });
     } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
       // Note off
       const name = midiToNoteName(note);
-      _sampler?.triggerRelease(name, Tone.now());
+      _sampler?.triggerRelease(name, toneTime(atMs));
     } else if (status === 0xb0) {
       const cc = data[1];
       if (cc === 123) {
-        // All notes off
+        // All notes off — immediate, this is a panic signal
         _sampler?.releaseAll(Tone.now());
       }
     }

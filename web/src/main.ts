@@ -6,7 +6,7 @@ import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
-import { saveGarden, loadGarden } from './io/garden-io';
+import { saveGarden, loadGarden, autosaveGarden, restoreAutosave } from './io/garden-io';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
 import type { VizMode, ThemeId } from './ui/theme';
@@ -29,6 +29,7 @@ async function main() {
   // ─── Core state ─────────────────────────────────────────────────────────────
   const bloom = new Bloom().seed();
   const garden = new Garden();
+  const restored = restoreAutosave(bloom, garden);
 
   // ─── UI ─────────────────────────────────────────────────────────────────────
   const viz = new BloomVisualization(canvas);
@@ -38,11 +39,13 @@ async function main() {
   viz.setBloom(bloom);
   gardenViz.setMode(viz.getMode());
   gardenViz.update(garden);
-  display.update(bloom, garden);
+  display.update(bloom, garden, restored ? 'restored from autosave' : '');
 
   // ─── MIDI ────────────────────────────────────────────────────────────────────
-  // Start loading piano samples immediately (non-blocking)
-  loadSynth();
+  // Start loading piano samples immediately (non-blocking), but surface failures
+  loadSynth().catch((err) => {
+    display.setStatus(`piano failed to load: ${err instanceof Error ? err.message : err}`);
+  });
 
   const midiState = await initMidi();
 
@@ -95,6 +98,7 @@ async function main() {
     viz.setBloom(b);
     gardenViz.update(garden);
     display.update(b, garden, msg);
+    autosaveGarden(bloom, garden);
   }
 
   const bloomEditor = new BloomEditor((b) => refreshAll(b, 'edited'));
@@ -142,6 +146,17 @@ async function main() {
     reg('rotatevel',   'rotate velocities',       b => b.rotateVelocities(1));
     reg('rotatetime',  'rotate time intervals',   b => b.rotateTime(1));
     reg('rotatechan',  'rotate channels',         b => b.rotateChans(1));
+    reg('rotateintervals', 'rotate intervals',    b => b.rotateIntervals(1));
+
+    // Intervals
+    reg('randintervals',  'randomize intervals',        b => b.randIntervals());
+    reg('addinterval',    'add an interval step',       b => b.addInterval());
+    reg('dropinterval',   'drop last interval step',    b => b.dropInterval());
+    reg('widenintervals', 'widen intervals by one',     b => b.incrementIntervals(1));
+    reg('narrowintervals', 'narrow intervals by one',   b => b.incrementIntervals(-1));
+    reg('resetintervals', 'reset intervals (none)',     b => b.resetIntervals());
+    reg('bakeintervals',  'bake intervals into notes',  b => b.bakeIntervals());
+    reg(['intervalmode', 'diatonicintervals'], 'intervals: semitones / scale steps', b => b.toggleIntervalsDiatonic());
 
     // Patterning
     reg('stutter',   'stutter pattern',           b => b.stutter());
@@ -443,9 +458,12 @@ async function main() {
 
   // Reverb
   const reverbMixInput = document.getElementById('reverb-mix') as HTMLInputElement;
+  const reverbMixVal = document.getElementById('reverb-mix-val') as HTMLElement;
   const reverbDecayInput = document.getElementById('reverb-decay') as HTMLInputElement;
   reverbMixInput?.addEventListener('input', () => {
-    setReverbMix(parseFloat(reverbMixInput.value));
+    const v = parseFloat(reverbMixInput.value);
+    setReverbMix(v);
+    if (reverbMixVal) reverbMixVal.textContent = v.toFixed(2);
   });
   reverbDecayInput?.addEventListener('change', () => {
     const v = parseFloat(reverbDecayInput.value);
@@ -545,9 +563,7 @@ async function main() {
   function doLoad() {
     loadGarden(bloom, garden, (err) => {
       if (err) { display.setStatus(err); return; }
-      if (viz) viz.setBloom(bloom);
-      if (gardenViz) gardenViz.update(garden);
-      display.update(bloom, garden, 'loaded');
+      refreshAll(bloom, 'loaded');
     });
   }
 

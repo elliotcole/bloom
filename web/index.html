@@ -120,22 +120,22 @@
       #help-toggle:hover { color: #aaa; border-color: #555; }
       /* margin-left: auto on help-toggle pushes panel-toggle before it to center-right area */
 
-      /* Settings bar */
+      /* Settings panel */
       #settings-bar {
         grid-row: 2;
         background: #0e0e18;
         border-bottom: 1px solid #1a1a28;
-        padding: 5px 12px;
+        padding: 6px 12px;
         display: none;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 5px 14px;
+        flex-direction: column;
+        gap: 5px;
         font-size: 11px;
         color: #888;
       }
       #settings-bar.visible { display: flex; }
-      .s-group { display: flex; align-items: center; gap: 5px; }
-      .s-sep { color: #222; font-size: 14px; padding: 0 2px; }
+      .s-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; }
+      .s-section { display: flex; align-items: center; gap: 5px; }
+      .s-section-label { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 2px; }
       #settings-bar label { display: flex; align-items: center; gap: 4px; cursor: default; }
       #settings-bar input[type="number"] {
         width: 46px;
@@ -149,6 +149,7 @@
       }
       #settings-bar input[type="number"]::-webkit-inner-spin-button,
       #settings-bar input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
+      #settings-bar input[type="range"] { cursor: pointer; }
       #settings-bar input[type="checkbox"] { accent-color: #48a; width: 12px; height: 12px; cursor: pointer; }
       #settings-bar select {
         background: #1a1a22;
@@ -197,6 +198,26 @@
         animation: pulse-red 1s ease-in-out infinite;
       }
       @keyframes pulse-red { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+      /* Channel edit mode badge */
+      #chan-mode-badge {
+        display: none;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #fb0;
+        border: 1px solid #a80;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+      }
+      #chan-mode-badge.active { display: inline-block; }
+
+      /* Help views are separated by mode: channel-mode help only in channel mode,
+         normal help only in normal mode */
+      #hf-chan-sec { display: none; }
+      body.chan-mode #hf-chan-sec { display: block; }
+      body.chan-mode .hf-sec:not(#hf-chan-sec) { display: none; }
 
       /* Main canvas area — flex column: viz on top, garden on bottom */
       #canvas-area {
@@ -524,111 +545,110 @@
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
+      <span id="chan-mode-badge" title="channel edit mode — shaping keys act on channels (o or esc exits)">CH</span>
       <button id="help-toggle">? help</button>
     </header>
 
     <div id="settings-bar">
-      <!-- Playback / timing -->
-      <span class="s-group">
-        <label>bpm <input type="number" id="bpm-input" min="20" max="300" step="1" value="60"></label>
-        <button class="s-btn" id="tap-tempo">tap</button>
-        <span id="clock-sync-status">clk: free</span>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Note duration -->
-      <span class="s-group">
-        <label>legato <input type="number" id="legato-input" min="0.05" max="8" step="0.05" value="2.00"></label>
-        <label title="sustain: fixed note gate in beats (overrides legato)">sustain
-          <input type="checkbox" id="sustain-enabled">
-          <input type="number" id="sustain-input" min="0.05" max="8" step="0.05" value="0.50" disabled>
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Compass range -->
-      <span class="s-group">
-        <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
-        <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
-        <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
-        <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
-        <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Fixed constraints -->
-      <span class="s-group">
-        <label title="lock duration before each play">fixDur
-          <input type="checkbox" id="fixed-dur-enabled">
-          <input type="number" id="fixed-dur-amount" min="0.5" max="16" step="0.5" value="4" disabled>
-          <select id="fixed-dur-mode" disabled>
-            <option value="trim">trim</option>
-            <option value="scale">scale</option>
-          </select>
-        </label>
-        <label title="quantize time grid before each play">fixGrid
-          <input type="checkbox" id="fixed-grid-enabled">
-          <input type="number" id="fixed-grid-size" min="2" max="16" step="1" value="8" disabled>
-        </label>
-        <label title="re-apply current scale before each play">fixScale
-          <input type="checkbox" id="fixed-scale-enabled">
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Max channels -->
-      <span class="s-group">
-        <label title="highest MIDI channel (0-based) for channel operations">maxChan
-          <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Graph display -->
-      <span class="s-group">
-        <label title="show axis labels in graph views (field, deep)">axis
-          <input type="checkbox" id="show-axis">
-        </label>
-        <label title="show pitch+octave label next to each note in all views">notes
-          <input type="checkbox" id="show-note-labels">
-        </label>
-        <label title="display keystroke and command name on screen (demo/presentation mode)">demo
-          <input type="checkbox" id="demo-mode">
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Color skin -->
-      <span class="s-group">
-        <label>skin
-          <select id="viz-theme-select">
-            <option value="dark">◼ dark</option>
-            <option value="phosphor">▣ phosphor</option>
-            <option value="ember">🔥 ember</option>
-            <option value="arctic">❄ arctic</option>
-            <option value="solar">☀ solar</option>
-            <option value="uv">◈ uv</option>
-            <option value="minimal">□ minimal</option>
-          </select>
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Synth -->
-      <span class="s-group">
-        <label title="maximum velocity sent to built-in piano (0–127)">vel max
-          <input type="number" id="vel-ceiling" min="0" max="127" step="1" value="100" style="width:42px">
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Reverb -->
-      <span class="s-group">
-        <label title="reverb dry/wet mix (0 = dry, 1 = wet)">reverb
-          <input type="range" id="reverb-mix" min="0" max="1" step="0.05" value="0.4" style="width:60px;vertical-align:middle">
-        </label>
-        <label title="reverb decay time in seconds">decay
-          <input type="number" id="reverb-decay" min="0.1" max="20" step="0.5" value="4" style="width:42px">
-        </label>
-      </span>
-      <span class="s-sep">|</span>
-      <!-- Save / load -->
-      <span class="s-group">
-        <button class="s-btn" id="save-garden" title="save garden to JSON (ctrl+s)">⬇ save</button>
-        <button class="s-btn" id="load-garden" title="load garden from JSON (ctrl+o)">⬆ load</button>
-      </span>
+      <!-- Row 1: timing, freeze, sound -->
+      <div class="s-row">
+        <span class="s-section">
+          <span class="s-section-label">timing</span>
+          <label>bpm <input type="number" id="bpm-input" min="20" max="300" step="1" value="60"></label>
+          <button class="s-btn" id="tap-tempo">tap</button>
+          <span id="clock-sync-status">clk: free</span>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">freeze</span>
+          <label title="lock total duration before each play">duration
+            <input type="checkbox" id="fixed-dur-enabled">
+            <input type="number" id="fixed-dur-amount" min="0.5" max="16" step="0.5" value="4" disabled>
+            <select id="fixed-dur-mode" disabled>
+              <option value="trim">trim</option>
+              <option value="scale">scale</option>
+            </select>
+          </label>
+          <label title="quantize to a fixed time grid before each play">grid
+            <input type="checkbox" id="fixed-grid-enabled">
+            <input type="number" id="fixed-grid-size" min="2" max="16" step="1" value="8" disabled>
+          </label>
+          <label title="re-apply the current scale before each play">scale
+            <input type="checkbox" id="fixed-scale-enabled">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">sound</span>
+          <label>legato <input type="number" id="legato-input" min="0.05" max="8" step="0.05" value="2.00"></label>
+          <label title="fixed note gate in beats (overrides legato)">sustain
+            <input type="checkbox" id="sustain-enabled">
+            <input type="number" id="sustain-input" min="0.05" max="8" step="0.05" value="0.50" disabled>
+          </label>
+          <label title="maximum velocity sent to built-in piano (0–127)">vel max
+            <input type="number" id="vel-ceiling" min="0" max="127" step="1" value="100" style="width:42px">
+          </label>
+        </span>
+      </div>
+
+      <!-- Row 2: compass, display, reverb, file -->
+      <div class="s-row">
+        <span class="s-section">
+          <span class="s-section-label">compass</span>
+          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
+          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
+          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
+          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
+          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">display</span>
+          <label title="show axis labels (field, deep)">axis
+            <input type="checkbox" id="show-axis">
+          </label>
+          <label title="show pitch+octave labels on notes">notes
+            <input type="checkbox" id="show-note-labels">
+          </label>
+          <label title="show keystroke + command on screen">demo
+            <input type="checkbox" id="demo-mode">
+          </label>
+          <label>skin
+            <select id="viz-theme-select">
+              <option value="dark">dark</option>
+              <option value="phosphor">phosphor</option>
+              <option value="ember">ember</option>
+              <option value="arctic">arctic</option>
+              <option value="solar">solar</option>
+              <option value="uv">uv</option>
+              <option value="minimal">minimal</option>
+            </select>
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">reverb</span>
+          <label title="dry/wet mix">mix
+            <input type="range" id="reverb-mix" min="0" max="1" step="0.05" value="0.4" style="width:50px">
+            <span id="reverb-mix-val" style="color:#555;width:24px">0.4</span>
+          </label>
+          <label title="decay time in seconds">decay
+            <input type="number" id="reverb-decay" min="0.1" max="20" step="0.5" value="4" style="width:42px">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">midi</span>
+          <label title="highest MIDI channel (0-based)">max ch
+            <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <button class="s-btn" id="save-garden" title="save garden (ctrl+s)">save</button>
+          <button class="s-btn" id="load-garden" title="load garden (ctrl+o)">load</button>
+        </span>
+      </div>
     </div>
 
     <div id="welcome-hint">space to play. n for new. ? for more.</div>
@@ -708,6 +728,14 @@ f    lift shape   F    cast
 <b>Channels</b>
 ;    rand chans   '    cycle chans
 :    drop chan    "    add chan
+o    channel edit mode (shaping keys act on chans)
+
+<b>Intervals</b> (notes added at playback)
+5    rand         8    reset
+7    add step     &    drop step
+6    widen        ^    narrow
+%    semitones / scale steps
+*    bake into notes
 
 <b>Fission / Fusion</b>
 |    merge garden >> b
@@ -815,7 +843,36 @@ cmd-k  command palette
           <div class="hf-sec">
             <div class="hf-h">Channels</div>
             <div class="hf-body"><b>;</b>    rand chans   <b>'</b>    cycle chans
-<b>:</b>    drop chan     <b>"</b>    add chan</div>
+<b>:</b>    drop chan     <b>"</b>    add chan
+<b>o</b>    channel edit mode</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Intervals (added at playback)</div>
+            <div class="hf-body"><b>5</b>    rand         <b>8</b>    reset
+<b>7</b>    add step     <b>&amp;</b>    drop step
+<b>6</b>    widen        <b>^</b>    narrow
+<b>%</b>    semitones / scale steps
+<b>*</b>    bake into notes</div>
+          </div>
+          <div class="hf-sec" id="hf-chan-sec">
+            <div class="hf-h">Channel mode (o or esc exits)</div>
+            <div class="hf-body"><b>m M</b>    mutate (palette / any)
+<b>s S</b>    scramble / shuffle
+<b>h H</b>    thin / thicken palette
+<b>- =</b>    converge / diverge
+<b>y n</b>    unify / new chans
+<b>c</b>      clear (all → 0)
+<b>1 2</b>    shift ∓1 (all channels)
+<b>3 4</b>    shift ∓1 (within palette)
+<b>i I</b>    invert / reflect modal
+<b>e w</b>    shear / curve
+<b>q Q</b>    cluster palette ≤K / set K
+<b>u U</b>    stutter / sputter
+<b>R D d</b>  mirror / pyramid / braid
+<b>9 0</b>    rotate &lt;&lt; &gt;&gt;
+<b>z a A</b>  drop / add (palette / any)
+<b>x f</b>    lace / copy from slot
+playback &amp; garden keys unchanged</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Fission / Fusion</div>

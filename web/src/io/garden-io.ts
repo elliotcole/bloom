@@ -11,6 +11,8 @@ interface BloomJSON {
   velocities: number[];
   timeIntervals: number[];
   chans: number[];
+  intervals?: unknown;          // IntervalVal[] — absent in files saved before intervals existed
+  intervalsDiatonic?: boolean;
   lowestPossibleNote: number;
   highestPossibleNote: number;
   lowestSeedNote: number;
@@ -41,6 +43,8 @@ function bloomToJSON(b: Bloom): BloomJSON {
     velocities: [...b.velocities],
     timeIntervals: [...b.timeIntervals],
     chans: [...b.chans],
+    intervals: JSON.parse(JSON.stringify(b.intervals)),
+    intervalsDiatonic: b.intervalsDiatonic,
     lowestPossibleNote: b.lowestPossibleNote,
     highestPossibleNote: b.highestPossibleNote,
     lowestSeedNote: b.lowestSeedNote,
@@ -63,6 +67,10 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   b.velocities = json.velocities;
   b.timeIntervals = json.timeIntervals;
   b.chans = json.chans;
+  if (Array.isArray(json.intervals) && json.intervals.length > 0) {
+    b.intervals = json.intervals as Bloom['intervals'];
+  }
+  b.intervalsDiatonic = json.intervalsDiatonic ?? false;
   b.lowestPossibleNote = json.lowestPossibleNote;
   b.highestPossibleNote = json.highestPossibleNote;
   b.lowestSeedNote = json.lowestSeedNote;
@@ -77,10 +85,8 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   return b;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-export function saveGarden(bloom: Bloom, garden: Garden): void {
-  const file: GardenFile = {
+function toGardenFile(bloom: Bloom, garden: Garden): GardenFile {
+  return {
     version: 1,
     bloom: bloomToJSON(bloom),
     garden: {
@@ -88,6 +94,49 @@ export function saveGarden(bloom: Bloom, garden: Garden): void {
       slots: garden.slots.map(s => (s ? bloomToJSON(s) : null)),
     },
   };
+}
+
+function applyGardenFile(data: GardenFile, bloom: Bloom, garden: Garden): void {
+  if (data.version !== 1) throw new Error(`unknown version ${data.version}`);
+  bloom.import(bloomFromJSON(data.bloom));
+  garden.slots = data.garden.slots.map(s => (s ? bloomFromJSON(s) : null));
+  garden.cursor = Math.max(0, Math.min(data.garden.cursor, garden.slots.length - 1));
+}
+
+// ─── Autosave (localStorage) ──────────────────────────────────────────────────
+
+const AUTOSAVE_KEY = 'bloom-garden-autosave';
+let _autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Mirror the current state to localStorage, debounced. Best-effort — never throws. */
+export function autosaveGarden(bloom: Bloom, garden: Garden): void {
+  if (_autosaveTimer !== null) clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(() => {
+    _autosaveTimer = null;
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(toGardenFile(bloom, garden)));
+    } catch {
+      // storage full or unavailable — autosave is best-effort
+    }
+  }, 250);
+}
+
+/** Restore the last autosaved state, if any. Returns true if state was restored. */
+export function restoreAutosave(bloom: Bloom, garden: Garden): boolean {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return false;
+    applyGardenFile(JSON.parse(raw) as GardenFile, bloom, garden);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export function saveGarden(bloom: Bloom, garden: Garden): void {
+  const file = toGardenFile(bloom, garden);
 
   const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -115,13 +164,7 @@ export function loadGarden(
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result as string) as GardenFile;
-        if (data.version !== 1) throw new Error(`unknown version ${data.version}`);
-
-        bloom.import(bloomFromJSON(data.bloom));
-        garden.slots = data.garden.slots.map(s => (s ? bloomFromJSON(s) : null));
-        garden.cursor = Math.max(0, Math.min(data.garden.cursor, garden.slots.length - 1));
-
+        applyGardenFile(JSON.parse(reader.result as string) as GardenFile, bloom, garden);
         onDone();
       } catch (err) {
         onDone(`load failed: ${(err as Error).message}`);

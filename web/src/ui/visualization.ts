@@ -29,6 +29,74 @@ function withAlpha(cssColor: string, alpha: number): string {
   return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : cssColor;
 }
 
+// ─── Added notes (intervals array) ────────────────────────────────────────────
+
+/**
+ * Mark for a note the intervals array adds at playback: an open diamond in the
+ * pitch's colour, so it reads as secondary to the bloom's own notes.
+ */
+function drawAddedMark(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, r: number,
+  pitch: number, vel: number, flash: number,
+  theme: Theme,
+  alphaScale = 1,
+): void {
+  const [h, s, l, a] = theme.noteHsla(pc(pitch), vel * 0.85, flash);
+  const size = r + flash * 3;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size, y);
+  ctx.closePath();
+  if (flash > 0.02 && !theme.strokeOnly) {
+    ctx.fillStyle = `hsla(${h},${s}%,${l}%,${flash * 0.35 * alphaScale})`;
+    ctx.fill();
+  }
+  ctx.strokeStyle = `hsla(${h},${s}%,${clamp(l + 12, 0, 96)}%,${clamp((a + 0.25) * alphaScale, 0, 1)})`;
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+}
+
+/**
+ * Pitch-class circles (tonal, set): a diamond on each pitch class the intervals
+ * add — around the node when the bloom already has that pitch class.
+ */
+function drawAddedPcMarks(
+  ctx: CanvasRenderingContext2D,
+  bloom: Bloom, flashValues: number[], theme: Theme,
+  cx: number, cy: number, outerR: number, nodeR: number,
+  angleOf: (p: number) => number,
+  ownCount: Int32Array,
+): void {
+  if (!bloom.hasIntervals()) return;
+  const flash = new Float32Array(12);
+  const vel = new Float32Array(12);
+  const present = new Uint8Array(12);
+  for (let i = 0; i < bloom.notes.length; i++) {
+    bloom.addedNotesAt(i).forEach(pitch => {
+      const p = pc(pitch);
+      present[p] = 1;
+      flash[p] = Math.max(flash[p], flashValues[i] ?? 0);
+      vel[p] = Math.max(vel[p], wrapAt(bloom.velocities, i));
+    });
+  }
+  for (let p = 0; p < 12; p++) {
+    if (!present[p]) continue;
+    const ang = angleOf(p);
+    const r = ownCount[p] > 0 ? nodeR * 1.9 : nodeR * 0.9;
+    drawAddedMark(ctx, cx + Math.cos(ang) * outerR, cy + Math.sin(ang) * outerR, r, p, vel[p], flash[p], theme);
+  }
+}
+
+/** Every pitch the bloom sounds: its own notes plus those the intervals add */
+function soundingPitches(bloom: Bloom): number[] {
+  const own = flatNotes(bloom.notes) as number[];
+  if (!bloom.hasIntervals()) return own;
+  return own.concat(...bloom.notes.map((_, i) => bloom.addedNotesAt(i)));
+}
+
 // ─── Note label helpers ───────────────────────────────────────────────────────
 
 const MIDI_NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -141,6 +209,13 @@ export function drawRadialAt(
       }
       ctx.restore();
     });
+
+    // Added notes sit where their petal's tip would be
+    bloom.addedNotesAt(i).forEach((pitch, ai) => {
+      const angle = noteAngles[i] + (chordNotes.length + ai) * 0.05;
+      const len = (pitch / 127) * radius * 0.8 + radius * 0.08;
+      drawAddedMark(ctx, cx - Math.sin(angle) * len, cy + Math.cos(angle) * len, 4.5, pitch, vel, flash, theme);
+    });
   }
 
   ctx.globalCompositeOperation = 'source-over';
@@ -189,7 +264,7 @@ export function drawPianoAt(
   const PY = y + h * 0.10;
   const PH = h * 0.78;
 
-  const allPitches = flatNotes(notes) as number[];
+  const allPitches = soundingPitches(bloom);
   const rawMin = Math.min(...allPitches);
   const rawMax = Math.max(...allPitches);
   const margin = Math.max(6, Math.round((rawMax - rawMin) * 0.18));
@@ -313,6 +388,8 @@ export function drawPianoAt(
         ctx.stroke();
       }
     });
+    bloom.addedNotesAt(i).forEach(pitch =>
+      drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
     t += wrapAt(bloom.timeIntervals, i);
   }
 
@@ -502,6 +579,8 @@ export function drawFieldAt(
         ctx.stroke();
       }
     });
+    bloom.addedNotesAt(i).forEach(pitch =>
+      drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
     t += wrapAt(bloom.timeIntervals, i);
   }
 
@@ -679,6 +758,7 @@ export function drawDeepAt(
 
   // Build flat list of all note instances for depth-sorted drawing
   type Inst = {
+    added?: boolean;
     pitch: number; vel: number; flash: number;
     projX: number; projY: number;
     dotScale: number; depthAlpha: number; zNorm: number;
@@ -700,6 +780,9 @@ export function drawDeepAt(
 
     chordNotes.forEach(pitch => {
       instances.push({ pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
+    });
+    bloom.addedNotesAt(i).forEach(pitch => {
+      instances.push({ added: true, pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
     });
 
     t += wrapAt(bloom.timeIntervals, i);
@@ -728,6 +811,10 @@ export function drawDeepAt(
   const baseR = 7.0;
   for (const inst of instances) {
     const { pitch, vel, flash, projX, projY, dotScale, depthAlpha, zNorm } = inst;
+    if (inst.added) {
+      drawAddedMark(ctx, projX, projY, baseR * dotScale * 0.8, pitch, vel, flash, theme, depthAlpha);
+      continue;
+    }
     const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
     const finalA = a * depthAlpha;
     const r = baseR * dotScale + flash * 7 * zNorm;
@@ -791,7 +878,7 @@ export function drawDeepAt(
   ctx.globalCompositeOperation = 'source-over';
 
   if (showNoteLabels && instances.length > 0) {
-    const labels: NoteLabel[] = instances.map(inst => ({
+    const labels: NoteLabel[] = instances.filter(inst => !inst.added).map(inst => ({
       x: inst.projX, y: inst.projY, label: pitchName(inst.pitch),
     }));
     const shapeCx = labels.reduce((a, l) => a + l.x, 0) / labels.length;
@@ -993,6 +1080,36 @@ export function drawScoreAt(
       }
     });
 
+    // Added notes — open diamond noteheads, like harmonics.
+    bloom.addedNotesAt(i).forEach(pitch => {
+      const { pos, acc } = midiToStaff(pitch);
+      const ny = posToY(pos);
+      const crowded = sortedPos.some(p => Math.abs(p - pos) <= 1);
+      const fx = crowded ? nx + NH_W * 1.9 : nx;
+
+      ctx.strokeStyle = scoreCol;
+      ctx.lineWidth   = 0.9;
+      for (const lp of ledgerLines(pos, pos >= 0)) {
+        ctx.beginPath();
+        ctx.moveTo(fx - LEDGER_W, posToY(lp));
+        ctx.lineTo(fx + LEDGER_W, posToY(lp));
+        ctx.stroke();
+      }
+      if (acc === '♯') drawSharp(ctx, fx - NH_W - LINE_SPACING * 0.72, ny, LINE_SPACING, scoreCol);
+
+      ctx.beginPath();
+      ctx.moveTo(fx, ny - HALF);
+      ctx.lineTo(fx + NH_W, ny);
+      ctx.lineTo(fx, ny + HALF);
+      ctx.lineTo(fx - NH_W, ny);
+      ctx.closePath();
+      ctx.fillStyle = theme.bg;
+      ctx.fill();
+      ctx.strokeStyle = flash > 0.01 ? withAlpha(theme.text, 0.70 + flash * 0.30) : scoreCol;
+      ctx.lineWidth   = 1.1;
+      ctx.stroke();
+    });
+
     // Optional pitch-name labels above/below the staff.
     if (showLabels) {
       ctx.font         = '8px monospace';
@@ -1108,6 +1225,18 @@ export function drawOrbitAt(
         ctx.arc(px, py, planetR, 0, Math.PI * 2);
         ctx.fill();
       }
+    });
+
+    // Added notes ride their own orbit at the same angle
+    bloom.addedNotesAt(i).forEach((pitch, ai) => {
+      const r = minR + (pitch / 127) * (maxR - minR);
+      const angle = ((i + (chordNotes.length + ai) * 0.12) / n) * Math.PI * 2 - Math.PI / 2 + orbitRotation;
+      ctx.strokeStyle = theme.grid;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      drawAddedMark(ctx, cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, 3 + (vel / 127) * 5, pitch, vel, flash, theme);
     });
   }
 
@@ -1289,6 +1418,8 @@ export function drawTonalAt(
     }
   }
 
+  drawAddedPcMarks(ctx, bloom, flashValues, theme, cx, cy, outerR, nodeR, fifthsAngle, pcCount);
+
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
@@ -1450,6 +1581,8 @@ export function drawSetAt(
     }
   }
 
+  drawAddedPcMarks(ctx, bloom, flashValues, theme, cx, cy, outerR, nodeR, chromaticAngle, pcCount);
+
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
@@ -1536,7 +1669,7 @@ export function drawSpiralAt(
   }
 
   // ── Build note positions ────────────────────────────────────────────────────
-  type NotePos = { px: number; py: number; sinT: number; flash: number; vel: number; midiPitch: number };
+  type NotePos = { px: number; py: number; sinT: number; flash: number; vel: number; midiPitch: number; added?: boolean };
   const positions: NotePos[] = [];
 
   for (let i = 0; i < bloom.notes.length; i++) {
@@ -1547,6 +1680,10 @@ export function drawSpiralAt(
     pitches.forEach(midi => {
       const { x, y, sinT } = project(midi);
       positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi });
+    });
+    bloom.addedNotesAt(i).forEach(midi => {
+      const { x, y, sinT } = project(midi);
+      positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi, added: true });
     });
   }
 
@@ -1595,7 +1732,11 @@ export function drawSpiralAt(
   positions.sort((a, b) => a.sinT - b.sinT);
   const nodeR = clamp(radius * 0.055, 3, 12);
 
-  for (const { px, py, flash, vel, midiPitch } of positions) {
+  for (const { px, py, flash, vel, midiPitch, added } of positions) {
+    if (added) {
+      drawAddedMark(ctx, px, py, nodeR * (0.6 + vel / 127 * 0.8), midiPitch, vel, flash, theme);
+      continue;
+    }
     const p = ((Math.round(midiPitch) % 12) + 12) % 12;
     const [h, s, l, a] = theme.noteHsla(p, vel, flash);
     const nr = nodeR * (0.6 + vel / 127 * 0.8) + flash * nodeR * 0.8;
@@ -1628,7 +1769,7 @@ export function drawSpiralAt(
 
   // ── Note labels ─────────────────────────────────────────────────────────────
   if (showNoteLabels && positions.length > 0) {
-    const labelPositions: NoteLabel[] = positions.map(({ px, py, midiPitch }) => ({
+    const labelPositions: NoteLabel[] = positions.filter(pos => !pos.added).map(({ px, py, midiPitch }) => ({
       x: px, y: py, label: pitchName(midiPitch),
     }));
     const sumX = positions.reduce((s, p) => s + p.px, 0) / positions.length;
@@ -1656,7 +1797,7 @@ export function drawHelixAt(
   const minR = radius * 0.08;
   const maxR = radius * 0.88;
 
-  const allPitches = flatNotes(notes) as number[];
+  const allPitches = soundingPitches(bloom);
   const midPitch = (Math.min(...allPitches) + Math.max(...allPitches)) / 2;
   const pitchHalfRange = Math.max(12, (Math.max(...allPitches) - Math.min(...allPitches)) / 2);
 
@@ -1743,6 +1884,18 @@ export function drawHelixAt(
     }
   }
 
+  // Added notes: same moment on the spiral, displaced by their own pitch
+  let tAdded = 0;
+  for (let i = 0; i < n; i++) {
+    const vel = wrapAt(bloom.velocities, i);
+    const flash = flashValues[i] ?? 0;
+    bloom.addedNotesAt(i).forEach(pitch => {
+      const pos = spiralPos(tAdded, pitch);
+      drawAddedMark(ctx, pos.x, pos.y, 3 + (vel / 127) * 3, pitch, vel, flash, theme);
+    });
+    tAdded += wrapAt(bloom.timeIntervals, i);
+  }
+
   ctx.globalCompositeOperation = 'source-over';
 
   if (showNoteLabels) {
@@ -1774,6 +1927,7 @@ export class BloomVisualization {
   private _theme: Theme = THEMES.dark;
   private _showAxis = false;
   private _showNoteLabels = false;
+  private _showChanStrip = false;
 
   // Flash / playhead state
   private petalFlash: number[] = [];
@@ -1827,6 +1981,8 @@ export class BloomVisualization {
   setShowAxis(show: boolean): void { this._showAxis = show; }
   setShowNoteLabels(show: boolean): void { this._showNoteLabels = show; }
   toggleNoteLabels(): boolean { this._showNoteLabels = !this._showNoteLabels; return this._showNoteLabels; }
+  /** Show the channel strip (channel-edit mode) */
+  setChanStrip(show: boolean): void { this._showChanStrip = show; }
 
   getMode(): VizMode { return this._mode; }
   getTheme(): ThemeId { return this._theme.id; }
@@ -2020,7 +2176,46 @@ export class BloomVisualization {
         break;
     }
 
+    if (this._showChanStrip) this._drawChanStrip(ctx, W, H, bloom, theme);
+
     ctx.restore();
+  }
+
+  /** Channel-edit mode: the chans array itself, as colored squares along the bottom */
+  private _drawChanStrip(ctx: CanvasRenderingContext2D, W: number, H: number, bloom: Bloom, theme: Theme): void {
+    const chans = bloom.chans;
+    if (chans.length === 0) return;
+
+    const gap = 3;
+    const s = Math.min(22, Math.max(8, (W * 0.9) / chans.length - gap));
+    const totalW = chans.length * (s + gap) - gap;
+    const x0 = (W - totalW) / 2;
+    const y = H - s - 10;
+
+    chans.forEach((chan, i) => {
+      const x = x0 + i * (s + gap);
+      const hue = (chan * 360) / 16;
+      ctx.fillStyle = `hsla(${hue},70%,55%,0.9)`;
+      ctx.beginPath();
+      ctx.roundRect(x, y, s, s, 3);
+      ctx.fill();
+      if (s >= 12) {
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.font = `${Math.floor(s * 0.55)}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(chan), x + s / 2, y + s / 2 + 0.5);
+      }
+    });
+
+    // Note count marker: where the chans cycle sits relative to the notes cycle
+    if (chans.length !== bloom.notes.length && bloom.notes.length > 0) {
+      ctx.fillStyle = theme.text;
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${chans.length} chans / ${bloom.notes.length} notes — phasing`, W / 2, y - 4);
+    }
   }
 
   private _drawEmpty(ctx: CanvasRenderingContext2D, cx: number, cy: number, _theme: Theme): void {

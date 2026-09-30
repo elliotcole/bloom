@@ -1,6 +1,7 @@
 // Core Bloom class — ported from Bloom.sc
 
 import type { NoteVal, NoteArray } from '../lib/arrays';
+import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
   wrapAt, wrapExtend, flatNotes, coin, exprand, rrand,
   scramble, perfectShuffle, mirror as mirrorArr, stutter as stutterArr,
@@ -35,6 +36,21 @@ export const BloomDefaults = {
   defaultChan: 0,
 };
 
+/** One step of the intervals array: 0 = nothing added, a list adds several notes */
+export type IntervalVal = number | number[];
+
+/** Notes added by the intervals array sound this much quieter than their parent */
+export const ADDED_NOTE_VELOCITY = 0.85;
+
+// Pools the random interval operations draw from
+const CHROMATIC_INTERVALS = [-12, -9, -8, -7, -5, -4, -3, 3, 4, 5, 7, 8, 9, 12];
+const DIATONIC_INTERVALS = [-7, -5, -4, -3, -2, 2, 3, 4, 5, 7];
+const MAX_BAKED_LENGTH = 256;
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
 // ─── Bloom class ──────────────────────────────────────────────────────────────
 
 export class Bloom {
@@ -42,6 +58,13 @@ export class Bloom {
   velocities: number[];
   timeIntervals: number[];
   chans: number[];
+  /**
+   * Notes added at playback, as distances from each note: [0, 0, 7] gives every
+   * third note a fifth above it. Cycles at its own length; never alters `notes`.
+   */
+  intervals: IntervalVal[];
+  /** true: intervals count steps of the scale; false: semitones */
+  intervalsDiatonic: boolean;
 
   lowestPossibleNote: number;
   highestPossibleNote: number;
@@ -91,7 +114,10 @@ export class Bloom {
     this.notes = Array.isArray(n) ? (n as NoteArray) : [n as number];
     this.velocities = Array.isArray(v) ? (v as number[]) : [v as number];
     this.timeIntervals = Array.isArray(t) ? (t as number[]) : [t as number];
-    this.chans = Array.isArray(c) ? (c as number[]) : [c as number];
+    // A scalar chan fills to the notes length so chans starts aligned with notes
+    this.chans = Array.isArray(c) ? (c as number[]) : this.notes.map(() => c as number);
+    this.intervals = [0];
+    this.intervalsDiatonic = false;
   }
 
   // ─── Copy / Import ─────────────────────────────────────────────────────────
@@ -102,6 +128,8 @@ export class Bloom {
     b.velocities = [...this.velocities];
     b.timeIntervals = [...this.timeIntervals];
     b.chans = [...this.chans];
+    b.intervals = JSON.parse(JSON.stringify(this.intervals));
+    b.intervalsDiatonic = this.intervalsDiatonic;
     b.lowestPossibleNote = this.lowestPossibleNote;
     b.highestPossibleNote = this.highestPossibleNote;
     b.lowestSeedNote = this.lowestSeedNote;
@@ -128,6 +156,8 @@ export class Bloom {
     this.velocities = b.velocities;
     this.timeIntervals = b.timeIntervals;
     this.chans = b.chans;
+    this.intervals = b.intervals;
+    this.intervalsDiatonic = b.intervalsDiatonic;
     this.lowestPossibleNote = b.lowestPossibleNote;
     this.highestPossibleNote = b.highestPossibleNote;
     this.lowestSeedNote = b.lowestSeedNote;
@@ -170,7 +200,7 @@ export class Bloom {
     this.timeIntervals = Array.from({ length: n }, () =>
       Math.round(exprand(this.timeRangeLow, this.timeRangeHi) * 100) / 100,
     );
-    this.chans = [0];
+    this.chans = Array.from({ length: n }, () => Bloom.defaultChan);
     this.appliedScale = null;
     this.enforceRange();
     return this;
@@ -239,10 +269,8 @@ export class Bloom {
   mutateVelocities(maxChange = 30): this {
     this.velocities = this.velocities.map(vel => {
       const change = Math.round(Math.random() * maxChange * (Math.random() < 0.5 ? 1 : -1));
-      let v = vel + change;
-      while (v < 0) v += 12;
-      while (v > 127) v -= 12;
-      return v;
+      // Clamp to 1..127: mutation should never silence a note (vel 0 = skip at playback)
+      return Math.max(1, Math.min(127, vel + change));
     });
     return this;
   }
@@ -762,6 +790,7 @@ export class Bloom {
     this.notes = lace([this.notes, softerBloom.notes], laceSize) as NoteArray;
     this.velocities = lace([this.velocities, softerBloom.velocities], this.notes.length);
     this.timeIntervals = lace([this.timeIntervals, softerBloom.timeIntervals], this.notes.length);
+    this.chans = lace([this.chans, softerBloom.chans], this.notes.length);
 
     // Adjust time intervals: split each orig-new pair
     const newTime: number[] = [];
@@ -1258,6 +1287,334 @@ export class Bloom {
     return this;
   }
 
+  // ─── Channel-mode transformations ──────────────────────────────────────────
+  // Mirrors of the note/time/velocity vocabulary, retargeted at the chans array.
+  // "Palette" = the set of distinct channels in use. Palette-bound ops are the
+  // diatonic analog (stay within current instruments); full-range ops are the
+  // chromatic analog (can introduce new instruments).
+
+  /** Distinct channels currently in use, sorted ascending */
+  chanPalette(): number[] {
+    return [...new Set(this.chans)].sort((a, b) => a - b);
+  }
+
+  /** Most common channel (ties broken by lower channel number) */
+  modalChan(): number {
+    const counts = new Map<number, number>();
+    this.chans.forEach(c => counts.set(c, (counts.get(c) ?? 0) + 1));
+    let best = this.chans[0] ?? Bloom.defaultChan;
+    counts.forEach((n, c) => {
+      const bestN = counts.get(best) ?? 0;
+      if (n > bestN || (n === bestN && c < best)) best = c;
+    });
+    return best;
+  }
+
+  private wrapChanVal(c: number): number {
+    const mod = Bloom.maxChan + 1;
+    return ((c % mod) + mod) % mod;
+  }
+
+  /** Mutate chans within the palette — timbral reshuffle, no new instruments */
+  mutateChansD(probability = 0.35): this {
+    const pal = this.chanPalette();
+    if (pal.length < 2) return this;
+    this.chans = this.chans.map(c => {
+      if (!coin(probability)) return c;
+      const others = pal.filter(p => p !== c);
+      return others[Math.floor(Math.random() * others.length)];
+    });
+    return this;
+  }
+
+  /** Mutate chans across the full range — can introduce new instruments */
+  mutateChans(probability = 0.35): this {
+    this.chans = this.chans.map(c =>
+      coin(probability) ? Math.floor(Math.random() * (Bloom.maxChan + 1)) : c,
+    );
+    return this;
+  }
+
+  /** Merge the rarest channel into the next-rarest — fewer distinct instruments */
+  thinChanPalette(): this {
+    const pal = this.chanPalette();
+    if (pal.length < 2) return this;
+    const counts = new Map<number, number>();
+    this.chans.forEach(c => counts.set(c, (counts.get(c) ?? 0) + 1));
+    const byRarity = [...pal].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0));
+    const [rarest, target] = [byRarity[0], byRarity[1]];
+    this.chans = this.chans.map(c => (c === rarest ? target : c));
+    return this;
+  }
+
+  /** Move roughly half the modal channel's slots onto an unused channel */
+  thickenChanPalette(): this {
+    const inUse = new Set(this.chans);
+    const unused: number[] = [];
+    for (let c = 0; c <= Bloom.maxChan; c++) if (!inUse.has(c)) unused.push(c);
+    if (unused.length === 0) return this;
+    const target = unused[Math.floor(Math.random() * unused.length)];
+    const modal = this.modalChan();
+    const idxs = this.chans.map((c, i) => (c === modal ? i : -1)).filter(i => i >= 0);
+    scramble(idxs).slice(0, Math.ceil(idxs.length / 2)).forEach(i => { this.chans[i] = target; });
+    return this;
+  }
+
+  /** Each chan steps one toward the modal channel — the "softer" of orchestration */
+  convergeChans(): this {
+    const m = this.modalChan();
+    this.chans = this.chans.map(c => (c === m ? c : c + Math.sign(m - c)));
+    return this;
+  }
+
+  /** Each chan steps one away from the modal channel (clamped to range) */
+  divergeChans(): this {
+    const m = this.modalChan();
+    this.chans = this.chans.map(c => {
+      const dir = c === m ? (coin(0.5) ? 1 : -1) : Math.sign(c - m);
+      return Math.max(0, Math.min(Bloom.maxChan, c + dir));
+    });
+    return this;
+  }
+
+  /** All chans → the modal channel — reset to tutti */
+  unifyChans(): this {
+    const m = this.modalChan();
+    this.chans = this.chans.map(() => m);
+    return this;
+  }
+
+  /** Shift every chan by n, wrapping — move the texture to adjacent instruments */
+  shiftChans(n = 1): this {
+    this.chans = this.chans.map(c => this.wrapChanVal(c + n));
+    return this;
+  }
+
+  /** Invert chans within the range: c → maxChan − c */
+  invertChans(): this {
+    this.chans = this.chans.map(c => Bloom.maxChan - c);
+    return this;
+  }
+
+  /** Reflect chans around the modal channel (clamped to range) */
+  invertChansModal(): this {
+    const m = this.modalChan();
+    this.chans = this.chans.map(c => Math.max(0, Math.min(Bloom.maxChan, 2 * m - c)));
+    return this;
+  }
+
+  /** Progressive drift across the array — an instrumentation glissando */
+  shearChans(step = 0.5): this {
+    this.chans = this.chans.map((c, i) => this.wrapChanVal(c + Math.floor(i * step)));
+    return this;
+  }
+
+  /** Redraw chans as a smooth curve through the full channel range */
+  curveChans(): this {
+    const n = this.chans.length;
+    if (n === 0) return this;
+    const ctrl = Array.from(
+      { length: 3 + Math.floor(Math.random() * 3) },
+      () => Math.floor(Math.random() * (Bloom.maxChan + 1)),
+    );
+    this.chans = resamp1(ctrl, n).map(c =>
+      Math.max(0, Math.min(Bloom.maxChan, Math.round(c))),
+    );
+    return this;
+  }
+
+  /** Cluster the palette down to at most maxDistinct channels by merging nearest pairs */
+  quantizeChanPalette(maxDistinct = 4): this {
+    let pal = this.chanPalette();
+    while (pal.length > maxDistinct) {
+      const counts = new Map<number, number>();
+      this.chans.forEach(c => counts.set(c, (counts.get(c) ?? 0) + 1));
+      // find the adjacent pair with the smallest gap; merge the rarer into the commoner
+      let bestI = 0;
+      for (let i = 1; i < pal.length - 1; i++) {
+        if (pal[i + 1] - pal[i] < pal[bestI + 1] - pal[bestI]) bestI = i;
+      }
+      const [a, b] = [pal[bestI], pal[bestI + 1]];
+      const drop = (counts.get(a) ?? 0) <= (counts.get(b) ?? 0) ? a : b;
+      const keep = drop === a ? b : a;
+      this.chans = this.chans.map(c => (c === drop ? keep : c));
+      pal = this.chanPalette();
+    }
+    return this;
+  }
+
+  /** Clear: all chans → 0 */
+  clearChans(): this {
+    this.chans = this.chans.map(() => 0);
+    return this;
+  }
+
+  /** Fresh random channel array, one per note — the chan analog of a new seed */
+  newChans(): this {
+    this.chans = this.notes.map(() => Math.floor(Math.random() * (Bloom.maxChan + 1)));
+    return this;
+  }
+
+  /** Move every chan to the next/previous channel in the palette — the diatonic shift */
+  dShiftChans(n = 1): this {
+    const pal = this.chanPalette();
+    if (pal.length < 2) return this;
+    const len = pal.length;
+    this.chans = this.chans.map(c => pal[(((pal.indexOf(c) + n) % len) + len) % len]);
+    return this;
+  }
+
+  // chans-only versions of the patterning ops — length changes phase against the
+  // notes at playback (wrapAt cycling), like the wheels-within-wheels velocity trick
+  scrambleChans(): this { this.chans = scramble(this.chans); return this; }
+  shuffleChans(): this { this.chans = perfectShuffle(this.chans); return this; }
+  mirrorChans(): this { this.chans = mirrorArr(this.chans); return this; }
+  stutterChans(repetitions = 2): this { this.chans = stutterArr(this.chans, repetitions); return this; }
+  sputterChans(probability = 0.3): this { this.chans = sputterArr(this.chans, probability); return this; }
+  braidChans(windowLength = 3): this { this.chans = slideArr(this.chans, windowLength); return this; }
+  pyramidChans(patternType = 1): this { this.chans = pyramidArr(this.chans, patternType); return this; }
+
+  /** Interlace this bloom's chans with another's — borrow orchestration */
+  laceChans(other: Bloom): this {
+    const laceSize = Math.max(this.chans.length, other.chans.length) * 2 - 1;
+    this.chans = lace([this.chans, other.chans], laceSize);
+    return this;
+  }
+
+  /** Copy another bloom's chans array wholesale */
+  copyChans(other: Bloom): this {
+    this.chans = [...other.chans];
+    return this;
+  }
+
+  // ─── Intervals ─────────────────────────────────────────────────────────────
+  // A fifth list, applied as the bloom is rendered: each step adds notes at the
+  // given distances from the note it lands on. `notes` is never modified.
+
+  /** True when the intervals array adds nothing */
+  hasIntervals(): boolean {
+    return this.intervals.some(step => (Array.isArray(step) ? step : [step]).some(iv => iv !== 0));
+  }
+
+  /**
+   * The notes added to the note at `index`. `tick` selects the intervals step and
+   * defaults to `index`; the looper passes its running count so the lists phase.
+   */
+  addedNotesAt(index: number, tick = index): number[] {
+    if (this.intervals.length === 0 || this.notes.length === 0) return [];
+    const step = wrapAt(this.intervals, tick);
+    const ivs = (Array.isArray(step) ? step : [step]).filter(iv => iv !== 0);
+    if (ivs.length === 0) return [];
+
+    const noteVal = wrapAt(this.notes, index);
+    const parents = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
+    const scale = this.intervalsDiatonic ? this.scale : null;
+
+    const added: number[] = [];
+    parents.forEach(parent => {
+      ivs.forEach(iv => {
+        let n = scale
+          ? degreeToKey(
+            Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + iv,
+            scale.degrees, scale.pitchesPerOctave,
+          )
+          : parent + iv;
+        while (n > this.highestPossibleNote) n -= 12;
+        while (n < this.lowestPossibleNote) n += 12;
+        if (!parents.includes(n) && !added.includes(n)) added.push(n);
+      });
+    });
+    return added;
+  }
+
+  private randomInterval(): number {
+    const pool = this.intervalsDiatonic ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  /** A random step: usually nothing, sometimes one interval, occasionally two */
+  private randomIntervalStep(): IntervalVal {
+    if (coin(0.5)) return 0;
+    if (coin(0.15)) {
+      const a = this.randomInterval();
+      const b = this.randomInterval();
+      return a === b ? a : [a, b].sort((x, y) => x - y);
+    }
+    return this.randomInterval();
+  }
+
+  /** Redraw every step. A pristine [0] list becomes a fresh list of 2–6 steps. */
+  randIntervals(): this {
+    const n = this.intervals.length > 1 ? this.intervals.length : 2 + Math.floor(Math.random() * 5);
+    this.intervals = Array.from({ length: n }, () => this.randomIntervalStep());
+    // a list of nothing but rests would be inaudible
+    if (!this.hasIntervals()) this.intervals[n - 1] = this.randomInterval();
+    return this;
+  }
+
+  /** Lengthen by one random step */
+  addInterval(): this {
+    this.intervals.push(this.randomIntervalStep());
+    return this;
+  }
+
+  /** Shorten by one step */
+  dropInterval(): this {
+    if (this.intervals.length > 1) this.intervals.pop();
+    return this;
+  }
+
+  /** Back to [0]: nothing added */
+  resetIntervals(): this {
+    this.intervals = [0];
+    return this;
+  }
+
+  /** Widen (or with a negative n, narrow) every interval; steps of 0 stay off */
+  incrementIntervals(n = 1): this {
+    const bump = (iv: number): number => {
+      if (iv === 0) return 0;
+      const next = iv + n;
+      // passing through 0 would switch the step off, so step over it
+      return next === 0 || Math.sign(next) !== Math.sign(iv) ? next + Math.sign(n) : next;
+    };
+    this.intervals = this.intervals.map(step =>
+      Array.isArray(step) ? step.map(bump) : bump(step),
+    );
+    return this;
+  }
+
+  rotateIntervals(n = 1): this {
+    this.intervals = rotateArr(this.intervals, n);
+    return this;
+  }
+
+  /** Switch between semitones and steps of the scale */
+  toggleIntervalsDiatonic(): this {
+    this.intervalsDiatonic = !this.intervalsDiatonic;
+    return this;
+  }
+
+  /**
+   * Write the added notes into `notes` as chords and reset the intervals.
+   * When the lists phase, notes is first repeated until both come out even.
+   */
+  bakeIntervals(): this {
+    if (!this.hasIntervals() || this.notes.length === 0) return this;
+    const n = this.notes.length;
+    const m = this.intervals.length;
+    const length = Math.min((n * m) / gcd(n, m), Math.max(n, MAX_BAKED_LENGTH));
+    this.notes = Array.from({ length }, (_, i) => {
+      const noteVal = wrapAt(this.notes, i);
+      const added = this.addedNotesAt(i);
+      if (added.length === 0) return JSON.parse(JSON.stringify(noteVal)) as NoteVal;
+      const parents = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
+      return [...parents, ...added].sort((a, b) => a - b);
+    });
+    this.intervals = [0];
+    return this;
+  }
+
   // ─── Storage ───────────────────────────────────────────────────────────────
 
   save(): this {
@@ -1274,7 +1631,11 @@ export class Bloom {
   }
 
   push(): this {
-    this.stack.push(this.clone());
+    const snapshot = this.clone();
+    // Snapshots don't carry their own history — without this, every push clones
+    // the entire existing stack and memory grows exponentially
+    snapshot.stack = [];
+    this.stack.push(snapshot);
     return this;
   }
 
@@ -1306,12 +1667,7 @@ export class Bloom {
       return n;
     });
 
-    this.velocities = this.velocities.map(vel => {
-      let v = vel;
-      while (v < 0) v += 12;
-      while (v > 127) v -= 12;
-      return v;
-    });
+    this.velocities = this.velocities.map(vel => Math.max(0, Math.min(127, vel)));
 
     this.timeIntervals = this.timeIntervals.map(ti => (ti < 0 ? 0.05 : ti));
     this.chans = this.chans.map(ch => (ch > 15 ? 0 : ch));
@@ -1359,6 +1715,7 @@ export class Bloom {
   }
 
   dur(): number {
+    if (this.timeIntervals.length === 0) return 0;
     return this.notes.reduce((sum: number, _: NoteVal, i: number) => sum + wrapAt(this.timeIntervals, i), 0);
   }
 
@@ -1407,9 +1764,10 @@ export class Bloom {
   // ─── Playback interface (consumed by scheduler) ────────────────────────────
 
   /** Returns flat list of { note, velocity, time, chan } events for playback */
-  toEvents(): Array<{ note: number | number[]; velocity: number; time: number; chan: number }> {
+  toEvents(): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
     return this.notes.map((note, i) => ({
       note: Array.isArray(note) ? (note as number[]) : note as number,
+      added: this.addedNotesAt(i),
       velocity: wrapAt(this.velocities, i),
       time: wrapAt(this.timeIntervals, i),
       chan: wrapAt(this.chans, i),
@@ -1426,6 +1784,9 @@ export class Bloom {
       `velocities: ${JSON.stringify(this.velocities)}`,
       `times:      ${JSON.stringify(this.timeIntervals.map(t => Math.round(t * 100) / 100))}`,
       `chans:      ${JSON.stringify(this.chans)}`,
+      this.hasIntervals()
+        ? `intervals:  ${JSON.stringify(this.intervals)} ${this.intervalsDiatonic ? 'scale steps' : 'semitones'}`
+        : '',
       `scale:      [${scale.degrees.join(',')}]${scaleName}`,
       this.name ? `name:       ${this.name}` : '',
     ].filter(Boolean);

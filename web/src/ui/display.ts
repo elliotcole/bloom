@@ -57,6 +57,11 @@ export class Display {
     const timeLabel = `time${bloom.timeIntervals.length < N ? `(${bloom.timeIntervals.length})` : ''}:`;
     const chanLabel = `chan${bloom.chans.length         < N ? `(${bloom.chans.length})`         : ''}:`;
 
+    const intvStrs = bloom.intervals.map(step =>
+      Array.isArray(step) ? `[${step.join(',')}]` : String(step),
+    );
+    const intvLabel = `intv${bloom.intervals.length !== N ? `(${bloom.intervals.length})` : ''}:`;
+
     const scale = bloom.scale;
     const scaleName = bloom.appliedScale
       ? ` ${bloom.appliedScale.name}`
@@ -70,6 +75,9 @@ export class Display {
       `${velLabel.padEnd(8)}${velStrs.join('  ')}`,
       `${timeLabel.padEnd(8)}${timeStrs.join('  ')}`,
       `${chanLabel.padEnd(8)}${chanStrs.join('  ')}`,
+      bloom.hasIntervals()
+        ? `${intvLabel.padEnd(8)}${intvStrs.join('  ')}   ${bloom.intervalsDiatonic ? 'scale steps' : 'semitones'}`
+        : '',
       `scale:  ${scaleStr}   dur: ${dur}b`,
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,
