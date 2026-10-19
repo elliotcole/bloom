@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bloom</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: #0a0a0f;
+        color: #ccc;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 12px;
+        height: 100vh;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr auto;
+      }
+
+      /* Header */
+      #header {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 12px;
+        background: #111118;
+        border-bottom: 1px solid #222;
+      }
+      #header h1 { font-size: 14px; color: #888; letter-spacing: 2px; font-weight: normal; }
+      .midi-status { font-size: 11px; }
+      .midi-status.ok { color: #4a9; }
+      .midi-status.error { color: #a44; }
+      #midi-select {
+        background: #1a1a22;
+        color: #aaa;
+        border: 1px solid #333;
+        font-size: 11px;
+        padding: 2px 4px;
+        font-family: inherit;
+      }
+      /* Viz mode select */
+      #viz-mode-select {
+        background: #1a1a22;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 5px;
+        font-size: 11px;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      #viz-mode-select:hover { color: #aaa; border-color: #555; }
+      /* Reset camera button (shown only in deep/spiral modes) */
+      #reset-camera {
+        background: transparent;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 7px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      #reset-camera:hover { color: #aaa; border-color: #555; }
+
+      /* ─── Theme skins (applied via body[data-theme="..."]) ─────────────────── */
+
+      /* Phosphor / CRT green */
+      body[data-theme="phosphor"] { background: #010a00; color: #39ff14; }
+      body[data-theme="phosphor"] #header { background: #010a00; border-color: #1a3a0a; }
+      body[data-theme="phosphor"] #header h1 { color: #39ff14; }
+      body[data-theme="phosphor"] #settings-bar { background: #020d01; border-color: #1a3a0a; color: #39ff14; }
+      body[data-theme="phosphor"] #footer { background: #010a00; border-color: #1a3a0a; color: #2a7a00; }
+      body[data-theme="phosphor"] #garden-area { background: #010a00; border-color: #1a3a0a; }
+      body[data-theme="phosphor"] #canvas-area { background: #010a00; }
+      body[data-theme="phosphor"] select,
+      body[data-theme="phosphor"] input[type="number"],
+      body[data-theme="phosphor"] button:not(#help-full *) { background: #010a00; border-color: #1a4a05; color: #39ff14; }
+      body[data-theme="phosphor"] .midi-status.ok { color: #39ff14; }
+      body[data-theme="phosphor"] .midi-status.error { color: #ff4400; }
+      body[data-theme="phosphor"]::after {
+        content: '';
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: repeating-linear-gradient(to bottom, transparent 0px, transparent 1px, rgba(0,0,0,0.10) 1px, rgba(0,0,0,0.10) 2px);
+        pointer-events: none;
+        z-index: 999;
+      }
+
+
+      /* UV / blacklight */
+      body[data-theme="uv"] { background: #08000f; color: #cc88ff; }
+      body[data-theme="uv"] #header { background: #0d0018; border-color: #2a0040; }
+      body[data-theme="uv"] #header h1 { color: #ff44ff; letter-spacing: 3px; }
+      body[data-theme="uv"] #settings-bar { background: #0a0015; border-color: #2a0040; color: #cc88ff; }
+      body[data-theme="uv"] #footer { background: #0d0018; border-color: #2a0040; color: #440066; }
+      body[data-theme="uv"] #garden-area { background: #06000c; border-color: #2a0040; }
+      body[data-theme="uv"] #canvas-area { background: #08000f; }
+      body[data-theme="uv"] select,
+      body[data-theme="uv"] input[type="number"],
+      body[data-theme="uv"] button:not(#help-full *) { background: #0d0018; border-color: #3a0060; color: #cc88ff; }
+      body[data-theme="uv"] .midi-status.ok { color: #aa44ff; }
+
+      /* Minimal */
+      body[data-theme="minimal"] { background: #0c0c0c; color: #555; }
+      body[data-theme="minimal"] #header { background: #111; border-color: #1a1a1a; }
+      body[data-theme="minimal"] #footer { background: #111; border-color: #1a1a1a; }
+      body[data-theme="minimal"] #garden-area { background: #0a0a0a; border-color: #1a1a1a; }
+      body[data-theme="minimal"] #canvas-area { background: #0c0c0c; }
+
+      #help-toggle {
+        margin-left: auto;
+        background: transparent;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      #help-toggle:hover { color: #aaa; border-color: #555; }
+      /* margin-left: auto on help-toggle pushes panel-toggle before it to center-right area */
+
+      /* Settings panel */
+      #settings-bar {
+        grid-row: 2;
+        background: #0e0e18;
+        border-bottom: 1px solid #1a1a28;
+        padding: 6px 12px;
+        display: none;
+        flex-direction: column;
+        gap: 5px;
+        font-size: 11px;
+        color: #888;
+      }
+      #settings-bar.visible { display: flex; }
+      .s-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; }
+      .s-section { display: flex; align-items: center; gap: 5px; }
+      .s-section-label { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 2px; }
+      #settings-bar label { display: flex; align-items: center; gap: 4px; cursor: default; }
+      #settings-bar input[type="number"] {
+        width: 46px;
+        background: #1a1a22;
+        border: 1px solid #2a2a38;
+        color: #aaa;
+        padding: 1px 3px;
+        font-family: inherit;
+        font-size: 11px;
+        -moz-appearance: textfield;
+      }
+      #settings-bar input[type="number"]::-webkit-inner-spin-button,
+      #settings-bar input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
+      #settings-bar input[type="range"] { cursor: pointer; }
+      #settings-bar input[type="checkbox"] { accent-color: #48a; width: 12px; height: 12px; cursor: pointer; }
+      #settings-bar select {
+        background: #1a1a22;
+        border: 1px solid #2a2a38;
+        color: #aaa;
+        font-family: inherit;
+        font-size: 11px;
+        padding: 1px 2px;
+      }
+      .s-btn {
+        background: transparent;
+        border: 1px solid #2a2a38;
+        color: #555;
+        padding: 1px 6px;
+        font-family: inherit;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .s-btn:hover { color: #aaa; border-color: #555; }
+      .s-btn.active { color: #8cf; border-color: #48a; }
+      #clock-sync-status { color: #333; font-size: 10px; }
+      #clock-sync-status.synced { color: #4a9; }
+      /* Settings toggle button (in header) */
+      #settings-toggle {
+        background: transparent;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      #settings-toggle:hover { color: #aaa; border-color: #555; }
+      #settings-toggle.active { color: #8cf; border-color: #48a; }
+      /* Recording dot */
+      #record-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #a33;
+        display: none;
+        flex-shrink: 0;
+      }
+      #record-dot.active {
+        display: inline-block;
+        animation: pulse-red 1s ease-in-out infinite;
+      }
+      @keyframes pulse-red { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+      /* Channel edit mode badge */
+      #chan-mode-badge {
+        display: none;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #fb0;
+        border: 1px solid #a80;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+      }
+      #chan-mode-badge.active { display: inline-block; }
+
+      /* Help views are separated by mode: channel-mode help only in channel mode,
+         normal help only in normal mode */
+      #hf-chan-sec { display: none; }
+      body.chan-mode #hf-chan-sec { display: block; }
+      body.chan-mode .hf-sec:not(#hf-chan-sec) { display: none; }
+
+      /* Main canvas area — flex column: viz on top, garden on bottom */
+      #canvas-area {
+        grid-row: 3;
+        grid-column: 1;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        background: #0a0a0f;
+        overflow: hidden;
+      }
+      #viz-area {
+        flex: 1 1 auto;
+        position: relative;
+        min-height: 0; /* CRITICAL — lets canvas shrink inside flex */
+      }
+      #bloom-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Garden carousel */
+      #garden-area {
+        flex: 0 0 160px;
+        position: relative;
+        display: none; /* shown by GardenVisualization when garden has content */
+        background: #080810;
+        border-top: 1px solid #1a1a22;
+      }
+      /* garden-canvas and garden-zoom are injected by GardenVisualization */
+      #garden-zoom {
+        position: absolute;
+        bottom: 6px;
+        right: 8px;
+        width: 100px;
+        accent-color: #48a;
+        opacity: 0.5;
+        cursor: pointer;
+        z-index: 2;
+      }
+      #garden-zoom:hover { opacity: 0.9; }
+
+      /* Console toggle button */
+      #console-toggle {
+        background: transparent;
+        color: #666;
+        border: 1px solid #333;
+        padding: 2px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      #console-toggle:hover { color: #aaa; border-color: #555; }
+      #console-toggle.active { color: #8cf; border-color: #48a; }
+
+      /* Console overlay — full canvas height, left-side scrollbar */
+      #console-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        overflow-y: auto;
+        overflow-x: visible;
+        z-index: 10;
+        font-size: 11px;
+        line-height: 1.6;
+        direction: rtl; /* flips scrollbar to left edge */
+      }
+      #console-overlay.visible { display: block; }
+      .console-entry {
+        white-space: pre;
+        padding: 5px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        color: #3d5c3d;
+        direction: ltr; /* restore text direction */
+      }
+      .console-entry--current {
+        color: #8aaa88;
+      }
+
+      /* Help panel (overlay) */
+      #help-panel {
+        display: none;
+        position: fixed;
+        top: 40px;
+        right: 0;
+        width: 340px;
+        height: calc(100vh - 40px);
+        background: #0d0d14ee;
+        border-left: 1px solid #333;
+        overflow-y: auto;
+        z-index: 100;
+        padding: 12px;
+        font-size: 11px;
+        line-height: 1.7;
+        color: #888;
+        white-space: pre;
+      }
+      #help-panel h2 { color: #aaa; font-size: 12px; margin-bottom: 8px; }
+
+      /* Footer */
+      #footer {
+        grid-row: 4;
+        grid-column: 1 / -1;
+        padding: 4px 12px;
+        background: #111118;
+        border-top: 1px solid #222;
+        font-size: 10px;
+        color: #444;
+      }
+
+      /* Help overlay — content-sized, centered */
+      #help-full {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: calc(100vw - 56px);
+        background: rgba(10, 10, 15, 0.25);
+        z-index: 200;
+        padding: 18px 28px 14px;
+      }
+      #help-full-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        /* Font scales to fill the window:
+           Width: 4 cols × 38-char lines + 3 gaps + 112px overhead (56px overlay + 56px padding) ≈ 100·em + 112px
+           Height: tallest col = ~38 content line-heights + 56px fixed overhead */
+        font-size: min(calc((100vw - 112px) / 100), calc((100vh - 56px) / 38));
+        gap: 0 2.9em;
+        align-content: start;
+      }
+      .hf-col { display: flex; flex-direction: column; gap: 1em; min-width: 0; overflow: hidden; }
+      .hf-h {
+        font-size: 0.9em;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #557799;
+        font-weight: bold;
+        padding-bottom: 0.25em;
+        border-bottom: 1px solid #1a1a28;
+        margin-bottom: 0.1em;
+      }
+      .hf-body {
+        font-size: 1em;
+        line-height: 1.62;
+        color: #787878;
+        white-space: pre;
+      }
+      .hf-body b { color: #9bc; font-weight: normal; }
+
+      /* ─── Bloom Editor ──────────────────────────────────────────────────────── */
+      #bloom-editor {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.72);
+        z-index: 300;
+        align-items: center;
+        justify-content: center;
+      }
+      #bloom-editor.open { display: flex; }
+
+      #be-box {
+        background: #0e0e1a;
+        border: 1px solid #2a2a44;
+        padding: 16px 20px 14px;
+        width: min(560px, 92vw);
+        max-height: 88vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 11px;
+      }
+      .be-title { font-size: 12px; color: #778; letter-spacing: 1px; }
+      .be-hint  { color: #445; font-size: 10px; margin-left: 8px; }
+      .be-row   { display: flex; gap: 12px; align-items: flex-start; }
+      .be-lbl   { flex: 0 0 110px; font-size: 10px; color: #667; line-height: 1.6; padding-top: 3px; }
+      .be-sub   { font-size: 9px; color: #445; }
+      .be-ta, .be-inp {
+        flex: 1;
+        background: #090912;
+        border: 1px solid #1e1e36;
+        color: #aab;
+        font-family: inherit;
+        font-size: 11px;
+        padding: 4px 6px;
+        resize: vertical;
+        outline: none;
+        line-height: 1.5;
+      }
+      .be-inp { resize: none; height: 24px; padding-top: 3px; padding-bottom: 3px; }
+      .be-ta:focus, .be-inp:focus { border-color: #44588a; }
+      .be-status { font-size: 10px; min-height: 14px; color: transparent; }
+      .be-status--err { color: #a55; }
+      .be-status--ok  { color: #5a9; }
+      .be-btns { display: flex; gap: 8px; }
+      .be-btns button {
+        background: transparent;
+        border: 1px solid #252540;
+        color: #667;
+        font-family: inherit;
+        font-size: 11px;
+        padding: 3px 10px;
+        cursor: pointer;
+      }
+      .be-btns button:hover { color: #aab; border-color: #4455aa; }
+
+      /* ─── Command Palette ───────────────────────────────────────────────────── */
+      #cmd-palette {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 400;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 16vh;
+      }
+      #cmd-palette.open { display: flex; }
+
+      #cp-box {
+        background: #0c0c18;
+        border: 1px solid #2a2a44;
+        width: min(500px, 92vw);
+        padding: 10px 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .cp-hint { font-size: 9px; color: #445; }
+      .cp-input {
+        background: #07070f;
+        border: 1px solid #252540;
+        color: #9ab;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 7px 10px;
+        outline: none;
+        width: 100%;
+      }
+      .cp-input:focus { border-color: #44588a; }
+      .cp-suggest { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+      .cp-sug {
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        color: #556;
+      }
+      .cp-sug:hover, .cp-sug.active { background: #14142a; }
+      .cp-sug-name  { flex: 0 0 130px; color: #7ab; }
+      .cp-sug.active .cp-sug-name { color: #acd; }
+      .cp-sug-desc  { font-size: 10px; color: #445; }
+      .cp-status { font-size: 10px; min-height: 13px; color: transparent; }
+      .cp-status--err { color: #a55; }
+      .cp-status--ok  { color: #5a9; }
+
+      /* ─── Demo mode toast ───────────────────────────────────────────────────── */
+      #demo-toast {
+        display: none;
+        position: absolute;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        pointer-events: none;
+        z-index: 50;
+        white-space: nowrap;
+      }
+      #demo-toast-key {
+        font-size: 80px;
+        font-weight: bold;
+        color: rgba(255, 255, 255, 0.92);
+        line-height: 1;
+        letter-spacing: -2px;
+        text-shadow: 0 2px 24px rgba(80, 140, 255, 0.45);
+      }
+      #demo-toast-cmd {
+        font-size: 22px;
+        color: rgba(160, 190, 255, 0.82);
+        margin-top: 8px;
+        letter-spacing: 0.06em;
+      }
+
+      /* Welcome hint */
+      #welcome-hint {
+        text-align: center;
+        padding: 8px 0;
+        font-size: 13px;
+        color: #556;
+        letter-spacing: 0.08em;
+        transition: opacity 0.6s ease-out;
+      }
+      #welcome-hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+    </style>
+    <script type="module" crossorigin src="/legacy/assets/main-B82UwSsO.js"></script>
+    <link rel="modulepreload" crossorigin href="/legacy/assets/visualization-wvePfwpA.js">
+    <link rel="stylesheet" crossorigin href="/legacy/assets/visualization-CJIbHHr7.css">
+  </head>
+  <body>
+    <header id="header">
+      <h1>BLOOM</h1>
+      <span id="midi-status" class="midi-status">initializing…</span>
+      <select id="midi-select"></select>
+      <select id="viz-mode-select" title="visualization mode (opt+1–9)">
+        <option value="deep"   selected>◆ deep</option>
+        <option value="field">⊞ field</option>
+        <option value="orbit">⊙ orbit</option>
+        <option value="score">𝄞 score</option>
+        <option value="tonal">⬡ tonal</option>
+        <option value="set">⬡ set</option>
+        <option value="spiral">🌀 spiral</option>
+        <option value="helix">⌀ helix</option>
+        <option value="flower">✿ flower</option>
+      </select>
+      <button id="reset-camera" title="reset camera view" style="display:none">⊹ reset view</button>
+      <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
+      <button id="settings-toggle" title="toggle settings">⚙ settings</button>
+      <span id="record-dot" title="recording"></span>
+      <span id="chan-mode-badge" title="channel edit mode — shaping keys act on channels (o or esc exits)">CH</span>
+      <button id="help-toggle">? help</button>
+    </header>
+
+    <div id="settings-bar">
+      <!-- Row 1: timing, freeze, sound -->
+      <div class="s-row">
+        <span class="s-section">
+          <span class="s-section-label">timing</span>
+          <label>bpm <input type="number" id="bpm-input" min="20" max="300" step="1" value="60"></label>
+          <button class="s-btn" id="tap-tempo">tap</button>
+          <span id="clock-sync-status">clk: free</span>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">freeze</span>
+          <label title="lock total duration before each play">duration
+            <input type="checkbox" id="fixed-dur-enabled">
+            <input type="number" id="fixed-dur-amount" min="0.5" max="16" step="0.5" value="4" disabled>
+            <select id="fixed-dur-mode" disabled>
+              <option value="trim">trim</option>
+              <option value="scale">scale</option>
+            </select>
+          </label>
+          <label title="quantize to a fixed time grid before each play">grid
+            <input type="checkbox" id="fixed-grid-enabled">
+            <input type="number" id="fixed-grid-size" min="2" max="16" step="1" value="8" disabled>
+          </label>
+          <label title="re-apply the current scale before each play">scale
+            <input type="checkbox" id="fixed-scale-enabled">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">sound</span>
+          <label>legato <input type="number" id="legato-input" min="0.05" max="8" step="0.05" value="2.00"></label>
+          <label title="fixed note gate in beats (overrides legato)">sustain
+            <input type="checkbox" id="sustain-enabled">
+            <input type="number" id="sustain-input" min="0.05" max="8" step="0.05" value="0.50" disabled>
+          </label>
+          <label title="maximum velocity sent to built-in piano (0–127)">vel max
+            <input type="number" id="vel-ceiling" min="0" max="127" step="1" value="100" style="width:42px">
+          </label>
+        </span>
+      </div>
+
+      <!-- Row 2: compass, display, reverb, file -->
+      <div class="s-row">
+        <span class="s-section">
+          <span class="s-section-label">compass</span>
+          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
+          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
+          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
+          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
+          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">display</span>
+          <label title="show axis labels (field, deep)">axis
+            <input type="checkbox" id="show-axis">
+          </label>
+          <label title="show pitch+octave labels on notes">notes
+            <input type="checkbox" id="show-note-labels">
+          </label>
+          <label title="show keystroke + command on screen">demo
+            <input type="checkbox" id="demo-mode">
+          </label>
+          <label>skin
+            <select id="viz-theme-select">
+              <option value="dark">dark</option>
+              <option value="phosphor">phosphor</option>
+              <option value="ember">ember</option>
+              <option value="arctic">arctic</option>
+              <option value="solar">solar</option>
+              <option value="uv">uv</option>
+              <option value="minimal">minimal</option>
+            </select>
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">reverb</span>
+          <label title="dry/wet mix">mix
+            <input type="range" id="reverb-mix" min="0" max="1" step="0.05" value="0.4" style="width:50px">
+            <span id="reverb-mix-val" style="color:#555;width:24px">0.4</span>
+          </label>
+          <label title="decay time in seconds">decay
+            <input type="number" id="reverb-decay" min="0.1" max="20" step="0.5" value="4" style="width:42px">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <span class="s-section-label">midi</span>
+          <label title="highest MIDI channel (0-based)">max ch
+            <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
+          </label>
+        </span>
+
+        <span class="s-section">
+          <button class="s-btn" id="save-garden" title="save garden (ctrl+s)">save</button>
+          <button class="s-btn" id="load-garden" title="load garden (ctrl+o)">load</button>
+        </span>
+      </div>
+    </div>
+
+    <div id="welcome-hint">space to play. n for new. ? for more.</div>
+
+    <main id="canvas-area">
+      <div id="viz-area">
+        <canvas id="bloom-canvas"></canvas>
+        <div id="console-overlay"></div>
+        <div id="demo-toast">
+          <div id="demo-toast-key"></div>
+          <div id="demo-toast-cmd"></div>
+        </div>
+      </div>
+      <div id="garden-area">
+        <!-- #garden-canvas and #garden-zoom injected by GardenVisualization -->
+      </div>
+    </main>
+
+    <div id="help-panel"><h2>Bloom Key Commands</h2>
+<b>Storage</b>
+n    new bloom
+N    new bloom (same scale)
+b    new bloom shape
+B    new bloom, same scale + shape
+p    push         P    pop
+
+<b>Shaping</b>
+m    mutate notes (diatonic)
+M    mutate notes (chromatic)
+t    mutate time  opt-t sort time
+T    mutate velocities
+s    scramble     S    shuffle
+H    thicken      h    thin
+g    gap          G    unGap
+[    faster       ]    slower
+-    softer       =    louder
+y    average time
+
+<b>Rotating / Extending</b>
+z    drop last    a    add in scale
+A    add one      9    rotate notes
+0    rotate vel   (    rotate time
+)    rotate chans
+
+<b>Patterning</b>
+u    stutter      U    sputter
+Y    spray        r    ratchet
+R    mirror       d    braid
+D    pyramid      q    quantize
+Q    change quantize amount
+{ }  shorten / lengthen times
+_ +  shorten / lengthen velocities
+w    draw curves (diatonic)
+opt-w wheels within wheels
+W    remove doubles
+
+<b>Pitch</b>
+e    shear        E    center range
+i    invert       I    invert mean
+1/2  -/+ semitone  !/@  -/+ octave
+3/4  -/+ scale step
+v    pivot (highest)
+V    pivot (loudest)
+
+<b>Diatonicism</b>
+k    choose nearest scale
+K    slant scale  j    lift scale
+J    reduce scale
+
+<b>Chords</b>
+c    clump chords  C    flatten chords
+
+<b>Blending</b>
+x    interlace    X    blend
+f    lift shape   F    cast
+
+<b>Channels</b>
+;    rand chans   '    cycle chans
+:    drop chan    "    add chan
+o    channel edit mode (shaping keys act on chans)
+
+<b>Intervals</b> (notes added at playback)
+5    rand         8    reset
+7    add step     &    drop step
+6    widen        ^    narrow
+%    semitones / scale steps
+*    bake into notes
+
+<b>Fission / Fusion</b>
+|    merge garden >> b
+opt-| curdle b >> garden
+
+<b>Playback</b>
+space    play
+shift-sp play garden slot
+,        loop            opt-,  loop garden
+/        start/update pulsar   opt-/  pulse garden
+.        stop all
+&lt; &gt;       slower/faster pulse
+`        record / stop
+~        sustain pedal toggle
+
+<b>Garden</b>
+↓    save here    ↑    lift here
+← →  navigate     Enter new slot
+Del  clear slot
+shift ← →  navigate + play
+
+<b>View</b>
+\      toggle console
+opt-e  edit bloom
+cmd-k  command palette
+</div>
+
+    <div id="help-full">
+      <div id="help-full-grid">
+        <div class="hf-col">
+          <div class="hf-sec">
+            <div class="hf-h">Storage</div>
+            <div class="hf-body"><b>n</b>      new bloom
+<b>N</b>      new bloom (same scale)
+<b>b</b>      new bloom shape
+<b>B</b>      new bloom, same scale + shape
+<b>p</b>      push         <b>P</b>    pop</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Shaping</div>
+            <div class="hf-body"><b>m</b>      mutate notes (diatonic)
+<b>M</b>      mutate notes (chromatic)
+<b>t</b>      mutate time  <b>opt-t</b> sort time
+<b>T</b>      mutate velocities
+<b>s</b>      scramble     <b>S</b>    shuffle
+<b>H</b>      thicken      <b>h</b>    thin
+<b>g</b>      gap          <b>G</b>    unGap
+<b>[</b>      faster       <b>]</b>    slower
+<b>-</b>      softer       <b>=</b>    louder
+<b>y</b>      average time</div>
+          </div>
+        </div>
+
+        <div class="hf-col">
+          <div class="hf-sec">
+            <div class="hf-h">Rotating / Extending</div>
+            <div class="hf-body"><b>z</b>    drop last    <b>a</b>    add in scale
+<b>A</b>    add one      <b>9</b>    rotate notes
+<b>0</b>    rotate vel   <b>(</b>    rotate time
+<b>)</b>    rotate chans</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Patterning</div>
+            <div class="hf-body"><b>u</b>      stutter      <b>U</b>    sputter
+<b>Y</b>      spray        <b>r</b>    ratchet
+<b>R</b>      mirror       <b>d</b>    braid
+<b>D</b>      pyramid      <b>q</b>    quantize
+<b>Q</b>      change quantize amount
+<b>{ }</b>    shorten / lengthen times
+<b>_ +</b>    shorten / lengthen velocities
+<b>w</b>      draw curves (diatonic)
+<b>opt-w</b>  wheels within wheels
+<b>W</b>      remove doubles</div>
+          </div>
+        </div>
+
+        <div class="hf-col">
+          <div class="hf-sec">
+            <div class="hf-h">Pitch</div>
+            <div class="hf-body"><b>e</b>    shear        <b>E</b>    center range
+<b>i</b>    invert       <b>I</b>    invert mean
+<b>1/2</b>  −/+ semitone  <b>!/@</b>  −/+ octave
+<b>3/4</b>  −/+ scale step
+<b>v</b>    pivot (highest)
+<b>V</b>    pivot (loudest)</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Diatonicism</div>
+            <div class="hf-body"><b>k</b>    choose nearest scale
+<b>K</b>    slant scale  <b>j</b>    lift scale
+<b>J</b>    reduce scale</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Chords</div>
+            <div class="hf-body"><b>c</b>    clump chords  <b>C</b>   flatten chords</div>
+          </div>
+        </div>
+
+        <div class="hf-col">
+          <div class="hf-sec">
+            <div class="hf-h">Blending</div>
+            <div class="hf-body"><b>x</b>    interlace    <b>X</b>    blend
+<b>f</b>    lift shape   <b>F</b>    cast</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Channels</div>
+            <div class="hf-body"><b>;</b>    rand chans   <b>'</b>    cycle chans
+<b>:</b>    drop chan     <b>"</b>    add chan
+<b>o</b>    channel edit mode</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Intervals (added at playback)</div>
+            <div class="hf-body"><b>5</b>    rand         <b>8</b>    reset
+<b>7</b>    add step     <b>&amp;</b>    drop step
+<b>6</b>    widen        <b>^</b>    narrow
+<b>%</b>    semitones / scale steps
+<b>*</b>    bake into notes</div>
+          </div>
+          <div class="hf-sec" id="hf-chan-sec">
+            <div class="hf-h">Channel mode (o or esc exits)</div>
+            <div class="hf-body"><b>m M</b>    mutate (palette / any)
+<b>s S</b>    scramble / shuffle
+<b>h H</b>    thin / thicken palette
+<b>- =</b>    converge / diverge
+<b>y n</b>    unify / new chans
+<b>c</b>      clear (all → 0)
+<b>1 2</b>    shift ∓1 (all channels)
+<b>3 4</b>    shift ∓1 (within palette)
+<b>i I</b>    invert / reflect modal
+<b>e w</b>    shear / curve
+<b>q Q</b>    cluster palette ≤K / set K
+<b>u U</b>    stutter / sputter
+<b>R D d</b>  mirror / pyramid / braid
+<b>9 0</b>    rotate &lt;&lt; &gt;&gt;
+<b>z a A</b>  drop / add (palette / any)
+<b>x f</b>    lace / copy from slot
+playback &amp; garden keys unchanged</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Fission / Fusion</div>
+            <div class="hf-body"><b>|</b>      merge garden &gt;&gt; b
+<b>opt-|</b>  curdle b &gt;&gt; garden</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Playback</div>
+            <div class="hf-body"><b>space</b>     play
+<b>shift-sp</b>  play garden slot
+<b>,</b>         loop       <b>opt-,</b>  loop garden
+<b>/</b>         pulsar     <b>opt-/</b>  pulse garden
+<b>.</b>         stop all
+<b>&lt; &gt;</b>       slower/faster pulse
+<b>`</b>         record / stop
+<b>~</b>         sustain pedal</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Garden</div>
+            <div class="hf-body"><b>↓</b>         save here    <b>↑</b>    lift here
+<b>← →</b>       navigate     <b>↵</b>    new slot
+<b>Del</b>       clear slot
+<b>shift ← →</b> navigate + play</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">View</div>
+            <div class="hf-body"><b>\</b>       toggle console
+<b>opt-e</b>    edit bloom
+<b>cmd-k</b>    command palette</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="footer">focus window and press any key · space to play</footer>
+
+  </body>
+</html>

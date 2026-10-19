@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bloom Player</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        background: #0a0a0f;
+        color: #ccc;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 12px;
+        overflow: hidden;
+      }
+
+      #stage { position: fixed; inset: 0; }
+      #bloom-canvas { width: 100%; height: 100%; display: block; }
+
+      /* Start overlay — browsers need a click before audio can begin */
+      #start {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px;
+        background: rgba(10, 10, 15, 0.72);
+        cursor: pointer;
+        transition: opacity 0.6s;
+      }
+      #start.hidden { opacity: 0; pointer-events: none; }
+      #start-button {
+        width: 64px; height: 64px;
+        border: 1px solid #556; border-radius: 50%;
+        background: none; color: #aab;
+        font-size: 22px; padding-left: 4px;
+        cursor: pointer;
+      }
+      #start-button:disabled { color: #445; border-color: #334; cursor: default; }
+      #start:hover #start-button:not(:disabled) { color: #fff; border-color: #88a; }
+      #start-title { color: #889; letter-spacing: 3px; text-transform: lowercase; }
+      #start-status { color: #556; font-size: 11px; min-height: 14px; }
+
+      /* Transport */
+      #transport {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 14px;
+        background: linear-gradient(transparent, rgba(10, 10, 15, 0.85));
+        opacity: 0.35;
+        transition: opacity 0.3s;
+      }
+      #transport:hover, #transport.paused { opacity: 1; }
+      #play {
+        width: 28px; height: 28px; flex: none;
+        border: none; background: none; color: #aab;
+        font-family: inherit; font-size: 14px;
+        cursor: pointer;
+      }
+      #play:hover { color: #fff; }
+      #bar {
+        position: relative; flex: 1; height: 18px;
+        cursor: pointer;
+      }
+      #bar-track {
+        position: absolute; left: 0; right: 0; top: 8px; height: 2px;
+        background: #2a2a36;
+      }
+      #bar-fill {
+        position: absolute; left: 0; top: 8px; height: 2px; width: 0;
+        background: #88a;
+      }
+      .marker {
+        position: absolute; top: 5px; width: 1px; height: 8px;
+        background: #445;
+      }
+      #time, #label { flex: none; color: #667; font-size: 11px; white-space: nowrap; }
+      #label { min-width: 52px; text-align: right; }
+
+      @media (max-width: 480px) {
+        #label { display: none; }
+      }
+    </style>
+    <script type="module" crossorigin src="/legacy/assets/player-C_1u3ITf.js"></script>
+    <link rel="modulepreload" crossorigin href="/legacy/assets/visualization-wvePfwpA.js">
+    <link rel="stylesheet" crossorigin href="/legacy/assets/visualization-CJIbHHr7.css">
+  </head>
+  <body>
+    <div id="stage"><canvas id="bloom-canvas"></canvas></div>
+
+    <div id="transport" class="paused">
+      <button id="play" aria-label="Play">&#9654;</button>
+      <div id="bar" role="slider" aria-label="Position" aria-valuemin="0" aria-valuenow="0" tabindex="0">
+        <div id="bar-track"></div>
+        <div id="bar-fill"></div>
+      </div>
+      <div id="time">0:00</div>
+      <div id="label"></div>
+    </div>
+
+    <div id="start">
+      <button id="start-button" aria-label="Play" disabled>&#9654;</button>
+      <div id="start-title"></div>
+      <div id="start-status">loading&hellip;</div>
+    </div>
+
+  </body>
+</html>
