@@ -51,6 +51,141 @@ function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
 }
 
+// ─── Lists, patterns, verbs ───────────────────────────────────────────────────
+
+/** The four parallel lists of a bloom */
+export type ListKey = 'notes' | 'time' | 'vel' | 'chan';
+
+/** Order and length patterns: identical on any list, or on whole notes */
+export type PatternOp =
+  | 'scramble' | 'shuffle' | 'mirror' | 'rotate<' | 'rotate>'
+  | 'stutter' | 'sputter' | 'braid' | 'pyramid';
+
+const PATTERNS: Record<PatternOp, <T>(arr: T[]) => T[]> = {
+  scramble: arr => scramble(arr),
+  // a perfect shuffle of an odd length would drop the middle element
+  shuffle: arr => perfectShuffle(arr.length % 2 ? [...arr, arr[0]] : arr),
+  mirror: arr => mirrorArr(arr),
+  'rotate<': arr => rotateArr(arr, -1),
+  'rotate>': arr => rotateArr(arr, 1),
+  stutter: arr => stutterArr(arr, 2),
+  sputter: arr => sputterArr(arr, 0.3),
+  braid: arr => slideArr(arr, 3),
+  pyramid: arr => pyramidArr(arr, 1),
+};
+
+/** Value verbs shared by the time, velocity and channel lists (see shapeList) */
+export type ListVerb =
+  | 'mutate' | 'mutateWild'
+  | 'nudgeDown' | 'nudgeUp' | 'octaveDown' | 'octaveUp' | 'stepDown' | 'stepUp'
+  | 'breezeDown' | 'breezeUp'
+  | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'shear' | 'curve'
+  | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew'
+  | 'dropLast' | 'addFromPalette' | 'addRandom';
+
+/** A note with everything that sounds with it */
+export interface NoteEvent {
+  note: NoteVal;
+  vel: number;
+  time: number;
+  chan: number;
+  iv: IntervalVal;
+}
+
+/** Step sizes for the whole-bloom gestures (calm, intensify, vary) */
+export const GESTURE = {
+  pitchNotes: 2,     // notes moved one scale step per calm / intensify
+  rhythmEdits: 1,    // merges (calm) or splits (intensify) per press
+  level: 0.06,       // loudness change per press, as a fraction of the mean
+  contrast: 0.15,    // accent contrast change per press
+  chanChance: 0.5,   // chance a press also moves one note's channel
+  vary: 0.18,        // share of notes vary touches
+  breeze: 0.3,       // share of notes a breeze moves per press (on average; at least one)
+  breezePull: 2,     // extra likelihood for a just-moved note: 2 → three times as likely
+  breezeMemory: 0.5, // how much of that pull is left after each further press
+  varyVel: 6,        // largest velocity change from vary
+};
+
+const MIN_TIME = 0.02;
+const roundTime = (t: number): number => Math.round(t * 1e6) / 1e6;
+const clampVel = (v: number): number => Math.max(1, Math.min(127, Math.round(v)));
+const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const mean = (arr: number[]): number => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+/** Index of the palette value nearest `t` by ratio, so 3/8 lies between 1/4 and 1/2 proportionally */
+function nearestByRatio(pal: number[], t: number): number {
+  const d = (p: number) => Math.abs(Math.log(Math.max(t, 1e-6) / p));
+  return pal.reduce((best, p, i) => (d(p) < d(pal[best]) ? i : best), 0);
+}
+
+function nearestLinear(pal: number[], v: number): number {
+  return pal.reduce((best, p, i) => (Math.abs(v - p) < Math.abs(v - pal[best]) ? i : best), 0);
+}
+
+/** Most common value; ties go to the lower */
+function modeOf(arr: number[]): number {
+  const counts = new Map<number, number>();
+  arr.forEach(v => counts.set(v, (counts.get(v) ?? 0) + 1));
+  let best = arr[0];
+  counts.forEach((n, v) => {
+    const bestN = counts.get(best) ?? 0;
+    if (n > bestN || (n === bestN && v < best)) best = v;
+  });
+  return best;
+}
+
+/**
+ * About `share` of the indices 0..n-1, and always at least one. `heat` leans
+ * the choice toward some indices without excluding the rest: each index's
+ * chance is proportional to 1 + GESTURE.breezePull × its heat, scaled so the
+ * expected count stays share × n.
+ */
+function someIndices(n: number, share: number, heat: number[] = []): Set<number> {
+  const w = Array.from({ length: n }, (_, i) => 1 + GESTURE.breezePull * (heat[i] ?? 0));
+  const sum = w.reduce((a, b) => a + b, 0);
+  const picked = new Set<number>();
+  w.forEach((wi, i) => { if (coin(Math.min(0.95, (share * n * wi) / sum))) picked.add(i); });
+  if (picked.size === 0 && n > 0) picked.add(weightedIndex(w));
+  return picked;
+}
+
+/** Random index, chosen in proportion to the weights */
+function weightedIndex(weights: number[]): number {
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) return i;
+  }
+  return weights.length - 1;
+}
+
+/**
+ * Merge a list's distinct values down to at most maxDistinct: the closest
+ * neighbouring pair merges, the rarer into the commoner. Values `skip` accepts
+ * (rests) are left alone and don't count.
+ */
+function clusterValues(
+  arr: number[], maxDistinct: number,
+  dist: (a: number, b: number) => number, skip: (v: number) => boolean = () => false,
+): number[] {
+  let out = [...arr];
+  for (;;) {
+    const pal = [...new Set(out.filter(v => !skip(v)))].sort((a, b) => a - b);
+    if (pal.length <= Math.max(1, maxDistinct)) return out;
+    let bestI = 0;
+    for (let i = 1; i < pal.length - 1; i++) {
+      if (dist(pal[i], pal[i + 1]) < dist(pal[bestI], pal[bestI + 1])) bestI = i;
+    }
+    const [a, b] = [pal[bestI], pal[bestI + 1]];
+    const count = (v: number) => out.filter(x => x === v).length;
+    const [drop, keep] = count(a) <= count(b) ? [a, b] : [b, a];
+    out = out.map(v => (v === drop ? keep : v));
+  }
+}
+
+const ratioDist = (a: number, b: number) => Math.abs(Math.log(b / a));
+const linearDist = (a: number, b: number) => Math.abs(b - a);
+
 // ─── Bloom class ──────────────────────────────────────────────────────────────
 
 export class Bloom {
@@ -308,9 +443,9 @@ export class Bloom {
 
   // ─── Ordering ──────────────────────────────────────────────────────────────
 
+  /** Scramble whole notes: each keeps its own time, velocity and channel */
   scramble(): this {
-    this.notes = scramble(this.notes) as NoteArray;
-    return this;
+    return this.patternEvents('scramble');
   }
 
   deepScramble(): this {
@@ -326,14 +461,7 @@ export class Bloom {
   }
 
   shuffle(): this {
-    // Ensure even length for perfect shuffle
-    if (this.notes.length % 2 !== 0) {
-      this.addOne(this.notes[0] as number, this.velocities[0], this.timeIntervals[0]);
-    }
-    this.notes = perfectShuffle(this.notes) as NoteArray;
-    this.timeIntervals = perfectShuffle(this.timeIntervals);
-    this.velocities = perfectShuffle(this.velocities);
-    return this;
+    return this.patternEvents('shuffle');
   }
 
   deepShuffle(): this {
@@ -345,10 +473,9 @@ export class Bloom {
 
   // ─── Rotation ──────────────────────────────────────────────────────────────
 
+  /** Rotate whole notes */
   rotate(n = 1): this {
-    this.notes = rotateArr(this.notes, n) as NoteArray;
-    this.timeIntervals = rotateArr(this.timeIntervals, n);
-    return this;
+    return this.setEvents(rotateArr(this.events(), n));
   }
 
   rotateNotes(n = 1): this {
@@ -374,16 +501,17 @@ export class Bloom {
   // ─── Dynamics ──────────────────────────────────────────────────────────────
 
   slower(multiplier = 1.2): this {
-    this.timeIntervals = this.timeIntervals.map(t =>
-      Math.round(t * multiplier * 100) / 100,
-    );
-    return this;
+    return this.scaleTimes(multiplier);
   }
 
   faster(multiplier = 1.2): this {
-    this.timeIntervals = this.timeIntervals.map(t =>
-      Math.round((t / multiplier) * 100) / 100,
-    );
+    return this.scaleTimes(1 / multiplier);
+  }
+
+  /** Scale every time by f. A frozen rhythm palette scales with it, so the lock follows the tempo change. */
+  scaleTimes(f: number): this {
+    this.timeIntervals = this.timeIntervals.map(t => Math.max(MIN_TIME, roundTime(t * f)));
+    if (this.frozen.time) this.frozen.time = this.frozen.time.map(t => roundTime(t * f));
     return this;
   }
 
@@ -393,7 +521,8 @@ export class Bloom {
   }
 
   softer(multiplier = 1.2): this {
-    this.velocities = this.velocities.map(v => Math.max(20, Math.round(v / multiplier)));
+    // rests (0) stay rests
+    this.velocities = this.velocities.map(v => (v === 0 ? 0 : Math.max(20, Math.round(v / multiplier))));
     return this;
   }
 
@@ -634,22 +763,11 @@ export class Bloom {
   // ─── Patterning ────────────────────────────────────────────────────────────
 
   stutter(repetitions = 2): this {
-    this.notes = stutterArr(this.notes, repetitions) as NoteArray;
-    this.velocities = stutterArr(this.velocities, repetitions);
-    this.timeIntervals = stutterArr(this.timeIntervals, repetitions);
-    this.chans = stutterArr(this.chans, repetitions);
-    return this;
+    return this.setEvents(stutterArr(this.events(), repetitions));
   }
 
   sputter(probability = 0.3): this {
-    // Create sputtered index plan, then map each array through it
-    const indices = Array.from({ length: this.notes.length }, (_, i) => i);
-    const plan = sputterArr(indices, probability);
-    this.notes = plan.map(i => wrapAt(this.notes, i));
-    this.timeIntervals = plan.map(i => wrapAt(this.timeIntervals, i));
-    this.velocities = plan.map(i => wrapAt(this.velocities, i));
-    this.chans = plan.map(i => wrapAt(this.chans, i));
-    return this;
+    return this.setEvents(sputterArr(this.events(), probability));
   }
 
   spray(probability = 0.25): this {
@@ -660,25 +778,15 @@ export class Bloom {
   }
 
   mirror(): this {
-    this.notes = mirrorArr(this.notes) as NoteArray;
-    this.velocities = mirrorArr(this.velocities);
-    this.timeIntervals = mirrorArr(this.timeIntervals);
-    this.chans = mirrorArr(this.chans);
-    return this;
+    return this.patternEvents('mirror');
   }
 
   pyramid(patternType = 1): this {
-    this.notes = pyramidArr(this.notes, patternType) as NoteArray;
-    this.timeIntervals = pyramidArr(this.timeIntervals, patternType);
-    this.velocities = pyramidArr(this.velocities, patternType);
-    return this;
+    return this.setEvents(pyramidArr(this.events(), patternType));
   }
 
   slide(windowLength = 3): this {
-    this.notes = slideArr(wrapExtend(this.notes, Math.max(this.notes.length, windowLength)), windowLength) as NoteArray;
-    this.timeIntervals = slideArr(wrapExtend(this.timeIntervals, this.notes.length), windowLength);
-    this.velocities = slideArr(wrapExtend(this.velocities, this.notes.length), windowLength);
-    return this;
+    return this.setEvents(slideArr(this.events(), windowLength));
   }
 
   braid(windowLength = 3): this {
@@ -898,6 +1006,47 @@ export class Bloom {
     this.notes = degreeToKeyArr(newDegrees, scale.degrees, scale.pitchesPerOctave);
     this.enforceRange();
     return this;
+  }
+
+  /**
+   * A breeze: transpose only some of the notes (GESTURE.breeze of them, at
+   * least one). `unit` is scale steps, semitones or octaves. Chord tones move
+   * independently.
+   */
+  breeze(amount = 1, unit: 'step' | 'semitone' | 'octave' = 'step', share = GESTURE.breeze): this {
+    const s = this.scale;
+    this.saveNest();
+    const flat = flatNotes(this.notes) as number[];
+    const heat = this.breezeHeatFor('pitch', flat);
+    const moving = someIndices(flat.length, share, heat);
+    this.notes = flat.map((note, i) => {
+      if (!moving.has(i)) return note;
+      if (unit === 'step') return this.stepPitch(note, amount, s);
+      return note + amount * (unit === 'octave' ? 12 : 1);
+    });
+    this.restoreNest();
+    this.enforceRange();
+    this.rememberBreeze('pitch', heat, moving, flatNotes(this.notes) as number[]);
+    return this;
+  }
+
+  // Breeze memory, per list: how recently each position moved, and the list as
+  // the breeze left it. The memory only holds while nothing else has changed
+  // that list; any other edit starts the weighting afresh.
+  private breezeMemo = new Map<string, { after: string; heat: number[] }>();
+
+  private breezeHeatFor(key: string, values: unknown[]): number[] {
+    const memo = this.breezeMemo.get(key);
+    return memo && memo.after === JSON.stringify(values) && memo.heat.length === values.length
+      ? memo.heat
+      : values.map(() => 0);
+  }
+
+  private rememberBreeze(key: string, heat: number[], moved: Set<number>, after: unknown[]): void {
+    this.breezeMemo.set(key, {
+      after: JSON.stringify(after),
+      heat: heat.map((h, i) => h * GESTURE.breezeMemory + (moved.has(i) ? 1 : 0)),
+    });
   }
 
   compass(lo = 60, hi = 90): this {
@@ -1464,27 +1613,467 @@ export class Bloom {
     return this;
   }
 
-  // chans-only versions of the patterning ops — length changes phase against the
-  // notes at playback (wrapAt cycling), like the wheels-within-wheels velocity trick
-  scrambleChans(): this { this.chans = scramble(this.chans); return this; }
-  shuffleChans(): this { this.chans = perfectShuffle(this.chans); return this; }
-  mirrorChans(): this { this.chans = mirrorArr(this.chans); return this; }
-  stutterChans(repetitions = 2): this { this.chans = stutterArr(this.chans, repetitions); return this; }
-  sputterChans(probability = 0.3): this { this.chans = sputterArr(this.chans, probability); return this; }
-  braidChans(windowLength = 3): this { this.chans = slideArr(this.chans, windowLength); return this; }
-  pyramidChans(patternType = 1): this { this.chans = pyramidArr(this.chans, patternType); return this; }
+  // Channel-only patterns, lacing and copying are the shared list operations:
+  // patternList('chan', …), laceList('chan', …), copyList('chan', …)
 
-  /** Interlace this bloom's chans with another's — borrow orchestration */
-  laceChans(other: Bloom): this {
-    const laceSize = Math.max(this.chans.length, other.chans.length) * 2 - 1;
-    this.chans = lace([this.chans, other.chans], laceSize);
+  // ─── Events ────────────────────────────────────────────────────────────────
+  // A note with its velocity, time, channel and intervals step. Whole-note
+  // operations reorder events, so each note keeps its own rhythm, dynamic and
+  // instrument. Lists of other lengths are first wrapped to the notes' length
+  // (what one play-through sounds like), which bakes in any phasing.
+
+  events(): NoteEvent[] {
+    const at = <T>(arr: T[], i: number, fallback: T): T => (arr.length ? wrapAt(arr, i) : fallback);
+    return this.notes.map((note, i) => ({
+      note,
+      vel: at(this.velocities, i, 60),
+      time: at(this.timeIntervals, i, 0.25),
+      chan: at(this.chans, i, Bloom.defaultChan),
+      iv: at(this.intervals, i, 0 as IntervalVal),
+    }));
+  }
+
+  setEvents(evs: NoteEvent[]): this {
+    if (evs.length === 0) return this;
+    // an untouched [0] intervals list stays as it is
+    const carryIntervals = this.hasIntervals();
+    this.notes = evs.map(e => JSON.parse(JSON.stringify(e.note)) as NoteVal);
+    this.velocities = evs.map(e => e.vel);
+    this.timeIntervals = evs.map(e => e.time);
+    this.chans = evs.map(e => e.chan);
+    if (carryIntervals) this.intervals = evs.map(e => JSON.parse(JSON.stringify(e.iv)) as IntervalVal);
     return this;
   }
 
-  /** Copy another bloom's chans array wholesale */
-  copyChans(other: Bloom): this {
-    this.chans = [...other.chans];
+  /** Reorder or repeat whole notes with one of the shared patterns */
+  patternEvents(op: PatternOp): this {
+    return this.setEvents(PATTERNS[op](this.events()));
+  }
+
+  // ─── Lists ─────────────────────────────────────────────────────────────────
+  // Any one list, the others left where they are. A list that changes length
+  // phases against the notes at playback.
+
+  getList(k: ListKey): unknown[] {
+    switch (k) {
+      case 'notes': return this.notes;
+      case 'time': return this.timeIntervals;
+      case 'vel': return this.velocities;
+      case 'chan': return this.chans;
+    }
+  }
+
+  private setList(k: ListKey, arr: unknown[]): void {
+    switch (k) {
+      case 'notes': this.notes = arr as NoteArray; break;
+      case 'time': this.timeIntervals = arr as number[]; break;
+      case 'vel': this.velocities = arr as number[]; break;
+      case 'chan': this.chans = arr as number[]; break;
+    }
+  }
+
+  patternList(k: ListKey, op: PatternOp): this {
+    const arr = this.getList(k);
+    if (arr.length > 0) this.setList(k, PATTERNS[op](arr));
     return this;
+  }
+
+  /** Interlace one list with the same list of another bloom */
+  laceList(k: ListKey, other: Bloom): this {
+    const a = this.getList(k);
+    const b = JSON.parse(JSON.stringify(other.getList(k))) as unknown[];
+    if (a.length && b.length) this.setList(k, lace([a, b], Math.max(a.length, b.length) * 2 - 1));
+    return this;
+  }
+
+  /** Copy one list from another bloom */
+  copyList(k: ListKey, other: Bloom): this {
+    const b = other.getList(k);
+    if (b.length) this.setList(k, JSON.parse(JSON.stringify(b)));
+    return this;
+  }
+
+  /** Sort pitches low to high (or high to low), leaving the rhythm where it is */
+  sortNotes(descending = false): this {
+    const key = (n: NoteVal): number => (Array.isArray(n) ? Math.min(...(flatNotes(n as NoteArray) as number[])) : n as number);
+    this.notes = [...this.notes].sort((a, b) => (descending ? key(b) - key(a) : key(a) - key(b)));
+    return this;
+  }
+
+  /**
+   * The distinct values a list uses, sorted: the bloom's own vocabulary of
+   * durations, dynamic levels or instruments. A rest (velocity 0) isn't a level.
+   */
+  paletteOf(k: 'time' | 'vel' | 'chan'): number[] {
+    const src = k === 'time' ? this.timeIntervals.map(roundTime)
+      : k === 'vel' ? this.velocities.filter(v => v > 0)
+      : this.chans;
+    return [...new Set(src)].sort((a, b) => a - b);
+  }
+
+  /** Move a time k steps along the palette; past either end it keeps halving or doubling */
+  private stepTime(t: number, k: number, pal: number[]): number {
+    if (pal.length === 0) return t;
+    const j = nearestByRatio(pal, t) + k;
+    if (j < 0) return roundTime(pal[0] / 2 ** -j);
+    if (j >= pal.length) return roundTime(pal[pal.length - 1] * 2 ** (j - pal.length + 1));
+    return pal[j];
+  }
+
+  /** Move a velocity k levels along the palette; past either end it moves 8 at a time */
+  private stepVel(v: number, k: number, pal: number[]): number {
+    if (pal.length === 0) return v;
+    const j = nearestLinear(pal, v) + k;
+    if (j < 0) return pal[0] + 8 * j;
+    if (j >= pal.length) return pal[pal.length - 1] + 8 * (j - pal.length + 1);
+    return pal[j];
+  }
+
+  /**
+   * Apply a shared verb to one list. `amount` is the quantize setting: the grid
+   * for time, the most distinct levels for velocity and channels. Returns false
+   * when the verb has no meaning for that list.
+   */
+  shapeList(k: 'time' | 'vel' | 'chan', verb: ListVerb, amount = 4): boolean {
+    if (k === 'time') return this.shapeTimes(verb, amount);
+    if (k === 'vel') return this.shapeVels(verb, amount);
+    return this.shapeChans(verb, amount);
+  }
+
+  // Time verbs work along the palette where they can (halves and doubles of the
+  // durations already there), so the groove's vocabulary survives them
+  private shapeTimes(verb: ListVerb, amount: number): boolean {
+    const ts = this.timeIntervals;
+    const n = ts.length;
+    if (n === 0) return true;
+    const pal = this.paletteOf('time');
+    // the commonest duration, or the middle of the palette when none repeats
+    const target = pal.length === n ? pal[Math.floor((pal.length - 1) / 2)] : modeOf(ts.map(roundTime));
+    const ti = nearestByRatio(pal, target);
+    const set = (fn: (t: number, i: number) => number) => {
+      this.timeIntervals = ts.map((t, i) => Math.max(MIN_TIME, roundTime(fn(t, i))));
+    };
+
+    switch (verb) {
+      case 'mutate': set(t => {
+        if (!coin(0.25)) return t;
+        const others = pal.filter(p => p !== roundTime(t));
+        return others.length ? pick(others) : t * pick([0.5, 2]);
+      }); break;
+      case 'mutateWild': this.mutateTime(); break;
+      case 'nudgeDown': this.faster(); break;
+      case 'nudgeUp': this.slower(); break;
+      case 'octaveDown': this.scaleTimes(0.5); break;
+      case 'octaveUp': this.scaleTimes(2); break;
+      case 'stepDown': set(t => this.stepTime(t, -1, pal)); break;
+      case 'stepUp': set(t => this.stepTime(t, 1, pal)); break;
+      case 'breezeDown': case 'breezeUp': {
+        const heat = this.breezeHeatFor('time', ts);
+        const moving = someIndices(n, GESTURE.breeze, heat);
+        const k = verb === 'breezeUp' ? 1 : -1;
+        set((t, i) => (moving.has(i) ? this.stepTime(t, k, pal) : t));
+        this.rememberBreeze('time', heat, moving, this.timeIntervals);
+        break;
+      }
+      // one palette step toward / away from the commonest duration
+      case 'converge': set(t => {
+        const i = nearestByRatio(pal, t);
+        return i === ti ? t : pal[i + Math.sign(ti - i)];
+      }); break;
+      case 'diverge': set(t => {
+        const i = nearestByRatio(pal, t);
+        if (i !== ti) return this.stepTime(t, Math.sign(i - ti), pal);
+        return coin(0.25) ? this.stepTime(t, coin(0.5) ? 1 : -1, pal) : t;
+      }); break;
+      case 'unify': set(() => target); break;
+      // longest ↔ shortest within the palette
+      case 'invert': set(t => pal[pal.length - 1 - nearestByRatio(pal, t)]); break;
+      // reflect around the geometric mean: doubling and halving are mirror images
+      case 'invertMid': {
+        const gm = Math.exp(mean(ts.map(t => Math.log(t))));
+        set(t => (gm * gm) / t);
+        break;
+      }
+      // accelerando or ritardando: up to two palette steps by the end
+      case 'shear': {
+        const dir = coin(0.5) ? 1 : -1;
+        set((t, i) => this.stepTime(t, dir * Math.round((i / Math.max(1, n - 1)) * 2), pal));
+        break;
+      }
+      case 'curve': {
+        const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-2, 2));
+        const offs = resamp1(ctrl, n);
+        set((t, i) => this.stepTime(t, Math.round(offs[i]), pal));
+        break;
+      }
+      case 'sortUp': this.timeIntervals = [...ts].sort((a, b) => a - b); break;
+      case 'sortDown': this.timeIntervals = [...ts].sort((a, b) => b - a); break;
+      case 'fewer':
+        if (pal.length > 1) this.timeIntervals = clusterValues(ts.map(roundTime), pal.length - 1, ratioDist);
+        break;
+      // some of the commonest duration take a new value: its half, double or dotted
+      case 'more': {
+        const fresh = [target / 2, target * 2, target * 1.5].map(roundTime).filter(v => !pal.includes(v));
+        if (fresh.length === 0) break;
+        const value = fresh[0];
+        const idxs = ts.map((t, i) => (roundTime(t) === target ? i : -1)).filter(i => i >= 0);
+        const out = [...ts];
+        scramble(idxs).slice(0, Math.max(1, Math.ceil(idxs.length / 3))).forEach(i => { out[i] = value; });
+        this.timeIntervals = out;
+        break;
+      }
+      case 'quantize': this.quantize(amount); break;
+      case 'renew': {
+        const choices = pal.length > 1 ? pal : [target / 2, target, target * 2].map(roundTime);
+        this.timeIntervals = this.notes.map(() => pick(choices));
+        break;
+      }
+      case 'dropLast': if (n > 1) this.timeIntervals = ts.slice(0, -1); break;
+      case 'addFromPalette': this.timeIntervals = [...ts, pick(ts)]; break;
+      case 'addRandom':
+        this.timeIntervals = [...ts, roundTime(exprand(this.timeRangeLow, this.timeRangeHi))];
+        break;
+      default: return false;
+    }
+    return true;
+  }
+
+  // Velocity verbs leave rests (0) as rests
+  private shapeVels(verb: ListVerb, amount: number): boolean {
+    const vs = this.velocities;
+    const n = vs.length;
+    const live = vs.filter(v => v > 0);
+    const pal = this.paletteOf('vel');
+    const set = (fn: (v: number, i: number) => number) => {
+      this.velocities = vs.map((v, i) => (v === 0 ? 0 : clampVel(fn(v, i))));
+    };
+    if (live.length === 0 && !['renew', 'addRandom'].includes(verb)) return true;
+    const m = live.length ? mean(live) : 60;
+    const lo = Math.min(...live);
+    const hi = Math.max(...live);
+
+    switch (verb) {
+      case 'mutate': set(v => (coin(0.5) ? v + rrand(-10, 10) : v)); break;
+      case 'mutateWild': set(v => v + rrand(-30, 30)); break;
+      case 'nudgeDown': this.softer(); break;
+      case 'nudgeUp': this.louder(); break;
+      case 'octaveDown': set(v => Math.max(20, v / 1.5)); break;
+      case 'octaveUp': set(v => v * 1.5); break;
+      case 'stepDown': set(v => this.stepVel(v, -1, pal)); break;
+      case 'stepUp': set(v => this.stepVel(v, 1, pal)); break;
+      case 'breezeDown': case 'breezeUp': {
+        const heat = this.breezeHeatFor('vel', vs);
+        const moving = someIndices(n, GESTURE.breeze, heat);
+        const k = verb === 'breezeUp' ? 1 : -1;
+        set((v, i) => (moving.has(i) ? this.stepVel(v, k, pal) : v));
+        this.rememberBreeze('vel', heat, moving, this.velocities);
+        break;
+      }
+      // flatter or wider dynamics around the mean; accents keep their places
+      case 'converge': set(v => m + (v - m) * 0.75); break;
+      case 'diverge': set(v => (hi === lo ? v + rrand(-8, 8) : m + (v - m) * 1.33)); break;
+      case 'unify': set(() => m); break;
+      case 'invert': set(v => lo + hi - v); break;
+      case 'invertMid': set(v => 2 * m - v); break;
+      // a dynamic ramp across the bloom, crescendo or decrescendo
+      case 'shear': {
+        const dir = coin(0.5) ? 1 : -1;
+        set((v, i) => v + dir * (i / Math.max(1, n - 1) - 0.5) * 40);
+        break;
+      }
+      // hairpins: a smooth contour through a few random levels
+      case 'curve': {
+        const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(30, 110));
+        const contour = resamp1(ctrl, n);
+        set((_, i) => contour[i]);
+        break;
+      }
+      case 'sortUp': this.crescendo(); break;
+      case 'sortDown': this.decrescendo(); break;
+      case 'fewer':
+        if (pal.length > 1) this.velocities = clusterValues(vs, pal.length - 1, linearDist, v => v === 0);
+        break;
+      case 'more': set(v => (coin(0.33) ? v + pick([-12, 12]) : v)); break;
+      case 'quantize': this.velocities = clusterValues(vs, amount, linearDist, v => v === 0); break;
+      case 'renew': this.velocities = this.notes.map(() => Math.round(exprand(40, 110))); break;
+      case 'dropLast': if (n > 1) this.velocities = vs.slice(0, -1); break;
+      case 'addFromPalette': this.velocities = [...vs, pick(live)]; break;
+      case 'addRandom': this.velocities = [...vs, Math.round(exprand(30, 110))]; break;
+      default: return false;
+    }
+    return true;
+  }
+
+  private shapeChans(verb: ListVerb, amount: number): boolean {
+    switch (verb) {
+      case 'mutate': this.mutateChansD(); break;
+      case 'mutateWild': this.mutateChans(); break;
+      case 'nudgeDown': this.shiftChans(-1); break;
+      case 'nudgeUp': this.shiftChans(1); break;
+      case 'stepDown': this.dShiftChans(-1); break;
+      case 'stepUp': this.dShiftChans(1); break;
+      // one step through the palette, for some notes only
+      case 'breezeDown': case 'breezeUp': {
+        const pal = this.chanPalette();
+        if (pal.length < 2) break;
+        const heat = this.breezeHeatFor('chan', this.chans);
+        const moving = someIndices(this.chans.length, GESTURE.breeze, heat);
+        const k = verb === 'breezeUp' ? 1 : -1;
+        const len = pal.length;
+        this.chans = this.chans.map((c, i) =>
+          (moving.has(i) ? pal[(((pal.indexOf(c) + k) % len) + len) % len] : c));
+        this.rememberBreeze('chan', heat, moving, this.chans);
+        break;
+      }
+      case 'converge': this.convergeChans(); break;
+      case 'diverge': this.divergeChans(); break;
+      case 'unify': this.unifyChans(); break;
+      case 'invert': this.invertChans(); break;
+      case 'invertMid': this.invertChansModal(); break;
+      case 'shear': this.shearChans(); break;
+      case 'curve': this.curveChans(); break;
+      case 'sortUp': this.sortChans(); break;
+      case 'sortDown': this.chans = [...this.chans].sort((a, b) => b - a); break;
+      case 'fewer': this.thinChanPalette(); break;
+      case 'more': this.thickenChanPalette(); break;
+      case 'quantize': this.quantizeChanPalette(amount); break;
+      case 'renew': this.newChans(); break;
+      case 'dropLast': this.dropChan(); break;
+      case 'addFromPalette': this.recycleChan(); break;
+      case 'addRandom': this.addChan(); break;
+      default: return false;
+    }
+    return true;
+  }
+
+  // ─── Split / merge ─────────────────────────────────────────────────────────
+  // Groove-safe rhythm edits. A split turns a note into two repeats of half its
+  // length; a merge lets a note absorb the next one's time. The total stays the
+  // same and durations stay among halves and doubles of what's already there.
+
+  splitNote(): this {
+    this._splitAt();
+    return this;
+  }
+
+  mergeNote(): this {
+    this._mergeAt();
+    return this;
+  }
+
+  /** Split a note (not `avoid`), preferring long notes whose half is already in the palette. Returns its index or -1. */
+  private _splitAt(avoid = -1): number {
+    const evs = this.events();
+    if (evs.length === 0) return -1;
+    const pal = new Set(this.paletteOf('time'));
+    const weights = evs.map((e, i) => {
+      if (i === avoid || e.time / 2 < MIN_TIME) return 0;
+      return e.time * (pal.has(roundTime(e.time / 2)) ? 3 : 1);
+    });
+    if (weights.every(w => w === 0)) return -1;
+    const i = weightedIndex(weights);
+    const half = roundTime(evs[i].time / 2);
+    evs.splice(i, 1, { ...evs[i], time: half }, { ...evs[i], time: half });
+    this.setEvents(evs);
+    return i;
+  }
+
+  /** Merge a note with the next one, preferring pairs whose sum is already in the palette (v/2 + v/2 → v). Returns its index or -1. */
+  private _mergeAt(): number {
+    const evs = this.events();
+    if (evs.length < 3) return -1;
+    const pal = new Set(this.paletteOf('time'));
+    const weights = evs.slice(0, -1).map((e, i) => (pal.has(roundTime(e.time + evs[i + 1].time)) ? 4 : 1));
+    const i = weightedIndex(weights);
+    evs.splice(i, 2, { ...evs[i], time: roundTime(evs[i].time + evs[i + 1].time) });
+    this.setEvents(evs);
+    return i;
+  }
+
+  // ─── Gestures ──────────────────────────────────────────────────────────────
+  // Whole-bloom moves that nudge pitch, rhythm, dynamics and channels a little
+  // at once. Rhythm only changes by splitting and merging. Step sizes: GESTURE.
+
+  /** Busier, louder, wider, more spread out */
+  intensify(): this {
+    for (let r = 0; r < GESTURE.rhythmEdits; r++) this._splitAt();
+    this.shapeDynamics(1 + GESTURE.level, 1 + GESTURE.contrast);
+    this.spreadPitch(1, GESTURE.pitchNotes);
+    // bring back one rest
+    const rest = this.velocities.indexOf(0);
+    const live = this.velocities.filter(v => v > 0);
+    if (rest >= 0 && live.length) this.velocities[rest] = Math.round(mean(live));
+    if (Bloom.maxChan > 0 && this.chans.length && coin(GESTURE.chanChance)) {
+      const i = Math.floor(Math.random() * this.chans.length);
+      this.chans[i] = this.wrapChanVal(this.chans[i] + (coin(0.5) ? 1 : -1));
+    }
+    return this;
+  }
+
+  /** Sparser, softer, narrower, more unified */
+  calm(): this {
+    for (let r = 0; r < GESTURE.rhythmEdits; r++) this._mergeAt();
+    this.shapeDynamics(1 - GESTURE.level, 1 - GESTURE.contrast);
+    this.spreadPitch(-1, GESTURE.pitchNotes);
+    if (coin(GESTURE.chanChance)) {
+      const modal = this.modalChan();
+      const strays = this.chans.map((c, i) => (c !== modal ? i : -1)).filter(i => i >= 0);
+      if (strays.length) this.chans[pick(strays)] = modal;
+    }
+    return this;
+  }
+
+  /** Small changes all through: a few scale steps, a merge traded for a split, slight dynamics, a channel swap */
+  vary(): this {
+    const amt = GESTURE.vary;
+    const s = this.scale;
+    this.saveNest();
+    this.notes = (flatNotes(this.notes) as number[]).map(note =>
+      (coin(amt) ? this.stepPitch(note, coin(0.5) ? 1 : -1, s) : note));
+    this.restoreNest();
+    this.enforceRange();
+    if (coin(0.5)) {
+      const merged = this._mergeAt();
+      if (merged >= 0) this._splitAt(merged);
+    }
+    this.velocities = this.velocities.map(v =>
+      (v === 0 || !coin(amt * 1.5) ? v : clampVel(v + rrand(-GESTURE.varyVel, GESTURE.varyVel))));
+    if (this.chanPalette().length > 1) this.mutateChansD(amt / 2);
+    return this;
+  }
+
+  private stepPitch(note: number, k: number, s: Scale): number {
+    const degree = Math.round(keyToDegree(note, s.degrees, s.pitchesPerOctave));
+    return degreeToKey(degree + k, s.degrees, s.pitchesPerOctave);
+  }
+
+  /** Move the `count` notes farthest from the centre one scale step outward (dir 1) or inward (dir -1) */
+  private spreadPitch(dir: 1 | -1, count: number): void {
+    const s = this.scale;
+    this.saveNest();
+    const flat = flatNotes(this.notes) as number[];
+    const lo = Math.min(...flat);
+    const hi = Math.max(...flat);
+    if (flat.length < 2 || (dir === -1 && hi - lo <= 2)) { this.nest = null; return; }
+    const centre = (lo + hi) / 2;
+    // shuffled first so equally distant notes take turns
+    const order = scramble(flat.map((_, i) => i))
+      .sort((a, b) => Math.abs(flat[b] - centre) - Math.abs(flat[a] - centre));
+    order.slice(0, count).forEach(i => {
+      const outward = flat[i] >= centre ? 1 : -1;
+      flat[i] = this.stepPitch(flat[i], outward * dir, s);
+    });
+    this.notes = flat;
+    this.restoreNest();
+    this.enforceRange();
+  }
+
+  /** Scale the overall level and the accent contrast around the mean; rests stay rests */
+  private shapeDynamics(level: number, contrast: number): void {
+    const live = this.velocities.filter(v => v > 0);
+    if (live.length === 0) return;
+    const m = mean(live);
+    this.velocities = this.velocities.map(v => (v === 0 ? 0 : clampVel(m * level + (v - m) * contrast)));
   }
 
   // ─── Intervals ─────────────────────────────────────────────────────────────
@@ -1731,9 +2320,26 @@ export class Bloom {
   fixedDur: number | false = false;
   fixedDurMode: 'trim' | 'scale' = 'trim';
   fixedGrid: number | false = false;
-  fixedScale: Scale | false = false;
+
+  /**
+   * Palette freezes, one per list. Each captures the bloom's palette when it's
+   * switched on (the scale for pitch, the distinct durations, dynamic levels or
+   * channels for the others) and, before each play, snaps anything off-palette
+   * to its nearest value. Durations are compared by ratio.
+   */
+  frozen: { pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false } =
+    { pitch: false, time: false, vel: false, chan: false };
+
+  freeze(k: 'pitch' | 'time' | 'vel' | 'chan', on: boolean): this {
+    if (k === 'pitch') this.frozen.pitch = on ? this.scale : false;
+    else this.frozen[k] = on && this.paletteOf(k).length ? this.paletteOf(k) : false;
+    return this;
+  }
 
   resolveFixed(): this {
+    // rhythm palette first, so a frozen duration or grid still has the last word on time
+    const ft = this.frozen.time;
+    if (ft) this.timeIntervals = this.timeIntervals.map(t => ft[nearestByRatio(ft, t)]);
     if (this.fixedDurMode === 'trim') {
       this._resolveFixedGrid();
       this._resolveFixedDur();
@@ -1742,7 +2348,11 @@ export class Bloom {
       this._resolveFixedGrid();
       if (typeof this.fixedDur === 'number') this.trimToDur(this.fixedDur);
     }
-    this._resolveFixedScale();
+    if (this.frozen.pitch) this.applyScale(this.frozen.pitch);
+    const fv = this.frozen.vel;
+    if (fv) this.velocities = this.velocities.map(v => (v === 0 ? 0 : fv[nearestLinear(fv, v)]));
+    const fc = this.frozen.chan;
+    if (fc) this.chans = this.chans.map(c => fc[nearestLinear(fc, c)]);
     return this;
   }
 
@@ -1751,10 +2361,6 @@ export class Bloom {
       if (this.fixedDurMode === 'scale') this.scaleToDur(this.fixedDur);
       else this.trimToDur(this.fixedDur);
     }
-  }
-
-  private _resolveFixedScale(): void {
-    if (this.fixedScale) this.applyScale(this.fixedScale);
   }
 
   private _resolveFixedGrid(): void {

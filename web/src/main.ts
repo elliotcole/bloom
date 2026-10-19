@@ -2,6 +2,7 @@
 
 import './style.css';
 import { Bloom, BloomDefaults } from './core/Bloom';
+import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
@@ -116,12 +117,10 @@ async function main() {
     // Mutation
     reg('mutate',    'mutate notes (diatonic)',   b => b.mutateNotesD());
     reg('mutateC',   'mutate notes (chromatic)',  b => b.mutateNotes());
-    reg('mutateT',   'mutate time',               b => b.mutateTime());
-    reg('mutateV',   'mutate velocities',         b => b.mutateVelocities());
 
     // Randomize
-    reg('scramble',  'scramble note order',       b => b.scramble());
-    reg('shuffle',   'perfect shuffle',           b => b.shuffle());
+    reg('scramble',  'scramble whole notes',      b => b.scramble());
+    reg('shuffle',   'perfect shuffle (whole notes)', b => b.shuffle());
 
     // Density
     reg('thicken',   'add similar notes',         b => b.thicken(0.3));
@@ -134,7 +133,6 @@ async function main() {
     reg(['faster', 'fast'], 'compress time intervals', b => b.faster());
     reg(['softer', 'soft'], 'reduce velocities',   b => b.softer());
     reg(['louder', 'loud'], 'increase velocities', b => b.louder());
-    reg(['avgtime', 'even'], 'even out time intervals', b => b.avgTime());
 
     // Extend / contract
     reg('droplast',  'drop last note',            b => b.dropLast());
@@ -143,9 +141,7 @@ async function main() {
 
     // Rotate
     reg('rotatenotes', 'rotate notes array',      b => b.rotateNotes(1));
-    reg('rotatevel',   'rotate velocities',       b => b.rotateVelocities(1));
-    reg('rotatetime',  'rotate time intervals',   b => b.rotateTime(1));
-    reg('rotatechan',  'rotate channels',         b => b.rotateChans(1));
+    reg('rotate',      'rotate whole notes',      b => b.rotate(1));
     reg('rotateintervals', 'rotate intervals',    b => b.rotateIntervals(1));
 
     // Intervals
@@ -163,7 +159,7 @@ async function main() {
     reg('sputter',   'sputter pattern',           b => b.sputter());
     reg('spray',     'spray pattern',             b => b.spray());
     reg('ratchet',   'ratchet rhythm',            b => b.ratchet());
-    reg('mirror',    'mirror notes',              b => b.mirror());
+    reg('mirror',    'mirror whole notes',        b => b.mirror());
     reg('braid',     'braid pattern',             b => b.braid());
     reg('pyramid',   'pyramid pattern',           b => b.pyramid());
     reg('quantize',  'quantize to grid (4)',      b => b.quantize(4));
@@ -196,6 +192,37 @@ async function main() {
     reg(['newshape', 'shape'], 'new bloom shape',     b => b.newShape());
     reg('push',    'push bloom to stack',             b => b.push());
     reg('pop',     'pop bloom from stack',            b => b.pop());
+
+    // Gestures (whole bloom) and groove-safe rhythm
+    reg('calm',      'calm: sparser, softer, narrower',  b => b.calm());
+    reg('intensify', 'intensify: busier, louder, wider', b => b.intensify());
+    reg('vary',      'small variations all through',     b => b.vary());
+    reg('split',     'split a note into two halves',     b => b.splitNote());
+    reg('merge',     'merge a note with the next',       b => b.mergeNote());
+    reg(['breeze+', 'breeze'], 'some notes up a scale step', b => b.breeze(1));
+    reg('breeze-',   'some notes down a scale step',     b => b.breeze(-1));
+    reg('breezeup1', 'some notes up a semitone',         b => b.breeze(1, 'semitone'));
+    reg('breezedown1', 'some notes down a semitone',     b => b.breeze(-1, 'semitone'));
+    reg('breezeup12', 'some notes up an octave',         b => b.breeze(1, 'octave'));
+    reg('breezedown12', 'some notes down an octave',     b => b.breeze(-1, 'octave'));
+    reg(['sortpitch', 'sortp'], 'sort pitches up',       b => b.sortNotes());
+
+    // One list at a time: <verb><list>, e.g. scrambleP (pitches), invertT, curveV, unifyC
+    const PATTERN_NAMES: PatternOp[] = ['scramble', 'shuffle', 'mirror', 'stutter', 'sputter', 'braid', 'pyramid'];
+    const LIST_SUFFIX: Array<[ListKey, string, string]> = [
+      ['notes', 'P', 'pitches'], ['time', 'T', 'times'], ['vel', 'V', 'velocities'], ['chan', 'C', 'channels'],
+    ];
+    LIST_SUFFIX.forEach(([k, suffix, name]) => {
+      PATTERN_NAMES.forEach(op => reg(`${op}${suffix}`, `${op} ${name} only`, b => b.patternList(k, op)));
+      if (k === 'notes') return;
+      const VERBS: ListVerb[] = [
+        'mutate', 'mutateWild', 'nudgeDown', 'nudgeUp', 'octaveDown', 'octaveUp', 'stepDown', 'stepUp',
+        'breezeDown', 'breezeUp',
+        'converge', 'diverge', 'unify', 'invert', 'invertMid', 'shear', 'curve', 'sortUp', 'sortDown',
+        'fewer', 'more', 'renew',
+      ];
+      VERBS.forEach(verb => reg(`${verb}${suffix}`, `${verb} ${name}`, b => { b.shapeList(k, verb); }));
+    });
   })();
 
   // ─── Key handler ─────────────────────────────────────────────────────────────
@@ -443,10 +470,13 @@ async function main() {
     if (bloom.fixedGrid !== false) bloom.fixedGrid = parseInt(fixedGridSizeInput.value);
   });
 
-  // Fixed scale
-  const fixedScaleEnabledCb = document.getElementById('fixed-scale-enabled') as HTMLInputElement;
-  fixedScaleEnabledCb?.addEventListener('change', () => {
-    bloom.fixedScale = fixedScaleEnabledCb.checked ? bloom.scale : false;
+  // Palette freezes — one per list, captured from the bloom when ticked
+  document.querySelectorAll<HTMLInputElement>('.freeze-palette').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const list = cb.dataset.list as 'pitch' | 'time' | 'vel' | 'chan';
+      bloom.freeze(list, cb.checked);
+      cb.blur();   // keep keystrokes going to the bloom
+    });
   });
 
   // Velocity ceiling

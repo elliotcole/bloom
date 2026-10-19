@@ -199,8 +199,8 @@
       }
       @keyframes pulse-red { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
 
-      /* Channel edit mode badge */
-      #chan-mode-badge {
+      /* List mode badge (time / velocity / channel) */
+      #list-mode-badge {
         display: none;
         font-size: 10px;
         font-weight: 600;
@@ -211,13 +211,27 @@
         padding: 1px 5px;
         flex-shrink: 0;
       }
-      #chan-mode-badge.active { display: inline-block; }
+      #list-mode-badge.active { display: inline-block; }
 
-      /* Help views are separated by mode: channel-mode help only in channel mode,
-         normal help only in normal mode */
-      #hf-chan-sec { display: none; }
-      body.chan-mode #hf-chan-sec { display: block; }
-      body.chan-mode .hf-sec:not(#hf-chan-sec) { display: none; }
+      /* What's frozen (F menu): ❄ p t … — highlighted while the menu is open */
+      #freeze-badge {
+        display: none;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        color: #8cf;
+        border: 1px solid #357;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+      }
+      #freeze-badge.active, #freeze-badge.menu { display: inline-block; }
+      #freeze-badge.menu { color: #fff; border-color: #8cf; }
+
+      /* Help views are separated by mode: list-mode help only in a list mode,
+         home help only at home */
+      #hf-list-sec { display: none; }
+      body.list-mode #hf-list-sec { display: block; }
+      body.list-mode .hf-sec:not(#hf-list-sec) { display: none; }
 
       /* Main canvas area — flex column: viz on top, garden on bottom */
       #canvas-area {
@@ -299,26 +313,6 @@
       .console-entry--current {
         color: #8aaa88;
       }
-
-      /* Help panel (overlay) */
-      #help-panel {
-        display: none;
-        position: fixed;
-        top: 40px;
-        right: 0;
-        width: 340px;
-        height: calc(100vh - 40px);
-        background: #0d0d14ee;
-        border-left: 1px solid #333;
-        overflow-y: auto;
-        z-index: 100;
-        padding: 12px;
-        font-size: 11px;
-        line-height: 1.7;
-        color: #888;
-        white-space: pre;
-      }
-      #help-panel h2 { color: #aaa; font-size: 12px; margin-bottom: 8px; }
 
       /* Footer */
       #footer {
@@ -545,7 +539,8 @@
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
-      <span id="chan-mode-badge" title="channel edit mode — shaping keys act on channels (o or esc exits)">CH</span>
+      <span id="freeze-badge" title="frozen lists — F then p t v c d g toggles"></span>
+      <span id="list-mode-badge" title="list mode — keys act on one list (t / v / c or esc goes home)"></span>
       <button id="help-toggle">? help</button>
     </header>
 
@@ -573,8 +568,21 @@
             <input type="checkbox" id="fixed-grid-enabled">
             <input type="number" id="fixed-grid-size" min="2" max="16" step="1" value="8" disabled>
           </label>
-          <label title="re-apply the current scale before each play">scale
-            <input type="checkbox" id="fixed-scale-enabled">
+        </span>
+
+        <span class="s-section" title="lock a list to the palette it has when ticked; anything off-palette snaps back before each play">
+          <span class="s-section-label">palette</span>
+          <label title="pitch: lock to the current scale">pitch
+            <input type="checkbox" class="freeze-palette" data-list="pitch">
+          </label>
+          <label title="rhythm: lock to the current set of durations (follows tempo changes)">rhythm
+            <input type="checkbox" class="freeze-palette" data-list="time">
+          </label>
+          <label title="dynamics: lock to the current velocity levels">dyn
+            <input type="checkbox" class="freeze-palette" data-list="vel">
+          </label>
+          <label title="channels: lock to the channels in use">chan
+            <input type="checkbox" class="freeze-palette" data-list="chan">
           </label>
         </span>
 
@@ -667,102 +675,6 @@
       </div>
     </main>
 
-    <div id="help-panel"><h2>Bloom Key Commands</h2>
-<b>Storage</b>
-n    new bloom
-N    new bloom (same scale)
-b    new bloom shape
-B    new bloom, same scale + shape
-p    push         P    pop
-
-<b>Shaping</b>
-m    mutate notes (diatonic)
-M    mutate notes (chromatic)
-t    mutate time  opt-t sort time
-T    mutate velocities
-s    scramble     S    shuffle
-H    thicken      h    thin
-g    gap          G    unGap
-[    faster       ]    slower
--    softer       =    louder
-y    average time
-
-<b>Rotating / Extending</b>
-z    drop last    a    add in scale
-A    add one      9    rotate notes
-0    rotate vel   (    rotate time
-)    rotate chans
-
-<b>Patterning</b>
-u    stutter      U    sputter
-Y    spray        r    ratchet
-R    mirror       d    braid
-D    pyramid      q    quantize
-Q    change quantize amount
-{ }  shorten / lengthen times
-_ +  shorten / lengthen velocities
-w    draw curves (diatonic)
-opt-w wheels within wheels
-W    remove doubles
-
-<b>Pitch</b>
-e    shear        E    center range
-i    invert       I    invert mean
-1/2  -/+ semitone  !/@  -/+ octave
-3/4  -/+ scale step
-v    pivot (highest)
-V    pivot (loudest)
-
-<b>Diatonicism</b>
-k    choose nearest scale
-K    slant scale  j    lift scale
-J    reduce scale
-
-<b>Chords</b>
-c    clump chords  C    flatten chords
-
-<b>Blending</b>
-x    interlace    X    blend
-f    lift shape   F    cast
-
-<b>Channels</b>
-;    rand chans   '    cycle chans
-:    drop chan    "    add chan
-o    channel edit mode (shaping keys act on chans)
-
-<b>Intervals</b> (notes added at playback)
-5    rand         8    reset
-7    add step     &    drop step
-6    widen        ^    narrow
-%    semitones / scale steps
-*    bake into notes
-
-<b>Fission / Fusion</b>
-|    merge garden >> b
-opt-| curdle b >> garden
-
-<b>Playback</b>
-space    play
-shift-sp play garden slot
-,        loop            opt-,  loop garden
-/        start/update pulsar   opt-/  pulse garden
-.        stop all
-&lt; &gt;       slower/faster pulse
-`        record / stop
-~        sustain pedal toggle
-
-<b>Garden</b>
-↓    save here    ↑    lift here
-← →  navigate     Enter new slot
-Del  clear slot
-shift ← →  navigate + play
-
-<b>View</b>
-\      toggle console
-opt-e  edit bloom
-cmd-k  command palette
-</div>
-
     <div id="help-full">
       <div id="help-full-grid">
         <div class="hf-col">
@@ -775,52 +687,46 @@ cmd-k  command palette
 <b>p</b>      push         <b>P</b>    pop</div>
           </div>
           <div class="hf-sec">
-            <div class="hf-h">Shaping</div>
-            <div class="hf-body"><b>m</b>      mutate notes (diatonic)
-<b>M</b>      mutate notes (chromatic)
-<b>t</b>      mutate time  <b>opt-t</b> sort time
-<b>T</b>      mutate velocities
-<b>s</b>      scramble     <b>S</b>    shuffle
-<b>H</b>      thicken      <b>h</b>    thin
-<b>g</b>      gap          <b>G</b>    unGap
-<b>[</b>      faster       <b>]</b>    slower
-<b>-</b>      softer       <b>=</b>    louder
-<b>y</b>      average time</div>
-          </div>
-        </div>
-
-        <div class="hf-col">
-          <div class="hf-sec">
-            <div class="hf-h">Rotating / Extending</div>
-            <div class="hf-body"><b>z</b>    drop last    <b>a</b>    add in scale
-<b>A</b>    add one      <b>9</b>    rotate notes
-<b>0</b>    rotate vel   <b>(</b>    rotate time
-<b>)</b>    rotate chans</div>
+            <div class="hf-h">Gestures (whole bloom)</div>
+            <div class="hf-body"><b>-</b>      calm         <b>=</b>    intensify
+<b>'</b>      vary
+<b>{</b>      merge two    <b>}</b>    split one</div>
           </div>
           <div class="hf-sec">
-            <div class="hf-h">Patterning</div>
-            <div class="hf-body"><b>u</b>      stutter      <b>U</b>    sputter
+            <div class="hf-h">Whole notes</div>
+            <div class="hf-body"><b>s</b>      scramble     <b>S</b>    shuffle
+<b>R</b>      mirror       <b>9 0</b>  rotate
+<b>u</b>      stutter      <b>U</b>    sputter
+<b>d</b>      braid        <b>D</b>    pyramid
 <b>Y</b>      spray        <b>r</b>    ratchet
-<b>R</b>      mirror       <b>d</b>    braid
-<b>D</b>      pyramid      <b>q</b>    quantize
-<b>Q</b>      change quantize amount
-<b>{ }</b>    shorten / lengthen times
-<b>_ +</b>    shorten / lengthen velocities
-<b>w</b>      draw curves (diatonic)
-<b>opt-w</b>  wheels within wheels
-<b>W</b>      remove doubles</div>
+<b>h</b>      thin         <b>H</b>    thicken
+<b>g</b>      gap          <b>G</b>    unGap
+<b>z</b>      drop last    <b>a</b>    add in scale
+<b>A</b>      add one</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Pitches only</div>
+            <div class="hf-body"><b>opt +</b>  s S R u U d D
+<b>( )</b>    rotate pitches</div>
           </div>
         </div>
 
         <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Pitch</div>
-            <div class="hf-body"><b>e</b>    shear        <b>E</b>    center range
+            <div class="hf-body"><b>m</b>    mutate (diatonic)
+<b>M</b>    mutate (chromatic)
+<b>e</b>    shear        <b>E</b>    center range
 <b>i</b>    invert       <b>I</b>    invert mean
 <b>1/2</b>  −/+ semitone  <b>!/@</b>  −/+ octave
 <b>3/4</b>  −/+ scale step
-<b>v</b>    pivot (highest)
-<b>V</b>    pivot (loudest)</div>
+<b>#/$</b>  breeze: some notes −/+ a step
+<b>o O</b>  sort up / down
+<b>[</b>    pivot (highest)
+<b>]</b>    pivot (loudest)
+<b>w</b>    draw curves (diatonic)
+<b>W</b>    remove doubles
+<b>opt-w</b> wheels within wheels</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Diatonicism</div>
@@ -830,21 +736,30 @@ cmd-k  command palette
           </div>
           <div class="hf-sec">
             <div class="hf-h">Chords</div>
-            <div class="hf-body"><b>c</b>    clump chords  <b>C</b>   flatten chords</div>
+            <div class="hf-body"><b>;</b>    clump chords  <b>:</b>   flatten chords</div>
           </div>
         </div>
 
         <div class="hf-col">
           <div class="hf-sec">
-            <div class="hf-h">Blending</div>
-            <div class="hf-body"><b>x</b>    interlace    <b>X</b>    blend
-<b>f</b>    lift shape   <b>F</b>    cast</div>
+            <div class="hf-h">One list at a time</div>
+            <div class="hf-body"><b>t</b>    time mode
+<b>v</b>    velocity mode
+<b>c</b>    channel mode
+same keys, same verbs, one list</div>
           </div>
           <div class="hf-sec">
-            <div class="hf-h">Channels</div>
-            <div class="hf-body"><b>;</b>    rand chans   <b>'</b>    cycle chans
-<b>:</b>    drop chan     <b>"</b>    add chan
-<b>o</b>    channel edit mode</div>
+            <div class="hf-h">Freeze (F, then…)</div>
+            <div class="hf-body"><b>p</b>    pitch (scale)
+<b>t r</b>  rhythm (durations)
+<b>v</b>    dynamics      <b>c</b>   channels
+<b>d</b>    duration      <b>g</b>   grid
+each key toggles; esc cancels</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Blending</div>
+            <div class="hf-body"><b>x</b>    interlace    <b>X</b>    blend
+<b>f</b>    lift shape   <b>C</b>    cast</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Intervals (added at playback)</div>
@@ -854,30 +769,42 @@ cmd-k  command palette
 <b>%</b>    semitones / scale steps
 <b>*</b>    bake into notes</div>
           </div>
-          <div class="hf-sec" id="hf-chan-sec">
-            <div class="hf-h">Channel mode (o or esc exits)</div>
-            <div class="hf-body"><b>m M</b>    mutate (palette / any)
-<b>s S</b>    scramble / shuffle
-<b>h H</b>    thin / thicken palette
-<b>- =</b>    converge / diverge
-<b>y n</b>    unify / new chans
-<b>c</b>      clear (all → 0)
-<b>1 2</b>    shift ∓1 (all channels)
-<b>3 4</b>    shift ∓1 (within palette)
-<b>i I</b>    invert / reflect modal
-<b>e w</b>    shear / curve
-<b>q Q</b>    cluster palette ≤K / set K
-<b>u U</b>    stutter / sputter
-<b>R D d</b>  mirror / pyramid / braid
-<b>9 0</b>    rotate &lt;&lt; &gt;&gt;
-<b>z a A</b>  drop / add (palette / any)
-<b>x f</b>    lace / copy from slot
-playback &amp; garden keys unchanged</div>
-          </div>
           <div class="hf-sec">
             <div class="hf-h">Fission / Fusion</div>
             <div class="hf-body"><b>|</b>      merge garden &gt;&gt; b
 <b>opt-|</b>  curdle b &gt;&gt; garden</div>
+          </div>
+        </div>
+
+        <div class="hf-col">
+          <div class="hf-sec" id="hf-list-sec">
+            <div class="hf-h"><span id="hf-list-mode-name"></span> mode (its key or esc goes home)</div>
+            <div class="hf-body"><b>s S</b>    scramble / shuffle
+<b>R</b>      mirror
+<b>9 0</b>    rotate &lt;&lt; &gt;&gt;
+<b>u U</b>    stutter / sputter
+<b>d D</b>    braid / pyramid
+<b>o O</b>    sort up / down
+<b>z a A</b>  drop / add (palette / any)
+
+<b>1 2</b>    down / up (faster, softer, ch −1…)
+<b>! @</b>    double / half time · much softer / louder
+<b>3 4</b>    one palette step down / up
+<b># $</b>    breeze: some values a step
+<b>- =</b>    converge / diverge
+<b>y</b>      unify
+<b>i I</b>    invert / around the middle
+<b>e w</b>    shear / curve
+
+<b>m M</b>    mutate (palette / wild)
+<b>h H</b>    fewer / more distinct values
+<b>q Q</b>    quantize / set grid or levels
+<b>n</b>      new list
+<b>x f</b>    lace / copy from slot
+
+<b>t v c</b>  switch list
+<b>F</b>      freeze menu
+playback &amp; garden keys unchanged</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Playback</div>

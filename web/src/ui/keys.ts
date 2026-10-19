@@ -1,6 +1,7 @@
 // Full keyboard handler — mirrors bloom keystroke controller.scd
 
 import { Bloom } from '../core/Bloom';
+import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import {
@@ -27,6 +28,88 @@ function nextQuantize(): number {
   _quantizeIdx = (_quantizeIdx + 1) % QUANTIZE_OPTIONS.length;
   return currentQuantize();
 }
+
+// ─── List modes ───────────────────────────────────────────────────────────────
+
+type ListMode = 'time' | 'vel' | 'chan';
+
+const MODE_KEYS: Record<string, ListMode> = { t: 'time', v: 'vel', c: 'chan' };
+const MODE_TAG: Record<ListMode, string> = { time: 'T', vel: 'V', chan: 'CH' };
+const MODE_NAME: Record<ListMode, string> = { time: 'time', vel: 'velocity', chan: 'channel' };
+const LIST_OF_MODE: Record<ListMode, ListKey> = { time: 'time', vel: 'vel', chan: 'chan' };
+
+/** One key, one verb, in every list mode. `labels` names what the verb does to a particular list. */
+type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } &
+  ({ pattern: PatternOp } | { verb: ListVerb });
+
+const LIST_KEYS: Record<string, ListAction> = {
+  // order and length
+  s: { pattern: 'scramble', label: 'scramble' },
+  S: { pattern: 'shuffle', label: 'shuffle' },
+  R: { pattern: 'mirror', label: 'mirror' },
+  '9': { pattern: 'rotate<', label: 'rotate <<' },
+  '0': { pattern: 'rotate>', label: 'rotate >>' },
+  u: { pattern: 'stutter', label: 'stutter' },
+  U: { pattern: 'sputter', label: 'sputter' },
+  d: { pattern: 'braid', label: 'braid' },
+  D: { pattern: 'pyramid', label: 'pyramid' },
+  o: { verb: 'sortUp', label: 'sort up', labels: { time: 'sort short → long', vel: 'crescendo' } },
+  O: { verb: 'sortDown', label: 'sort down', labels: { time: 'sort long → short', vel: 'decrescendo' } },
+  z: { verb: 'dropLast', label: 'drop last' },
+  a: { verb: 'addFromPalette', label: 'add one (palette)' },
+  A: { verb: 'addRandom', label: 'add one (any)' },
+  // values
+  '1': { verb: 'nudgeDown', label: 'down', labels: { time: 'faster', vel: 'softer', chan: 'shift −1' } },
+  '2': { verb: 'nudgeUp', label: 'up', labels: { time: 'slower', vel: 'louder', chan: 'shift +1' } },
+  '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer' } },
+  '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder' } },
+  '3': { verb: 'stepDown', label: 'palette step down' },
+  '4': { verb: 'stepUp', label: 'palette step up' },
+  '#': { verb: 'breezeDown', label: 'breeze: some a step down' },
+  '$': { verb: 'breezeUp', label: 'breeze: some a step up' },
+  '-': { verb: 'converge', label: 'converge', labels: { time: 'evener', vel: 'flatter dynamics' } },
+  '=': { verb: 'diverge', label: 'diverge', labels: { time: 'more uneven', vel: 'wider dynamics' } },
+  '+': { verb: 'diverge', label: 'diverge', labels: { time: 'more uneven', vel: 'wider dynamics' } },
+  y: { verb: 'unify', label: 'unify' },
+  i: { verb: 'invert', label: 'invert', labels: { time: 'invert long ↔ short', vel: 'invert loud ↔ quiet' } },
+  I: { verb: 'invertMid', label: 'invert around middle' },
+  e: { verb: 'shear', label: 'shear', labels: { time: 'accel / rit', vel: 'dynamic ramp' } },
+  w: { verb: 'curve', label: 'curve', labels: { time: 'rubato curve', vel: 'hairpins' } },
+  // vocabulary
+  m: { verb: 'mutate', label: 'mutate (palette)' },
+  M: { verb: 'mutateWild', label: 'mutate (wild)' },
+  h: { verb: 'fewer', label: 'fewer distinct values' },
+  H: { verb: 'more', label: 'more distinct values' },
+  n: { verb: 'renew', label: 'new list' },
+};
+
+function own<T extends object>(obj: T, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+// ─── Freeze menu ──────────────────────────────────────────────────────────────
+
+interface FreezeItem { key: string; alias?: string; name: string; selector: string }
+
+/** F, then one of these. Keys match the list modes where there is one (t, v, c). */
+const FREEZE_ITEMS: FreezeItem[] = [
+  { key: 'p', name: 'pitch', selector: '.freeze-palette[data-list="pitch"]' },
+  { key: 't', alias: 'r', name: 'rhythm', selector: '.freeze-palette[data-list="time"]' },
+  { key: 'v', name: 'dynamics', selector: '.freeze-palette[data-list="vel"]' },
+  { key: 'c', name: 'channels', selector: '.freeze-palette[data-list="chan"]' },
+  { key: 'd', name: 'duration', selector: '#fixed-dur-enabled' },
+  { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
+];
+
+// ─── Pitches only (opt + an order key at home) ────────────────────────────────
+
+const PITCH_ONLY: Record<string, [PatternOp, PatternOp]> = {
+  // e.code: [plain, shift]
+  KeyS: ['scramble', 'shuffle'],
+  KeyR: ['mirror', 'mirror'],
+  KeyU: ['stutter', 'sputter'],
+  KeyD: ['braid', 'pyramid'],
+};
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -59,6 +142,9 @@ export function createKeyHandler(state: KeyHandlerState) {
   function refresh(msg = '') {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
+    // While a loop or the pulsar runs, every change passes through the freezes,
+    // just as space-play does — the loop never hears an unfrozen bloom
+    if (isLooping() || isPulsing()) state.bloom.resolveFixed();
     if (state.viz) state.viz.setBloom(state.bloom);
     if (state.gardenViz) state.gardenViz.update(state.garden);
     if (state.display) state.display.update(state.bloom, state.garden, msg);
@@ -81,111 +167,140 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (state.display) state.display.setStatus(msg);
   }
 
-  // ─── Channel edit mode ──────────────────────────────────────────────────────
-  // Toggled with 'o'. Shaping keys are remapped to the chans array, mirroring
-  // their normal-mode meaning; playback / garden / view / push-pop pass through.
-  // Never persisted — always starts off.
-  let _chanMode = false;
+  // ─── List modes ─────────────────────────────────────────────────────────────
+  // t, v and c enter time, velocity and channel mode. Each key means the same
+  // verb in every mode, applied to that list alone. The mode's own key or esc
+  // goes back home; the other mode keys switch straight across. Playback, garden,
+  // view and push/pop pass through. Never persisted — always starts at home.
+  let _mode: ListMode | null = null;
 
-  function setChanMode(on: boolean) {
-    _chanMode = on;
-    state.viz?.setChanStrip(on);
-    document.body.classList.toggle('chan-mode', on);   // swaps the help overlay view
-    const badge = document.getElementById('chan-mode-badge');
-    if (badge) badge.classList.toggle('active', on);
+  function setListMode(m: ListMode | null) {
+    _mode = m;
+    state.viz?.setChanStrip(m === 'chan');
+    document.body.classList.toggle('list-mode', m !== null);   // swaps the help overlay view
+    const badge = document.getElementById('list-mode-badge');
+    if (badge) {
+      badge.textContent = m ? MODE_TAG[m] : '';
+      badge.classList.toggle('active', m !== null);
+    }
+    const name = document.getElementById('hf-list-mode-name');
+    if (name) name.textContent = m ? MODE_NAME[m] : '';
   }
 
-  /** Handle a key while in channel mode. Returns true if the key was consumed. */
-  function onChanKey(e: KeyboardEvent): boolean {
-    if (e.altKey) return false;   // all opt combos keep their normal meaning
+  // ─── Freeze menu ────────────────────────────────────────────────────────────
+  // F opens it; the next key toggles one freeze and closes it. The settings bar
+  // checkboxes are the source of truth, so mouse and keys stay in step.
+  let _freezeMenu = false;
+
+  function freezeBox(f: FreezeItem): HTMLInputElement | null {
+    return document.querySelector<HTMLInputElement>(f.selector);
+  }
+
+  function isFrozen(f: FreezeItem): boolean {
+    return freezeBox(f)?.checked ?? false;
+  }
+
+  /** Show what's frozen in the header, e.g. ❄ p t g */
+  function updateFreezeBadge() {
+    const badge = document.getElementById('freeze-badge');
+    if (!badge) return;
+    const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key);
+    badge.textContent = on.length ? `❄ ${on.join(' ')}` : '';
+    badge.classList.toggle('active', on.length > 0);
+    badge.classList.remove('menu');
+  }
+
+  function onFreezeKey(e: KeyboardEvent) {
+    _freezeMenu = false;
+    const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
+    if (!f) {
+      updateFreezeBadge();
+      status(e.code === 'Escape' || e.key === 'F' ? 'freeze menu closed' : `freeze: nothing on ${e.key}`);
+      return;
+    }
+    const box = freezeBox(f);
+    if (!box) return;
+    box.checked = !box.checked;
+    box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click
+    updateFreezeBadge();
+    refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
+    status(`${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
+  }
+
+  // Clicks in the settings bar update the badge too
+  document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-grid-enabled')
+    .forEach(el => el.addEventListener('change', updateFreezeBadge));
+
+  /** Handle a key in a list mode. Returns true if the key was consumed. */
+  function onListKey(e: KeyboardEvent, m: ListMode): boolean {
+    if (e.altKey) return false;   // all opt combos keep their home meaning
     const ch = e.key;
-    const shift = e.shiftKey;
     const b = state.bloom;
     const g = state.garden;
+    const tag = `[${MODE_TAG[m].toLowerCase()}]`;
 
     if (e.code === 'Escape') {
-      setChanMode(false);
-      status('channel mode off');
+      setListMode(null);
+      status(`${MODE_NAME[m]} mode off`);
       return true;
     }
 
-    // Pass-through: playback, recording, pedal, merge, push/pop, view, help,
-    // and the normal-mode channel keys
-    const PASS = new Set([
-      ' ', ',', '.', '/', '<', '>', '~', '|', '`',
-      'p', 'P', 'l', '\\', '?', ';', "'", ':', '"', ')',
-    ]);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', '\\', '?', 'F']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
     }
 
     const apply = (msg: string, fn: () => void) => {
-      status(`[ch] ${msg}`);
+      status(`${tag} ${msg}`);
       fn();
-      refresh(`[ch] ${msg}`);
+      refresh(`${tag} ${msg}`);
     };
 
-    if (ch === 'm' && !shift) { apply('mutate chans (palette)', () => b.mutateChansD()); return true; }
-    if (ch === 'M' && shift)  { apply('mutate chans (any)', () => b.mutateChans()); return true; }
-    if (ch === 's' && !shift) { apply('scramble chans', () => b.scrambleChans()); return true; }
-    if (ch === 'S' && shift)  { apply('shuffle chans', () => b.shuffleChans()); return true; }
-    if (ch === 'h' && !shift) { apply('thin palette', () => b.thinChanPalette()); return true; }
-    if (ch === 'H' && shift)  { apply('thicken palette', () => b.thickenChanPalette()); return true; }
-    if (ch === '-')           { apply('converge chans', () => b.convergeChans()); return true; }
-    if (ch === '=' || ch === '+') { apply('diverge chans', () => b.divergeChans()); return true; }
-    if (ch === 'y' && !shift) { apply('unify chans', () => b.unifyChans()); return true; }
-    if (ch === 'n' && !shift) { apply('new chans', () => b.newChans()); return true; }
-    if (ch === 'c' && !shift) { apply('clear chans (all 0)', () => b.clearChans()); return true; }
-    if (ch === '1' && !shift) { apply('shift chans -1', () => b.shiftChans(-1)); return true; }
-    if (ch === '2' && !shift) { apply('shift chans +1', () => b.shiftChans(1)); return true; }
-    if (ch === '3' && !shift) { apply('palette shift -1', () => b.dShiftChans(-1)); return true; }
-    if (ch === '4' && !shift) { apply('palette shift +1', () => b.dShiftChans(1)); return true; }
-    if (ch === 'i' && !shift) { apply('invert chans', () => b.invertChans()); return true; }
-    if (ch === 'I' && shift)  { apply('invert chans (modal)', () => b.invertChansModal()); return true; }
-    if (ch === 'e' && !shift) { apply('shear chans', () => b.shearChans()); return true; }
-    if (ch === 'w' && !shift) { apply('curve chans', () => b.curveChans()); return true; }
-    if (ch === 'q' && !shift) {
-      apply(`palette ≤ ${currentQuantize()}`, () => b.quantizeChanPalette(currentQuantize()));
+    if (ch === 'q') {
+      const q = currentQuantize();
+      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(m, 'quantize', q));
       return true;
     }
-    if (ch === 'Q' && shift) {
+    if (ch === 'Q') {
       const q = nextQuantize();
-      status(`[ch] (q to apply) palette ≤ ${q}`);
+      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`}`);
       return true;
     }
-    if (ch === 'u' && !shift) { apply('stutter chans', () => b.stutterChans()); return true; }
-    if (ch === 'U' && shift)  { apply('sputter chans', () => b.sputterChans()); return true; }
-    if (ch === 'R' && shift)  { apply('mirror chans', () => b.mirrorChans()); return true; }
-    if (ch === 'd' && !shift) { apply('braid chans', () => b.braidChans()); return true; }
-    if (ch === 'D' && shift)  { apply('pyramid chans', () => b.pyramidChans()); return true; }
-    if (ch === '9')           { apply('rotate chans <<', () => b.rotateChans(-1)); return true; }
-    if (ch === '0')           { apply('rotate chans >>', () => b.rotateChans(1)); return true; }
-    if (ch === 'z' && !shift) { apply('drop last chan', () => b.dropChan()); return true; }
-    if (ch === 'a' && !shift) { apply('add chan (palette)', () => b.recycleChan()); return true; }
-    if (ch === 'A' && shift)  { apply('add chan (any)', () => b.addChan()); return true; }
-    if (ch === 'x' && !shift) {
+    if (ch === 'x' || ch === 'f') {
       const src = g.current;
-      if (src) apply('lace chans with slot', () => b.laceChans(src));
-      else status('no bloom in slot');
-      return true;
-    }
-    if (ch === 'f' && !shift) {
-      const src = g.current;
-      if (src) apply('copy chans from slot', () => b.copyChans(src));
-      else status('no bloom in slot');
+      if (!src) { status('no bloom in slot'); return true; }
+      const k = LIST_OF_MODE[m];
+      if (ch === 'x') apply('lace with slot', () => b.laceList(k, src));
+      else apply('copy from slot', () => b.copyList(k, src));
       return true;
     }
 
-    // Everything else is consumed with a hint, so normal-mode muscle memory
-    // can't accidentally mutate notes/time/velocities while sculpting channels
-    status('[ch] no channel analog — o or esc exits');
+    const action = own(LIST_KEYS, ch) ? LIST_KEYS[ch] : undefined;
+    if (action) {
+      const label = action.labels?.[m] ?? action.label;
+      if ('pattern' in action) {
+        apply(label, () => b.patternList(LIST_OF_MODE[m], action.pattern));
+      } else if (b.shapeList(m, action.verb)) {
+        refresh(`${tag} ${label}`);
+        status(`${tag} ${label}`);
+      } else {
+        status(`${tag} no ${MODE_NAME[m]} version of ${label}`);
+      }
+      return true;
+    }
+
+    // Everything else is consumed with a hint, so home-mode muscle memory
+    // can't accidentally change the notes while sculpting one list
+    status(`${tag} no ${MODE_NAME[m]} version — ${m === 'time' ? 't' : m === 'vel' ? 'v' : 'c'} or esc goes home`);
     return true;
   }
 
   function onKey(e: KeyboardEvent): void {
     // Ignore if modifier keys other than shift/option are active (e.g. Ctrl+R)
     if (e.ctrlKey || e.metaKey) return;
+    // A modifier pressed on its own is only the start of a chord (shift for F)
+    if (['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) return;
 
     const ch = e.key;
     const shift = e.shiftKey;
@@ -193,17 +308,31 @@ export function createKeyHandler(state: KeyHandlerState) {
     const b = state.bloom;
     const g = state.garden;
 
-    // ─── Channel edit mode toggle + dispatch ──────────────────────────────────
-    if (ch === 'o' && !shift && !alt) {
-      setChanMode(!_chanMode);
-      if (_chanMode && Bloom.maxChan === 0) {
+    // ─── Freeze menu: F, then the key for what to freeze ──────────────────────
+    if (_freezeMenu) {
+      onFreezeKey(e);
+      return;
+    }
+    if (ch === 'F' && !alt) {
+      _freezeMenu = true;
+      const badge = document.getElementById('freeze-badge');
+      if (badge) { badge.textContent = '❄ ?'; badge.classList.add('menu'); }
+      status(`freeze: ${FREEZE_ITEMS.map(f => `${f.key} ${f.name}${isFrozen(f) ? ' ❄' : ''}`).join(' · ')}  (esc cancels)`);
+      return;
+    }
+
+    // ─── List mode toggle + dispatch ──────────────────────────────────────────
+    if (!alt && own(MODE_KEYS, ch)) {
+      const m = MODE_KEYS[ch];
+      setListMode(_mode === m ? null : m);
+      if (_mode === 'chan' && Bloom.maxChan === 0) {
         status('channel mode — maxChan is 0, raise it in settings to hear channels');
       } else {
-        status(_chanMode ? 'channel mode (o or esc exits)' : 'channel mode off');
+        status(_mode ? `${MODE_NAME[m]} mode (${ch} or esc goes home)` : `${MODE_NAME[m]} mode off`);
       }
       return;
     }
-    if (_chanMode && onChanKey(e)) return;
+    if (_mode && onListKey(e, _mode)) return;
 
     // ─── Visualization mode  (opt+1 … opt+9) ─────────────────────────────────
     if (alt && !shift && e.code.startsWith('Digit')) {
@@ -225,6 +354,18 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (alt && e.code === 'KeyE') {
       e.preventDefault();
       state.editorOpenFn?.();
+      return;
+    }
+
+    // ─── Pitches only: opt + an order key ─────────────────────────────────────
+    // At home the order keys move whole notes; with opt they move only the
+    // pitches over the rhythm, dynamics and channels that stay put
+    if (alt && own(PITCH_ONLY, e.code)) {
+      e.preventDefault();
+      const op = PITCH_ONLY[e.code][shift ? 1 : 0];
+      status(`${op} pitches`);
+      b.patternList('notes', op);
+      refresh(`${op} pitches`);
       return;
     }
 
@@ -299,24 +440,6 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('mutate');
       return;
     }
-    if (ch === 't' && !shift && !alt) {
-      status('mutate time');
-      b.mutateTime();
-      refresh('mutate time');
-      return;
-    }
-    if (e.code === 'KeyT' && !shift && alt) {
-      status('sort time');
-      b.timeIntervals = [...b.timeIntervals].sort((a, v) => a - v);
-      refresh('sort time');
-      return;
-    }
-    if (ch === 'T' && shift) {
-      status('mutate velocities');
-      b.mutateVelocities();
-      refresh('mutate vel');
-      return;
-    }
     if (ch === 's' && !shift) {
       status('scramble');
       b.scramble();
@@ -353,34 +476,35 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('unGap');
       return;
     }
-    if (ch === ']') {
-      status('slower');
-      b.slower();
-      refresh('slower');
-      return;
-    }
-    if (ch === '[') {
-      status('faster');
-      b.faster();
-      refresh('faster');
-      return;
-    }
+    // ─── Gestures (whole bloom) ───────────────────────────────────────────────
     if (ch === '-') {
-      status('softer');
-      b.softer();
-      refresh('softer');
+      status('calm');
+      b.calm();
+      refresh('calm');
       return;
     }
     if (ch === '=' || ch === '+') {
-      status('louder');
-      b.louder();
-      refresh('louder');
+      status('intensify');
+      b.intensify();
+      refresh('intensify');
       return;
     }
-    if (ch === 'y' && !shift) {
-      status('even time');
-      b.avgTime();
-      refresh('avg time');
+    if (ch === "'") {
+      status('vary');
+      b.vary();
+      refresh('vary');
+      return;
+    }
+    if (ch === '{') {
+      status('merge two notes');
+      b.mergeNote();
+      refresh('merge');
+      return;
+    }
+    if (ch === '}') {
+      status('split a note');
+      b.splitNote();
+      refresh('split');
       return;
     }
 
@@ -406,7 +530,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       else state.display?.setStatus('no bloom in slot');
       return;
     }
-    if (ch === 'F' && shift) {
+    if (ch === 'C' && shift) {
       status('cast');
       const src = g.current;
       if (src) { b.cast(src); refresh('cast'); }
@@ -434,27 +558,27 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (ch === '9') {
-      status('rotate notes >>');
-      b.rotateNotes(1);
-      refresh('rotate notes');
-      return;
-    }
-    if (ch === '0') {
-      status('rotate velocities >>');
-      b.rotateVelocities(1);
-      refresh('rotate vel');
+      status('rotate notes <<');
+      b.rotate(-1);
+      refresh('rotate <<');
       return;
     }
     if (ch === '(') {
-      status('rotate times >>');
-      b.rotateTime(1);
-      refresh('rotate time');
+      status('rotate pitches <<');
+      b.rotateNotes(-1);
+      refresh('rotate pitches <<');
+      return;
+    }
+    if (ch === '0') {
+      status('rotate notes >>');
+      b.rotate(1);
+      refresh('rotate >>');
       return;
     }
     if (ch === ')') {
-      status('rotate chans >>');
-      b.rotateChans(1);
-      refresh('rotate chan');
+      status('rotate pitches >>');
+      b.rotateNotes(1);
+      refresh('rotate pitches >>');
       return;
     }
 
@@ -501,40 +625,16 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('pyramid');
       return;
     }
-    if (ch === 'q' && !shift) {
-      status(`quantize [${currentQuantize()}]`);
-      b.quantize(currentQuantize());
-      refresh(`quantize ${currentQuantize()}`);
+    if (ch === 'o') {
+      status('sort pitches up');
+      b.sortNotes();
+      refresh('sort pitches up');
       return;
     }
-    if (ch === 'Q' && shift) {
-      const q = nextQuantize();
-      status(`(q to apply) quantize [1/${q}]`);
-      if (state.display) state.display.setStatus(`(q to apply) quantize [1/${q}]`);
-      return;
-    }
-    if (ch === '{') {
-      status('shorten times');
-      b.timeIntervals = b.timeIntervals.slice(0, -1);
-      refresh('shorten times');
-      return;
-    }
-    if (ch === '}') {
-      status('lengthen times');
-      b.timeIntervals.push(b.timeIntervals[Math.floor(Math.random() * b.timeIntervals.length)]);
-      refresh('lengthen times');
-      return;
-    }
-    if (ch === '_') {
-      status('shorten velocities');
-      b.velocities = b.velocities.slice(0, -1);
-      refresh('shorten vel');
-      return;
-    }
-    if (ch === '+' && shift) {
-      status('lengthen velocities');
-      b.velocities.push(b.velocities[Math.floor(Math.random() * b.velocities.length)]);
-      refresh('lengthen vel');
+    if (ch === 'O') {
+      status('sort pitches down');
+      b.sortNotes(true);
+      refresh('sort pitches down');
       return;
     }
 
@@ -599,13 +699,25 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('dTranspose +1');
       return;
     }
-    if (ch === 'v' && !shift) {
+    if (ch === '#') {
+      status('breeze: some notes a step down');
+      b.breeze(-1);
+      refresh('breeze -1');
+      return;
+    }
+    if (ch === '$') {
+      status('breeze: some notes a step up');
+      b.breeze(1);
+      refresh('breeze +1');
+      return;
+    }
+    if (ch === '[') {
       status('pivot (highest)');
       b.pivot();
       refresh('pivot');
       return;
     }
-    if (ch === 'V' && shift) {
+    if (ch === ']') {
       status('pivot (loudest)');
       b.pivotLoudest();
       refresh('pivotLoudest');
@@ -631,13 +743,13 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // ─── Chords ───────────────────────────────────────────────────────────────
-    if (ch === 'c' && !shift) {
+    if (ch === ';') {
       status('clump chords');
       b.chordsRandShorten();
       refresh('chordsRand');
       return;
     }
-    if (ch === 'C' && shift) {
+    if (ch === ':') {
       status('flatten chords');
       b.flattenChords();
       refresh('flattenChords');
@@ -668,32 +780,6 @@ export function createKeyHandler(state: KeyHandlerState) {
       status('reduce scale');
       b.reduceScale();
       refresh('reduceScale');
-      return;
-    }
-
-    // ─── Channels ─────────────────────────────────────────────────────────────
-    if (ch === ';') {
-      status('randomize channels');
-      b.randChans();
-      refresh('randChans');
-      return;
-    }
-    if (ch === "'") {
-      status('cycle channels');
-      b.cycleChans();
-      refresh('cycleChans');
-      return;
-    }
-    if (ch === ':') {
-      status('drop channel');
-      b.dropChan();
-      refresh('dropChan');
-      return;
-    }
-    if (ch === '"') {
-      status('add channel');
-      b.recycleChan();
-      refresh('recycleChan');
       return;
     }
 
@@ -765,6 +851,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (ch === ',' && !alt) {
+      b.resolveFixed();
       if (!isLooping()) {
         startLooper(
           b,
@@ -806,6 +893,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (ch === '/' && !alt) {
+      b.resolveFixed();
       if (!isPulsing()) startPulsar(b, state.out!, getPulsarRate(), idx => state.viz?.activateNote(idx));
       updatePulsar(b);
       status(`pulsar [${getPulsarRate()}b]`);
