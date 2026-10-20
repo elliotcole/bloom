@@ -503,6 +503,20 @@
         letter-spacing: 0.06em;
       }
 
+      /* Notice: what the last key did and changed (hidden while the console is open) */
+      #notice {
+        position: absolute; top: 12px; left: 14px; max-width: calc(100% - 28px);
+        pointer-events: none; z-index: 40;
+        padding: 6px 10px; border-radius: 6px;
+        background: rgba(10, 10, 16, 0.72); border: 1px solid rgba(255, 255, 255, 0.08);
+        opacity: 0; transform: translateY(-4px);
+        transition: opacity 0.35s ease-out, transform 0.35s ease-out;
+      }
+      #notice.on { opacity: 1; transform: none; transition: opacity 0.08s, transform 0.08s; }
+      .notice-label { font-size: 13px; color: rgba(255, 255, 255, 0.88); }
+      .notice-detail { font-size: 11px; color: #e8a33a; margin-top: 3px; }
+      body.clean #notice { display: none !important; }
+
       /* Clean view (opt+c): the picture alone, for recording */
       body.clean { grid-template-rows: 1fr; }
       body.clean > *:not(#canvas-area) { display: none !important; }
@@ -691,7 +705,8 @@
 <b>N</b>      new bloom (same scale)
 <b>b</b>      new bloom shape
 <b>B</b>      new bloom, same scale + shape
-<b>p</b>      push         <b>P</b>    pop</div>
+<b>cmd-z</b>  undo   <b>cmd-shift-z</b> redo
+<b>opt-p</b>  push   <b>opt-P</b> pop (save points)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Gestures (whole bloom)</div>
@@ -750,7 +765,8 @@
         <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">One list at a time</div>
-            <div class="hf-body"><b>t</b>    time mode
+            <div class="hf-body"><b>p</b>    pitch mode
+<b>t</b>    time mode
 <b>v</b>    velocity mode
 <b>c</b>    channel mode
 same keys, same verbs, one list</div>
@@ -795,22 +811,22 @@ menu stays open; F or esc closes</div>
 <b>o O</b>    sort up / down
 <b>z a A</b>  drop / add (palette / any)
 
-<b>1 2</b>    down / up (faster, softer, ch −1…)
-<b>! @</b>    double / half time · much softer / louder
-<b>3 4</b>    one palette step down / up
+<b>1 2</b>    down / up (semitone, faster, softer, ch −1…)
+<b>! @</b>    octave · double / half time · much softer / louder
+<b>3 4</b>    one palette (scale) step down / up
 <b># $</b>    breeze: some values a step
-<b>- =</b>    converge / diverge
+<b>- =</b>    converge / diverge (pitch: range)
 <b>y</b>      unify
 <b>i I</b>    invert / around the middle
 <b>e w</b>    shear / curve
 
 <b>m M</b>    mutate (palette / wild)
 <b>h H</b>    fewer / more distinct values
-<b>q Q</b>    quantize / set grid or levels
+<b>q Q</b>    quantize / set grid or levels (pitch: snap to scale)
 <b>n</b>      new list
 <b>x f</b>    lace / copy from slot
 
-<b>t v c</b>  switch list
+<b>p t v c</b> switch list
 <b>F</b>      freeze menu
 playback &amp; garden keys unchanged</div>
           </div>

@@ -215,7 +215,6 @@ async function main() {
     ];
     LIST_SUFFIX.forEach(([k, suffix, name]) => {
       PATTERN_NAMES.forEach(op => reg(`${op}${suffix}`, `${op} ${name} only`, b => b.patternList(k, op)));
-      if (k === 'notes') return;
       const VERBS: ListVerb[] = [
         'mutate', 'mutateWild', 'nudgeDown', 'nudgeUp', 'octaveDown', 'octaveUp', 'stepDown', 'stepUp',
         'breezeDown', 'breezeUp',

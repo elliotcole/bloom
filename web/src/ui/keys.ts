@@ -18,6 +18,7 @@ import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
 import type { VizMode } from './theme';
+import { Notice, snap, sameSnap, describeChange } from './notice';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
 
@@ -31,12 +32,13 @@ function nextQuantize(): number {
 
 // ─── List modes ───────────────────────────────────────────────────────────────
 
-type ListMode = 'time' | 'vel' | 'chan';
+type ListMode = 'pitch' | 'time' | 'vel' | 'chan';
 
-const MODE_KEYS: Record<string, ListMode> = { t: 'time', v: 'vel', c: 'chan' };
-const MODE_TAG: Record<ListMode, string> = { time: 'T', vel: 'V', chan: 'CH' };
-const MODE_NAME: Record<ListMode, string> = { time: 'time', vel: 'velocity', chan: 'channel' };
-const LIST_OF_MODE: Record<ListMode, ListKey> = { time: 'time', vel: 'vel', chan: 'chan' };
+const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan' };
+const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c' };
+const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH' };
+const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel' };
+const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan' };
 
 /** One key, one verb, in every list mode. `labels` names what the verb does to a particular list. */
 type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } &
@@ -53,34 +55,34 @@ const LIST_KEYS: Record<string, ListAction> = {
   U: { pattern: 'sputter', label: 'sputter' },
   d: { pattern: 'braid', label: 'braid' },
   D: { pattern: 'pyramid', label: 'pyramid' },
-  o: { verb: 'sortUp', label: 'sort up', labels: { time: 'sort short → long', vel: 'crescendo' } },
-  O: { verb: 'sortDown', label: 'sort down', labels: { time: 'sort long → short', vel: 'decrescendo' } },
+  o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo' } },
+  O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo' } },
   z: { verb: 'dropLast', label: 'drop last' },
-  a: { verb: 'addFromPalette', label: 'add one (palette)' },
-  A: { verb: 'addRandom', label: 'add one (any)' },
+  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one (a pitch in use)' } },
+  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (in scale)' } },
   // values
-  '1': { verb: 'nudgeDown', label: 'down', labels: { time: 'faster', vel: 'softer', chan: 'shift −1' } },
-  '2': { verb: 'nudgeUp', label: 'up', labels: { time: 'slower', vel: 'louder', chan: 'shift +1' } },
+  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1' } },
+  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1' } },
   '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer' } },
   '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder' } },
-  '3': { verb: 'stepDown', label: 'palette step down' },
-  '4': { verb: 'stepUp', label: 'palette step up' },
+  '3': { verb: 'stepDown', label: 'palette step down', labels: { pitch: 'scale step down' } },
+  '4': { verb: 'stepUp', label: 'palette step up', labels: { pitch: 'scale step up' } },
   '#': { verb: 'breezeDown', label: 'breeze: some a step down' },
   '$': { verb: 'breezeUp', label: 'breeze: some a step up' },
-  '-': { verb: 'converge', label: 'converge', labels: { time: 'evener', vel: 'flatter dynamics' } },
-  '=': { verb: 'diverge', label: 'diverge', labels: { time: 'more uneven', vel: 'wider dynamics' } },
-  '+': { verb: 'diverge', label: 'diverge', labels: { time: 'more uneven', vel: 'wider dynamics' } },
-  y: { verb: 'unify', label: 'unify' },
-  i: { verb: 'invert', label: 'invert', labels: { time: 'invert long ↔ short', vel: 'invert loud ↔ quiet' } },
-  I: { verb: 'invertMid', label: 'invert around middle' },
-  e: { verb: 'shear', label: 'shear', labels: { time: 'accel / rit', vel: 'dynamic ramp' } },
-  w: { verb: 'curve', label: 'curve', labels: { time: 'rubato curve', vel: 'hairpins' } },
+  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics' } },
+  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics' } },
+  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics' } },
+  y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
+  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet' } },
+  I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean' } },
+  e: { verb: 'shear', label: 'shear', labels: { pitch: 'tilt', time: 'accel / rit', vel: 'dynamic ramp' } },
+  w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins' } },
   // vocabulary
-  m: { verb: 'mutate', label: 'mutate (palette)' },
-  M: { verb: 'mutateWild', label: 'mutate (wild)' },
-  h: { verb: 'fewer', label: 'fewer distinct values' },
-  H: { verb: 'more', label: 'more distinct values' },
-  n: { verb: 'renew', label: 'new list' },
+  m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
+  M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
+  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'fewer distinct pitches' } },
+  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'more distinct pitches' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches' } },
 };
 
 function own<T extends object>(obj: T, key: string): boolean {
@@ -145,12 +147,58 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (!on) status('clean view off');
   }
 
+  // ─── Undo history and notices ───────────────────────────────────────────────
+  // Every change that reaches refresh() is recorded, so cmd-z steps back one
+  // change at a time and cmd-shift-z forward again. The notice shows what the
+  // key did and, from the same before/after comparison, what it changed.
+  const HISTORY_MAX = 300;
+  const _undo: Bloom[] = [];
+  const _redo: Bloom[] = [];
+  const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
+  let _prevBloom = snapshotOf(state.bloom);
+  let _prevSnap = snap(state.bloom);
+  const vizArea = document.getElementById('viz-area');
+  const _notice = vizArea ? new Notice(vizArea) : null;
+
+  /** Record the current state; returns what changed since the last one ('' if nothing) */
+  function record(): string {
+    const now = snap(state.bloom);
+    if (sameSnap(now, _prevSnap)) return '';
+    const what = describeChange(_prevSnap, now);
+    _undo.push(_prevBloom);
+    if (_undo.length > HISTORY_MAX) _undo.shift();
+    _redo.length = 0;
+    _prevBloom = snapshotOf(state.bloom);
+    _prevSnap = now;
+    return what;
+  }
+
+  function undo(redo: boolean) {
+    const from = redo ? _redo : _undo, to = redo ? _undo : _redo;
+    const target = from.pop();
+    if (!target) { status(redo ? 'nothing to redo' : 'nothing to undo'); return; }
+    to.push(snapshotOf(state.bloom));
+    const before = _prevSnap;
+    const stack = state.bloom.stack;
+    state.bloom.import(target);
+    state.bloom.stack = stack;   // push/pop save points aren't part of the history
+    _prevBloom = snapshotOf(state.bloom);
+    _prevSnap = snap(state.bloom);
+    const what = describeChange(before, _prevSnap);
+    const left = redo ? _redo.length : _undo.length;
+    status(`${redo ? 'redo' : 'undo'} (${left} more)`);
+    refresh(redo ? 'redo' : 'undo');
+    _notice?.setDetail('', what);
+  }
+
   function refresh(msg = '') {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
     // While a loop or the pulsar runs, every change passes through the freezes,
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
+    const what = record();
+    if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
     if (state.gardenViz) state.gardenViz.update(state.garden);
     if (state.display) state.display.update(state.bloom, state.garden, msg);
@@ -171,6 +219,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   function status(msg: string) {
     if (state.display) state.display.setStatus(msg);
+    _notice?.setLabel(msg);
   }
 
   // ─── List modes ─────────────────────────────────────────────────────────────
@@ -236,7 +285,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.altKey || e.metaKey || e.ctrlKey) return false;
     const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
     if (!f) {
-      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', 'L', '\\', '?']);
+      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'l', 'L', '\\', '?']);
       if (PASS.has(e.key)) return false;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) return false;
       status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
@@ -298,7 +347,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', 'L', '\\', '?', 'F']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'l', 'L', '\\', '?', 'F']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
@@ -310,9 +359,14 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh(`${tag} ${msg}`);
     };
 
+    if (m === 'pitch' && (ch === 'q' || ch === 'Q')) {
+      if (ch === 'q') apply('snap to the scale', () => b.shapeList('notes', 'quantize'));
+      else status(`${tag} q snaps to the scale; k K j J change it`);
+      return true;
+    }
     if (ch === 'q') {
       const q = currentQuantize();
-      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(m, 'quantize', q));
+      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
       return true;
     }
     if (ch === 'Q') {
@@ -334,9 +388,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       const label = action.labels?.[m] ?? action.label;
       if ('pattern' in action) {
         apply(label, () => b.patternList(LIST_OF_MODE[m], action.pattern));
-      } else if (b.shapeList(m, action.verb)) {
-        refresh(`${tag} ${label}`);
+      } else if (b.shapeList(LIST_OF_MODE[m], action.verb)) {
         status(`${tag} ${label}`);
+        refresh(`${tag} ${label}`);
       } else {
         status(`${tag} no ${MODE_NAME[m]} version of ${label}`);
       }
@@ -345,13 +399,21 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     // Everything else is consumed with a hint, so home-mode muscle memory
     // can't accidentally change the notes while sculpting one list
-    status(`${tag} no ${MODE_NAME[m]} version — ${m === 'time' ? 't' : m === 'vel' ? 'v' : 'c'} or esc goes home`);
+    status(`${tag} no ${MODE_NAME[m]} version — ${KEY_OF_MODE[m]} or esc goes home`);
     return true;
   }
 
   function onKey(e: KeyboardEvent): void {
+    // cmd-z / cmd-shift-z: undo / redo any change
+    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ' && !e.altKey) {
+      e.preventDefault();
+      _notice?.begin();
+      undo(e.shiftKey);
+      return;
+    }
     // Ignore if modifier keys other than shift/option are active (e.g. Ctrl+R)
     if (e.ctrlKey || e.metaKey) return;
+    _notice?.begin();
     // A modifier pressed on its own is only the start of a chord (shift for F)
     if (['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) return;
 
@@ -456,16 +518,11 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom shape');
       return;
     }
-    if (ch === 'p' && !shift) {
-      status('push');
-      b.push();
-      refresh('push');
-      return;
-    }
-    if (ch === 'P' && shift) {
-      status('pop');
-      b.pop();
-      refresh('pop');
+    // push / pop: deliberate save points (cmd-z undoes any single change)
+    if (alt && e.code === 'KeyP') {
+      e.preventDefault();
+      if (shift) { status('pop'); b.pop(); refresh('pop'); }
+      else { status(`push (${b.stack.length + 1} saved)`); b.push(); refresh('push'); }
       return;
     }
     if (ch === '`') {

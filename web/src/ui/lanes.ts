@@ -6,7 +6,7 @@ import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
 
 type LaneKey = 'notes' | 'time' | 'vel' | 'chan';
-export type LaneMode = 'time' | 'vel' | 'chan' | null;
+export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | null;
 
 const LANE_H = 24;
 const LABEL_W = 70;
@@ -14,7 +14,7 @@ const TRACE_MS = 1400;
 export const LANES_HEIGHT = 4 * LANE_H + 10;
 
 const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze: 'pitch' | 'time' | 'vel' | 'chan' }[] = [
-  { key: 'notes', name: 'pitch', mode: null,   freeze: 'pitch' },
+  { key: 'notes', name: 'pitch', mode: 'pitch', freeze: 'pitch' },
   { key: 'time',  name: 'time',  mode: 'time', freeze: 'time' },
   { key: 'vel',   name: 'vel',   mode: 'vel',  freeze: 'vel' },
   { key: 'chan',  name: 'chan',  mode: 'chan', freeze: 'chan' },

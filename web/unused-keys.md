@@ -1,7 +1,7 @@
 # Unused Key Bindings
 
 Keys not bound at **home** in the Bloom web keyboard handler (October 2026
-layout, see [GUIDE.md](GUIDE.md)). Inside the `t v c` list modes most letters
+layout, see [GUIDE.md](GUIDE.md)). Inside the `p t v c` list modes most letters
 are taken by the shared verbs.
 Scope: bare keys, shift keys, and option (alt) keys on a standard US keyboard.
 Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
@@ -14,14 +14,14 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Shift keys
 
-- `Q`  `T`  `V`  `Z`  *(`L` is lanes)*
+- `P`  `Q`  `T`  `V`  `Z`  *(`L` is lanes)*
 - `"`  `_`  *(`#` `$` are breeze)*
 
 ## Option (alt) keys
 
 **Letters**
 - `opt-a`  `opt-b`  `opt-f`  `opt-g`  `opt-h`  `opt-i`
-- `opt-j`  `opt-k`  `opt-l`  `opt-m`  `opt-n`  `opt-o`  `opt-p`
+- `opt-j`  `opt-k`  `opt-l`  `opt-m`  `opt-n`  `opt-o`
 - `opt-q`  `opt-t`  `opt-v`  `opt-x`  `opt-y`  `opt-z`
 
 **Numbers**
@@ -37,7 +37,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Taken option keys
 
 - `opt-s` `opt-r` `opt-u` `opt-d` and their shifts: pitch-only patterns
-- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view
+- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-p` / `opt-P` push / pop
 - `opt-,` loop garden · `opt-/` pulse garden · `opt-shift-\` curdle
 
 On macOS, option keys produce Unicode characters (e.g. opt+e = ´), but bindings

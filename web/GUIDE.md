@@ -30,9 +30,9 @@ You can work at four levels. In the order you'll probably use them:
 1. **Gestures**: one key nudges the whole bloom: pitch, rhythm, dynamics and channels together.
 2. **Whole notes**: reorder or repeat notes. Each note keeps its own rhythm, dynamic and instrument.
 3. **Pitch**: most home keys change only the pitches.
-4. **One list**: `t`, `v` or `c` enters a mode where the keys act on time, velocity or channels alone.
+4. **One list**: `p`, `t`, `v` or `c` enters a mode where the keys act on pitch, time, velocity or channels alone.
 
-Levels 1–3 live at **home**. Level 4 is a **list mode**.
+Levels 1–3 live at **home**. Level 4 is a **list mode**. Pitch has both: the common pitch moves are bare keys at home, and `p` gives the full set of list verbs for pitch.
 
 ---
 
@@ -46,8 +46,7 @@ Levels 1–3 live at **home**. Level 4 is a **list mode**.
 | `{` | **merge** | one note absorbs the next one's time |
 | `}` | **split** | one note becomes two repeats of half its length |
 
-Each press is small; press again to go further, and use `p` / `P` (push / pop)
-to get back. The step sizes are in `GESTURE` near the top of
+Each press is small; press again to go further, and **cmd-Z** to step back. The step sizes are in `GESTURE` near the top of
 `src/core/Bloom.ts`.
 
 **Rhythm only changes by splitting and merging**, so the total duration stays
@@ -107,15 +106,19 @@ alone; opt + digits already change the view.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5`–`8`, `%`, `*`.
 - **Merge and split the garden:** `|` and opt-`|`.
-- **Storage:** `n N b B`, and `p` / `P` to push and pop.
+- **Storage:** `n N b B`.
+- **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
+  change is remembered (the last 300).
+- **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
+  back to it.
 
 ---
 
-## List modes: `t` `v` `c`
+## List modes: `p` `t` `v` `c`
 
-`t` time · `v` velocity · `c` channels. The badge in the header shows the mode.
+`p` pitch · `t` time · `v` velocity · `c` channels. The badge in the header shows the mode.
 The mode's own key or `esc` takes you home, and pressing another mode key
-switches straight across. Playback, garden, push/pop, `F` and every opt key work
+switches straight across. Playback, garden, undo, `F` and every opt key work
 as usual. Any
 key with no meaning in the mode does nothing and shows a hint, so home-mode
 habits can't change the pitches by accident.
@@ -151,6 +154,13 @@ point: stutter only the velocities and the accent pattern drifts.
 | `i` / `I` | invert / around the middle | longest ↔ shortest | loud ↔ quiet | across the range / around the most-used |
 | `e` | shear | accelerando or ritardando | dynamic ramp | drift across channels |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
+
+**In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
+semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
+`y` puts every note on the commonest pitch, `i` mirrors high and low, `e`
+tilts the line up or down, `w` draws a contour. `h H` merge the rarest pitch
+into its neighbour or split a repeated pitch to a new one. `q` snaps to the
+scale. Chords keep their shape.
 
 ### Vocabulary ("palette")
 A list's **palette** is the set of distinct values it uses: the bloom's
@@ -234,6 +244,14 @@ above has a name:
 - **one list:** verb + list letter (**P** pitches, **T** time, **V**
   velocities, **C** channels), e.g. `scrambleP`, `stutterV`, `invertT`,
   `curveV`, `unifyC`, `stepUpT`, `fewerV`
+
+## Notices
+
+After each key, a small notice at the top left of the view says what you did
+and what changed: "slant scale · scale Hungarian Minor", "[t] stutter ·
+times 3 → 6", "3 of 8 pitches moved · range C3–G5". It fades after a couple
+of seconds and stays out of the way while the console (`\`) is open, since
+the console says the same, and in clean view.
 
 ## Saving
 

@@ -1765,10 +1765,96 @@ export class Bloom {
    * for time, the most distinct levels for velocity and channels. Returns false
    * when the verb has no meaning for that list.
    */
-  shapeList(k: 'time' | 'vel' | 'chan', verb: ListVerb, amount = 4): boolean {
+  shapeList(k: ListKey, verb: ListVerb, amount = 4): boolean {
+    if (k === 'notes') return this.shapePitch(verb);
     if (k === 'time') return this.shapeTimes(verb, amount);
     if (k === 'vel') return this.shapeVels(verb, amount);
     return this.shapeChans(verb, amount);
+  }
+
+  // Pitch verbs count in scale steps, so the scale is pitch's palette. Chords
+  // keep their shape: every tone moves, and the nesting is restored after.
+  private shapePitch(verb: ListVerb): boolean {
+    const flat = flatNotes(this.notes) as number[];
+    const n = flat.length;
+    if (n === 0) return true;
+    const scale = this.appliedScale ?? this.asScale();
+    const toDeg = (m: number) => keyToDegree(m, scale.degrees, scale.pitchesPerOctave);
+    const toKey = (d: number) => degreeToKey(Math.round(d), scale.degrees, scale.pitchesPerOctave);
+    const degs = flat.map(toDeg);
+    const sorted = [...degs].sort((a, b) => a - b);
+    const centre = sorted[Math.floor((n - 1) / 2)];
+    // map flat pitches by degree, keeping chords
+    const setDegs = (fn: (d: number, i: number) => number) => {
+      this.saveNest();
+      this.notes = degs.map((d, i) => toKey(fn(d, i)));
+      this.restoreNest();
+      this.enforceRange();
+    };
+
+    switch (verb) {
+      case 'mutate': this.mutateNotesD(); break;
+      case 'mutateWild': this.mutateNotes(); break;
+      case 'nudgeDown': this.transpose(-1); break;
+      case 'nudgeUp': this.transpose(1); break;
+      case 'octaveDown': this.transpose(-12); break;
+      case 'octaveUp': this.transpose(12); break;
+      case 'stepDown': this.dTranspose(-1); break;
+      case 'stepUp': this.dTranspose(1); break;
+      case 'breezeDown': this.breeze(-1); break;
+      case 'breezeUp': this.breeze(1); break;
+      // one scale step toward / away from the middle pitch: narrower or wider range
+      case 'converge': setDegs(d => (d === centre ? d : d + Math.sign(centre - d))); break;
+      case 'diverge': setDegs(d => (d !== centre ? d + Math.sign(d - centre) : coin(0.25) ? d + (coin(0.5) ? 1 : -1) : d)); break;
+      case 'unify': setDegs(() => modeOf(degs)); break;
+      // highest ↔ lowest, mirrored in scale steps within the range
+      case 'invert': setDegs(d => sorted[0] + sorted[n - 1] - d); break;
+      case 'invertMid': this.invertMean(); break;
+      // a tilt: up to three scale steps up or down by the end
+      case 'shear': {
+        const dir = coin(0.5) ? 1 : -1;
+        setDegs((d, i) => d + dir * Math.round((i / Math.max(1, n - 1)) * 3));
+        break;
+      }
+      case 'curve': {
+        const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-3, 3));
+        const offs = resamp1(ctrl, n);
+        setDegs((d, i) => d + Math.round(offs[i]));
+        break;
+      }
+      case 'sortUp': this.sortNotes(); break;
+      case 'sortDown': this.sortNotes(true); break;
+      // the rarest pitch joins its nearest neighbour among the pitches used
+      case 'fewer': {
+        const used = [...new Set(flat)];
+        if (used.length < 2) break;
+        const count = (m: number) => flat.filter(x => x === m).length;
+        const rare = used.reduce((a, m) => (count(m) < count(a) ? m : a));
+        const others = used.filter(m => m !== rare);
+        const near = others.reduce((a, m) => (Math.abs(m - rare) < Math.abs(a - rare) ? m : a));
+        this.saveNest(); this.notes = flat.map(m => (m === rare ? near : m)); this.restoreNest();
+        break;
+      }
+      // one repeated pitch steps to a scale neighbour nobody uses yet
+      case 'more': {
+        const seen = new Set<number>();
+        const repeats = flat.map((m, i) => (seen.has(m) ? i : (seen.add(m), -1))).filter(i => i >= 0);
+        if (!repeats.length) break;
+        const i = pick(repeats);
+        const options = [-2, -1, 1, 2].map(k => toKey(degs[i] + k)).filter(m => !flat.includes(m));
+        if (!options.length) break;
+        const out = [...flat]; out[i] = pick(options);
+        this.saveNest(); this.notes = out; this.restoreNest(); this.enforceRange();
+        break;
+      }
+      case 'quantize': this.applyScale(scale); break;
+      case 'renew': setDegs(() => toDeg(Math.round(rrand(this.lowestSeedNote, this.highestSeedNote)))); break;
+      case 'dropLast': if (this.notes.length > 1) this.notes = this.notes.slice(0, -1); break;
+      case 'addFromPalette': this.notes = [...this.notes, JSON.parse(JSON.stringify(pick(this.notes)))]; break;
+      case 'addRandom': this.notes = [...this.notes, toKey(rrand(Math.min(...degs) - 2, Math.max(...degs) + 2))]; break;
+      default: return false;
+    }
+    return true;
   }
 
   // Time verbs work along the palette where they can (halves and doubles of the
