@@ -477,32 +477,6 @@
       .cp-status--ok  { color: #5a9; }
 
       /* ─── Demo mode toast ───────────────────────────────────────────────────── */
-      #demo-toast {
-        display: none;
-        position: absolute;
-        top: 18px;
-        left: 50%;
-        transform: translateX(-50%);
-        text-align: center;
-        pointer-events: none;
-        z-index: 50;
-        white-space: nowrap;
-      }
-      #demo-toast-key {
-        font-size: 80px;
-        font-weight: bold;
-        color: rgba(255, 255, 255, 0.92);
-        line-height: 1;
-        letter-spacing: -2px;
-        text-shadow: 0 2px 24px rgba(80, 140, 255, 0.45);
-      }
-      #demo-toast-cmd {
-        font-size: 22px;
-        color: rgba(160, 190, 255, 0.82);
-        margin-top: 8px;
-        letter-spacing: 0.06em;
-      }
-
       /* Notice: what the last key did and changed (hidden while the console is open) */
       #notice {
         position: absolute; top: 12px; left: 14px; max-width: calc(100% - 28px);
@@ -515,13 +489,23 @@
       #notice.on { opacity: 1; transform: none; transition: opacity 0.08s, transform 0.08s; }
       .notice-label { font-size: 13px; color: rgba(255, 255, 255, 0.88); }
       .notice-detail { font-size: 11px; color: #e8a33a; margin-top: 3px; }
+      .notice-key { display: none; }
+      /* demo mode: centred, with the key large above, for recordings */
+      #notice.demo { left: 50%; transform: translate(-50%, -4px); text-align: center; padding: 10px 18px; }
+      #notice.demo.on { transform: translate(-50%, 0); }
+      #notice.demo .notice-key {
+        display: block; font-size: 64px; font-weight: bold; line-height: 1; letter-spacing: -2px;
+        color: rgba(255, 255, 255, 0.92); text-shadow: 0 2px 24px rgba(80, 140, 255, 0.45); margin-bottom: 8px;
+      }
+      #notice.demo .notice-label { font-size: 18px; }
+      #notice.demo .notice-detail { font-size: 14px; }
       body.clean #notice { display: none !important; }
 
       /* Clean view (opt+c): the picture alone, for recording */
       body.clean { grid-template-rows: 1fr; }
       body.clean > *:not(#canvas-area) { display: none !important; }
       body.clean #canvas-area { grid-row: 1; }
-      body.clean #garden-area, body.clean #console-overlay, body.clean #demo-toast { display: none !important; }
+      body.clean #garden-area, body.clean #console-overlay { display: none !important; }
       body.clean #bloom-canvas { cursor: none !important; }
 
       /* Welcome hint */
@@ -633,15 +617,6 @@
 
         <span class="s-section">
           <span class="s-section-label">display</span>
-          <label title="show axis labels (field, deep)">axis
-            <input type="checkbox" id="show-axis">
-          </label>
-          <label title="show pitch+octave labels on notes">notes
-            <input type="checkbox" id="show-note-labels">
-          </label>
-          <label title="show keystroke + command on screen">demo
-            <input type="checkbox" id="demo-mode">
-          </label>
           <label>skin
             <select id="viz-theme-select">
               <option value="dark">dark</option>
@@ -652,6 +627,15 @@
               <option value="uv">uv</option>
               <option value="minimal">minimal</option>
             </select>
+          </label>
+          <label title="show axis labels (field, deep)">axis
+            <input type="checkbox" id="show-axis">
+          </label>
+          <label title="show pitch+octave labels on notes">notes
+            <input type="checkbox" id="show-note-labels">
+          </label>
+          <label title="show each key, large, with what it did — for recordings">demo keys
+            <input type="checkbox" id="demo-mode">
           </label>
         </span>
 
@@ -686,10 +670,6 @@
       <div id="viz-area">
         <canvas id="bloom-canvas"></canvas>
         <div id="console-overlay"></div>
-        <div id="demo-toast">
-          <div id="demo-toast-key"></div>
-          <div id="demo-toast-cmd"></div>
-        </div>
       </div>
       <div id="garden-area">
         <!-- #garden-canvas and #garden-zoom injected by GardenVisualization -->

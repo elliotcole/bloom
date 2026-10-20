@@ -253,6 +253,9 @@ times 3 → 6", "3 of 8 pitches moved · range C3–G5". It fades after five
 seconds and stays out of the way while the console (`\`) is open, since
 the console says the same, and in clean view.
 
+**Demo keys** (⚙ settings → display) adds the key you pressed, large, above
+the notice and centres it: for screen recordings.
+
 ## Saving
 
 - **Save the garden:** cmd-S.

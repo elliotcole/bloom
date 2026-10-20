@@ -7,8 +7,13 @@ import { spell, spellOctave } from '../lib/numbers';
 
 const SHOW_MS = 5000;
 
+// Demo mode: the key that was pressed, shown large above the notice
+let _key = '';
+export function setNoticeKey(key: string): void { _key = key; }
+
 export class Notice {
   private el: HTMLElement;
+  private keyEl: HTMLElement;
   private labelEl: HTMLElement;
   private detailEl: HTMLElement;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -18,11 +23,13 @@ export class Notice {
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
     this.el.id = 'notice';
+    this.keyEl = document.createElement('div');
+    this.keyEl.className = 'notice-key';
     this.labelEl = document.createElement('div');
     this.labelEl.className = 'notice-label';
     this.detailEl = document.createElement('div');
     this.detailEl.className = 'notice-detail';
-    this.el.append(this.labelEl, this.detailEl);
+    this.el.append(this.keyEl, this.labelEl, this.detailEl);
     parent.appendChild(this.el);
   }
 
@@ -42,6 +49,8 @@ export class Notice {
     // the console already says all this
     if (document.getElementById('console-overlay')?.classList.contains('visible')) return;
     if (!this.label && !this.detail) return;
+    this.keyEl.textContent = _key;
+    this.el.classList.toggle('demo', _key !== '');
     this.labelEl.textContent = this.label;
     this.detailEl.textContent = this.detail;
     this.detailEl.style.display = this.detail ? '' : 'none';

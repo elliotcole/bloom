@@ -14,6 +14,7 @@ import type { VizMode, ThemeId } from './ui/theme';
 import { Display } from './ui/display';
 import type { KeyHandlerState } from './ui/keys';
 import { createKeyHandler } from './ui/keys';
+import { setNoticeKey } from './ui/notice';
 import { BloomEditor } from './ui/bloomEditor';
 import { CommandPalette } from './ui/commandPalette';
 
@@ -284,10 +285,9 @@ async function main() {
     // Don't send keystrokes to bloom when editor or palette is open
     if (bloomEditor.isOpen() || commandPalette.isOpen()) return;
     keyState.out = midiState.selectedOutput;
-    _pendingDemoKey = formatDemoKey(e);
-    _demoShownThisKey = false;
+    // demo mode: the notice also shows the key, large, for recordings
+    setNoticeKey(_demoMode ? formatDemoKey(e) : '');
     onKey(e);
-    _pendingDemoKey = '';
   });
 
   window.addEventListener('beforeunload', () => {
@@ -501,27 +501,8 @@ async function main() {
   });
 
   // ─── Demo mode ────────────────────────────────────────────────────────────────
-  const demoToastEl   = document.getElementById('demo-toast')     as HTMLElement;
-  const demoToastKey  = document.getElementById('demo-toast-key') as HTMLElement;
-  const demoToastCmd  = document.getElementById('demo-toast-cmd') as HTMLElement;
+  // Shows each key, large, in the notice above what it did (see ui/notice.ts)
   let _demoMode = false;
-  let _demoFadeTimer:  ReturnType<typeof setTimeout> | null = null;
-  let _demoHideTimer:  ReturnType<typeof setTimeout> | null = null;
-
-  function showDemoToast(key: string, cmd: string) {
-    if (_demoFadeTimer !== null) { clearTimeout(_demoFadeTimer); _demoFadeTimer = null; }
-    if (_demoHideTimer !== null) { clearTimeout(_demoHideTimer); _demoHideTimer = null; }
-    demoToastKey.textContent = key;
-    demoToastCmd.textContent = cmd;
-    demoToastEl.style.transition = 'none';
-    demoToastEl.style.opacity = '1';
-    demoToastEl.style.display = 'block';
-    _demoFadeTimer = setTimeout(() => {
-      demoToastEl.style.transition = 'opacity 0.3s ease-out';
-      demoToastEl.style.opacity = '0';
-      _demoHideTimer = setTimeout(() => { demoToastEl.style.display = 'none'; }, 350);
-    }, 1500);
-  }
 
   function formatDemoKey(e: KeyboardEvent): string {
     const alt = e.altKey;
@@ -543,24 +524,10 @@ async function main() {
     return e.key;
   }
 
-  // Fire demo toast on first status message per keypress
-  let _pendingDemoKey = '';
-  let _demoShownThisKey = false;
-  display.onStatus = (msg) => {
-    if (_demoMode && _pendingDemoKey && !_demoShownThisKey) {
-      _demoShownThisKey = true;
-      showDemoToast(_pendingDemoKey, msg);
-    }
-  };
-
   const demoModeCb = document.getElementById('demo-mode') as HTMLInputElement;
   demoModeCb?.addEventListener('change', () => {
     _demoMode = demoModeCb.checked;
-    if (!_demoMode) {
-      if (_demoFadeTimer !== null) { clearTimeout(_demoFadeTimer); _demoFadeTimer = null; }
-      if (_demoHideTimer !== null) { clearTimeout(_demoHideTimer); _demoHideTimer = null; }
-      demoToastEl.style.display = 'none';
-    }
+    demoModeCb.blur();
   });
 
   // Show axis (field / deep)
