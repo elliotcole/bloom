@@ -166,6 +166,15 @@ scale follows along, and the notice shows the count and the scale's name,
 e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
 scale. Chords keep their shape.
 
+To travel further, `]` steps **sharpward** and `[` **flatward** round the
+circle of fifths: one pitch class of the scale moves a semitone and the notes
+on it move with it, so C major becomes G major (F → F#), then D major, and so
+on. It works on any scale type, preferring a move that keeps the scale's
+shape, then one that makes a named scale. Keep pressing to modulate steadily;
+the notice names each step ("sharpward: F → F# · scale G Major"). Slant
+(`K`, at home) now looks on every root and avoids the last few scales it
+visited, so repeated slants wander outward instead of circling.
+
 ### Vocabulary ("palette")
 A list's **palette** is the set of distinct values it uses: the bloom's
 own rhythmic vocabulary, dynamic levels, instruments.

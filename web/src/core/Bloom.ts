@@ -11,14 +11,14 @@ import {
   moveDoublesUpOctave as moveDoublesUpOctaveArr,
 } from '../lib/arrays';
 import {
-  spellToPC, justAbove, justBelow,
+  spell, spellToPC, justAbove, justBelow,
   softRound, invertChord, invertMean as invertMeanArr,
   negHarmony as negHarmonyFn,
 } from '../lib/numbers';
 import type { Scale } from '../lib/scales';
 import {
   SCALES, mostSimilarTo, slantMatch,
-  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr, nameScaleDegrees,
+  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr, nameScaleDegrees, pcsKey,
 } from '../lib/scales';
 
 // ─── Class-level defaults ──────────────────────────────────────────────────────
@@ -110,6 +110,14 @@ const MIN_TIME = 0.02;
 const roundTime = (t: number): number => Math.round(t * 1e6) / 1e6;
 const clampVel = (v: number): number => Math.max(1, Math.min(127, Math.round(v)));
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+// The last few scales slant visited (as pitch-class keys), which it avoids
+// returning to, so repeated slants travel instead of circling
+const SLANT_TRAIL = 6;
+const _slantTrail: string[] = [];
+// Likewise for steps round the circle of fifths, while they keep one direction
+const _stepTrail: string[] = [];
+let _stepDir = 0;
 const mean = (arr: number[]): number => arr.reduce((a, b) => a + b, 0) / arr.length;
 
 /** Index of the palette value nearest `t` by ratio, so 3/8 lies between 1/4 and 1/2 proportionally */
@@ -1284,11 +1292,74 @@ export class Bloom {
   }
 
   slantScale(): this {
-    const currentScale = this.scale;
-    const candidates = slantMatch(currentScale.degrees);
-    const scale = candidates[Math.floor(Math.random() * candidates.length)];
+    const here = pcsKey(this.scale.degrees);
+    if (_slantTrail[_slantTrail.length - 1] !== here) _slantTrail.push(here);
+    const scale = pick(slantMatch(this.scale.degrees, new Set(_slantTrail)));
     this.applyScale(scale);
+    _slantTrail.push(pcsKey(scale.degrees));
+    while (_slantTrail.length > SLANT_TRAIL) _slantTrail.shift();
     return this;
+  }
+
+  /**
+   * One step round the circle of fifths: one pitch class of the scale moves a
+   * semitone, sharpward (dir 1) or flatward (-1), and the notes on it move
+   * with it. "Sharpward" is measured on the circle of fifths around the
+   * scale's own centre, so C major goes to G major (F → F#), and any scale
+   * type drifts the same way. A move that keeps the scale's shape (a
+   * transposition) is preferred, then one that makes a named scale, then one
+   * that moves notes actually played. Returns e.g. "F → F#", or null.
+   */
+  fifthsward(dir: 1 | -1): string | null {
+    const S = new Set(this.scale.degrees.map(this.pcOf));
+    if (S.size === 0 || S.size >= 12) return null;
+    const fifths = (pc: number) => (pc * 7) % 12;
+    // the most compact arc of fifths holding the set, and its middle
+    let start = 0, span = 12;
+    for (let st = 0; st < 12; st++) {
+      const w = Math.max(...[...S].map(pc => (fifths(pc) - st + 12) % 12));
+      if (w < span) { span = w; start = st; }
+    }
+    const centre = start + span / 2;
+    const off = (pc: number) => { let d = (fifths(pc) - centre) % 12; if (d < -6) d += 12; if (d >= 6) d -= 12; return d; };
+
+    const flat = flatNotes(this.notes) as number[];
+    const used = new Set(flat.map(this.pcOf));
+    const shape = (set: number[]) => {
+      const sorted = [...set].sort((a, b) => a - b);
+      return sorted.map((d, i) => (sorted[(i + 1) % sorted.length] - d + 12) % 12).join(',');
+    };
+    const rotations = (str: string) => { const a = str.split(','); return a.map((_, i) => [...a.slice(i), ...a.slice(0, i)].join(',')); };
+    const myShapes = new Set(rotations(shape([...S])));
+
+    const moves: { from: number; to: number; step: number; score: number }[] = [];
+    for (const from of S) {
+      for (const step of [1, -1]) {
+        const to = (from + step + 12) % 12;
+        if (S.has(to) || Math.sign(off(to) - off(from)) !== dir) continue;
+        const next = [...S].filter(pc => pc !== from).concat(to);
+        const score = (myShapes.has(shape(next)) ? 4 : nameScaleDegrees(next) ? 2 : 0) + (used.has(from) ? 1 : 0);
+        moves.push({ from, to, step, score });
+      }
+    }
+    if (_stepDir !== dir) { _stepTrail.length = 0; _stepDir = dir; }
+    const here = pcsKey([...S]);
+    if (_stepTrail[_stepTrail.length - 1] !== here) _stepTrail.push(here);
+    const keyOf = (mv: { from: number; to: number }) => pcsKey([...S].filter(pc => pc !== mv.from).concat(mv.to));
+    const ahead = moves.filter(mv => !_stepTrail.includes(keyOf(mv)));
+    if (ahead.length) moves.splice(0, moves.length, ...ahead);
+    if (!moves.length) return null;
+    const best = Math.max(...moves.map(m => m.score));
+    const mv = pick(moves.filter(m => m.score === best));
+
+    this.saveNest();
+    this.notes = flat.map(m => (this.pcOf(m) === mv.from ? m + mv.step : m));
+    this.restoreNest();
+    this.enforceRange();
+    this.setScalePcs([...S].filter(pc => pc !== mv.from).concat(mv.to));
+    _stepTrail.push(keyOf(mv));
+    while (_stepTrail.length > SLANT_TRAIL) _stepTrail.shift();
+    return `${spell(mv.from)} → ${spell(mv.to)}`;
   }
 
   setRoot(root: number | string): this {

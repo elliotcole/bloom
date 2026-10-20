@@ -111,23 +111,52 @@ export function mostSimilarTo(targetDegrees: number[]): Scale[] {
   return [SCALES.chromatic];
 }
 
-/** Find scales with the second-most pitch classes in common */
-export function slantMatch(targetDegrees: number[]): Scale[] {
-  const candidates = ALL_SCALES.filter(s => s.pitchesPerOctave === 12 && s.degrees.length <= 10);
-  const targetSet = new Set(targetDegrees.map(d => d % 12));
+const PC_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
-  const buckets: Scale[][] = Array.from({ length: 13 }, () => []);
-  candidates.forEach(s => {
-    const overlap = s.degrees.filter(d => targetSet.has(d % 12)).length;
-    buckets[overlap].push(s);
-  });
+/** A pitch-class set as a comparable key, e.g. "0,2,4,5,7,9,11" */
+export const pcsKey = (pcs: number[]): string =>
+  [...new Set(pcs.map(d => ((d % 12) + 12) % 12))].sort((a, b) => a - b).join(',');
 
-  const nonEmpty = buckets.filter(b => b.length > 0);
-  if (nonEmpty.length < 2) return nonEmpty[0] ?? [SCALES.major];
-  return nonEmpty[nonEmpty.length - 2];
+// Every catalogue scale on every root, one entry per distinct pitch-class set
+// (named after the first template that makes it). Built once: ~700 sets.
+let _rooted: { scale: Scale; key: string; set: Set<number> }[] | null = null;
+function rootedScales() {
+  if (_rooted) return _rooted;
+  const seen = new Set<string>();
+  _rooted = [];
+  for (const sc of ALL_SCALES) {
+    if (sc.pitchesPerOctave !== 12 || sc.degrees.length > 10) continue;
+    for (let root = 0; root < 12; root++) {
+      const degrees = sc.degrees.map(d => (d + root) % 12).sort((a, b) => a - b);
+      const key = degrees.join(',');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      _rooted.push({ scale: { degrees, pitchesPerOctave: 12, name: `${PC_NAMES[root]} ${sc.name}` }, key, set: new Set(degrees) });
+    }
+  }
+  return _rooted;
 }
 
-const PC_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+/**
+ * The near neighbours of a pitch-class set, on any root: the scales sharing
+ * the second-most pitch classes with it (the most is the set itself and its
+ * supersets). Sets in `avoid` are left out while anything else is left, so a
+ * walk of slants keeps moving outward instead of circling back.
+ */
+export function slantMatch(targetDegrees: number[], avoid: Set<string> = new Set()): Scale[] {
+  const target = new Set(targetDegrees.map(d => ((d % 12) + 12) % 12));
+  const buckets: { scale: Scale; key: string }[][] = Array.from({ length: 13 }, () => []);
+  for (const r of rootedScales()) {
+    let overlap = 0;
+    r.set.forEach(d => { if (target.has(d)) overlap++; });
+    buckets[overlap].push(r);
+  }
+  const nonEmpty = buckets.filter(b => b.length > 0);
+  const near = nonEmpty.length < 2 ? (nonEmpty[0] ?? []) : nonEmpty[nonEmpty.length - 2];
+  const fresh = near.filter(r => !avoid.has(r.key));
+  const out = (fresh.length ? fresh : near).map(r => r.scale);
+  return out.length ? out : [SCALES.major];
+}
 
 /**
  * Name a set of pitch classes after a catalogue scale it matches on some root,

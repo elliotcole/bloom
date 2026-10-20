@@ -359,6 +359,14 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh(`${tag} ${msg}`);
     };
 
+    if (m === 'pitch' && (ch === '[' || ch === ']')) {
+      const dir = ch === ']' ? 1 : -1;
+      const name = dir === 1 ? 'sharpward' : 'flatward';
+      const moved = b.fifthsward(dir);
+      if (moved) { status(`${tag} ${name}: ${moved}`); refresh(`${tag} ${name}`); }
+      else status(`${tag} no ${name} step from here`);
+      return true;
+    }
     if (m === 'pitch' && (ch === 'q' || ch === 'Q')) {
       if (ch === 'q') apply('snap to the scale', () => b.shapeList('notes', 'quantize'));
       else status(`${tag} q snaps to the scale; k K j J change it`);
