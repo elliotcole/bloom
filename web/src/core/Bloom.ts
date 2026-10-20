@@ -615,6 +615,27 @@ export class Bloom {
   }
 
   trimToDur(dur = 4): this {
+    // Lists of other lengths (phasing): trim the notes so one pass fits, and
+    // leave the velocities and channels cycling as they were.
+    if (this.timeIntervals.length !== this.notes.length
+      || this.velocities.length !== this.notes.length || this.chans.length !== this.notes.length) {
+      const n0 = this.notes.length;
+      const times = this.notes.map((_, i) => wrapAt(this.timeIntervals, i));
+      const pass = times.reduce((a, b) => a + b, 0);
+      if (pass <= dur) {
+        if (this.timeIntervals.length === n0) this.timeIntervals[n0 - 1] += dur - pass;
+        else this.timeIntervals = [...times.slice(0, -1), times[n0 - 1] + dur - pass];
+        return this;
+      }
+      let acc = 0, n = 0;
+      while (acc < dur && n < n0) acc += times[n++];
+      times.length = n;
+      times[n - 1] = Math.max(MIN_TIME, times[n - 1] - (acc - dur));
+      this.notes = this.notes.slice(0, n);
+      // the time list now lines up with the notes, since its last value is this pass's own
+      this.timeIntervals = times;
+      return this;
+    }
     const total = this.timeIntervals.reduce((a, b) => a + b, 0);
     if (dur <= total) {
       let acc = 0;
@@ -816,9 +837,13 @@ export class Bloom {
     return this;
   }
 
+  /** Snap times to a 1/grid grid. A duration never rounds down to 0 (that would stack notes on one instant): it gets one grid step. */
   quantize(grid = 4, margin = 0, strength = 1): this {
     const resolution = 1 / grid;
-    this.timeIntervals = this.timeIntervals.map(t => softRound(t, resolution, margin, strength));
+    this.timeIntervals = this.timeIntervals.map(t => {
+      const q = softRound(t, resolution, margin, strength);
+      return t > 0 && q <= 0 ? resolution : q;
+    });
     return this;
   }
 

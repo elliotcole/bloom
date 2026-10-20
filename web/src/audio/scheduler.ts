@@ -27,6 +27,38 @@ function addedVelocity(vel: number): number {
   return Math.max(1, Math.round(vel * ADDED_NOTE_VELOCITY));
 }
 
+// ─── Voices ───────────────────────────────────────────────────────────────────
+// A note-off releases every sounding copy of that pitch on that channel (in
+// MIDI synths and the built-in piano alike). Notes are held long (sustain), so
+// a pitch that repeats before the earlier copy's note-off would be cut short
+// by it. Each (output, channel, pitch) remembers its latest note-on; a stale
+// note-off is skipped, and a repeat cleanly releases the earlier copy first.
+
+const _voices = new WeakMap<MidiOutput, Map<number, number>>();
+let _voiceSeq = 0;
+
+function startVoice(out: MidiOutput, chan: number, note: number, vel: number, atMs: number): number {
+  let held = _voices.get(out);
+  if (!held) { held = new Map(); _voices.set(out, held); }
+  const key = chan * 128 + note;
+  if (held.has(key)) noteOff(out, chan, note, atMs - 1);
+  const id = ++_voiceSeq;
+  held.set(key, id);
+  noteOn(out, chan, note, vel, atMs);
+  return id;
+}
+
+function endVoice(out: MidiOutput, chan: number, note: number, id: number, atMs: number): void {
+  const held = _voices.get(out);
+  const key = chan * 128 + note;
+  if (held?.get(key) !== id) return;   // a later copy of this pitch is sounding
+  held.delete(key);
+  noteOff(out, chan, note, atMs);
+}
+
+/** Forget held voices (after all-notes-off). */
+function clearVoices(out: MidiOutput): void { _voices.delete(out); }
+
 // ─── One-shot playback ────────────────────────────────────────────────────────
 
 export interface ActiveNote {
@@ -61,15 +93,16 @@ export function playOnce(
     const onAt = cursor;
 
     // Schedule note-on(s) + visual callback
+    const ids: [number, number][] = [];   // [pitch, voice id]
     const t = setTimeout(() => {
       if (vel > 0) {
         notes.forEach(n => {
           if (n < 0 || n > 127) return;
-          noteOn(out, chan, n, vel, now + onAt);
+          ids.push([n, startVoice(out, chan, n, vel, now + onAt)]);
         });
         added.forEach(n => {
           if (n < 0 || n > 127) return;
-          noteOn(out, chan, n, addedVelocity(vel), now + onAt);
+          ids.push([n, startVoice(out, chan, n, addedVelocity(vel), now + onAt)]);
         });
       }
       onNoteOn?.(i, tick + i);
@@ -79,10 +112,7 @@ export function playOnce(
     // Schedule note-off(s)
     const offAt = onAt + Math.max(10, gateMs);
     const tOff = setTimeout(() => {
-      [...notes, ...added].forEach(n => {
-        if (n < 0 || n > 127 || vel === 0) return;
-        noteOff(out, chan, n, now + offAt);
-      });
+      ids.forEach(([n, id]) => endVoice(out, chan, n, id, now + offAt));
     }, offAt);
     timeouts.push(tOff);
 
@@ -92,6 +122,7 @@ export function playOnce(
   return () => {
     timeouts.forEach(clearTimeout);
     allNotesOff(out);
+    clearVoices(out);
   };
 }
 
@@ -186,9 +217,9 @@ export function startLooper(
       if (vel > 0) {
         const sound = (n: number, v: number) => {
           if (n < 0 || n > 127) return;
-          noteOn(out, chan, n, v, atMs);
+          const id = startVoice(out, chan, n, v, atMs);
           setTimeout(
-            () => noteOff(out, chan, n, atMs + Math.max(10, gateMs)),
+            () => endVoice(out, chan, n, id, atMs + Math.max(10, gateMs)),
             atMs - now + Math.max(10, gateMs),
           );
         };
