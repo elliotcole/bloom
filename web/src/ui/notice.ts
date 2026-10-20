@@ -5,7 +5,7 @@ import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import { spell, spellOctave } from '../lib/numbers';
 
-const SHOW_MS = 1800;
+const SHOW_MS = 5000;
 
 export class Notice {
   private el: HTMLElement;

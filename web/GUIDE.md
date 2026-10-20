@@ -249,8 +249,8 @@ above has a name:
 
 After each key, a small notice at the top left of the view says what you did
 and what changed: "slant scale · scale Hungarian Minor", "[t] stutter ·
-times 3 → 6", "3 of 8 pitches moved · range C3–G5". It fades after a couple
-of seconds and stays out of the way while the console (`\`) is open, since
+times 3 → 6", "3 of 8 pitches moved · range C3–G5". It fades after five
+seconds and stays out of the way while the console (`\`) is open, since
 the console says the same, and in clean view.
 
 ## Saving
