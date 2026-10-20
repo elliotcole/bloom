@@ -1042,6 +1042,12 @@ export class Bloom {
       : values.map(() => 0);
   }
 
+  /** How recently each position of a list was breezed (0 = not lately), for display. Keys: 'pitch' (flat notes), 'time', 'vel', 'chan'. */
+  breezeHeat(key: 'pitch' | ListKey): number[] | null {
+    const memo = this.breezeMemo.get(key);
+    return memo ? this.breezeHeatFor(key, key === 'pitch' ? flatNotes(this.notes) as number[] : this.getList(key)) : null;
+  }
+
   private rememberBreeze(key: string, heat: number[], moved: Set<number>, after: unknown[]): void {
     this.breezeMemo.set(key, {
       after: JSON.stringify(after),

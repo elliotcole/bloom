@@ -139,6 +139,12 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** Temporary bloom used for loop-cycle display; reused across cycles to avoid allocation */
   let _loopDisplayBloom: Bloom | null = null;
 
+  function setClean(on: boolean) {
+    document.body.classList.toggle('clean', on);
+    state.viz?.setClean(on);
+    if (!on) status('clean view off');
+  }
+
   function refresh(msg = '') {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
@@ -177,6 +183,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   function setListMode(m: ListMode | null) {
     _mode = m;
     state.viz?.setChanStrip(m === 'chan');
+    state.viz?.setListMode(m);
     document.body.classList.toggle('list-mode', m !== null);   // swaps the help overlay view
     const badge = document.getElementById('list-mode-badge');
     if (badge) {
@@ -245,7 +252,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', '\\', '?', 'F']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', 'L', '\\', '?', 'F']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
@@ -348,6 +355,13 @@ export function createKeyHandler(state: KeyHandlerState) {
         status(`view: ${mode}`);
         return;
       }
+    }
+
+    // ─── Clean view (opt+c): the picture alone, for recording ────────────────
+    if (alt && !shift && e.code === 'KeyC') {
+      e.preventDefault();
+      setClean(!document.body.classList.contains('clean'));
+      return;
     }
 
     // ─── Editor / Palette ─────────────────────────────────────────────────────
@@ -839,7 +853,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         // so set the preview AFTER play() returns (JS is single-threaded).
         if (_previewResetId !== null) clearTimeout(_previewResetId);
         play(src, `play slot [${g.index}]`);
-        state.viz?.setBloom(src);
+        state.viz?.setBloom(src, false);
         const durationMs = beatsToMs(src.timeIntervals.reduce((a, t) => a + t, 0));
         _previewResetId = setTimeout(() => {
           _previewResetId = null;
@@ -865,7 +879,7 @@ export function createKeyHandler(state: KeyHandlerState) {
             _loopDisplayBloom.timeIntervals = time;
             _loopDisplayBloom.chans         = chan;
             _loopDisplayBloom.intervals     = intervals;
-            state.viz?.setBloom(_loopDisplayBloom);
+            state.viz?.setBloom(_loopDisplayBloom, false);
           },
         );
       }
@@ -1010,6 +1024,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
+    if (ch === 'L' && !alt) {
+      const on = state.viz?.toggleLanes() ?? false;
+      try { localStorage.setItem('bloom.lanes', on ? '1' : '0'); } catch { /* private window */ }
+      status(on ? 'lanes on' : 'lanes off');
+      return;
+    }
+
     if (ch === '\\') {
       state.consoleToggleFn?.();
       return;
@@ -1018,6 +1039,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     // ─── Help ─────────────────────────────────────────────────────────────────
     if (ch === '?') {
       state.fullHelpToggleFn?.();
+      return;
+    }
+    if (e.code === 'Escape' && document.body.classList.contains('clean')) {
+      setClean(false);
       return;
     }
     if (e.code === 'Escape') {

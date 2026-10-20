@@ -503,6 +503,13 @@
         letter-spacing: 0.06em;
       }
 
+      /* Clean view (opt+c): the picture alone, for recording */
+      body.clean { grid-template-rows: 1fr; }
+      body.clean > *:not(#canvas-area) { display: none !important; }
+      body.clean #canvas-area { grid-row: 1; }
+      body.clean #garden-area, body.clean #console-overlay, body.clean #demo-toast { display: none !important; }
+      body.clean #bloom-canvas { cursor: none !important; }
+
       /* Welcome hint */
       #welcome-hint {
         text-align: center;
@@ -827,6 +834,9 @@ playback &amp; garden keys unchanged</div>
           <div class="hf-sec">
             <div class="hf-h">View</div>
             <div class="hf-body"><b>\</b>       toggle console
+<b>L</b>        lanes (the lists, two passes)
+<b>opt-c</b>    clean view (esc leaves)
+<b>l</b>        note labels
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette</div>
           </div>

@@ -204,6 +204,21 @@ what's frozen, e.g. `❄ p t`. The same switches are in ⚙ settings under
 
 ---
 
+## Seeing it
+
+- **Lanes: `L`.** A strip under the view showing the four lists (pitch, time,
+  velocity, channels) on one time axis, two loop passes wide. Each lane shows
+  its length (×n); its shading alternates each time that list wraps, so when
+  lists of different lengths phase, you can see where. The lane for the
+  current list mode is lit amber, a frozen list shows ❄, recently breezed
+  values glow, and whatever the last key changed is boxed for a moment. The
+  setting is remembered.
+- **Clean view: opt-`c`.** Only the picture: no header, garden, console, lanes
+  or cursor. Made for recording video. Keys still work. `esc` or opt-`c`
+  leaves. For a whole-screen picture, also make the browser full screen
+  (ctrl-cmd-F).
+- **Views:** opt-`1`…`9`. Note labels: `l`. Console: `\`.
+
 ## Command palette: cmd-K
 
 Type command names joined with dots, e.g. `calm.calm.varyT`. Every operation

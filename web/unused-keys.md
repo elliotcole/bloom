@@ -14,13 +14,13 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Shift keys
 
-- `L`  `Q`  `T`  `V`  `Z`
+- `Q`  `T`  `V`  `Z`  *(`L` is lanes)*
 - `"`  `_`  *(`#` `$` are breeze)*
 
 ## Option (alt) keys
 
 **Letters**
-- `opt-a`  `opt-b`  `opt-c`  `opt-f`  `opt-g`  `opt-h`  `opt-i`
+- `opt-a`  `opt-b`  `opt-f`  `opt-g`  `opt-h`  `opt-i`
 - `opt-j`  `opt-k`  `opt-l`  `opt-m`  `opt-n`  `opt-o`  `opt-p`
 - `opt-q`  `opt-t`  `opt-v`  `opt-x`  `opt-y`  `opt-z`
 
@@ -37,7 +37,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Taken option keys
 
 - `opt-s` `opt-r` `opt-u` `opt-d` and their shifts: pitch-only patterns
-- `opt-e` editor · `opt-w` wheels within wheels
+- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view
 - `opt-,` loop garden · `opt-/` pulse garden · `opt-shift-\` curdle
 
 On macOS, option keys produce Unicode characters (e.g. opt+e = ´), but bindings

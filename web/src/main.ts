@@ -38,6 +38,7 @@ async function main() {
   const display = new Display(displayEl);
 
   viz.setBloom(bloom);
+  try { viz.setLanes(localStorage.getItem('bloom.lanes') === '1'); } catch { /* private window */ }
   gardenViz.setMode(viz.getMode());
   gardenViz.update(garden);
   display.update(bloom, garden, restored ? 'restored from autosave' : '');

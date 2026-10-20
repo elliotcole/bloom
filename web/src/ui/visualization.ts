@@ -6,6 +6,8 @@ import { beatsToMs } from '../audio/scheduler';
 import { THEMES, getTheme } from './theme';
 import type { VizMode, ThemeId, Theme } from './theme';
 import { drawNotehead, drawSharp, drawFlat } from './glyphs';
+import { Lanes, LANES_HEIGHT } from './lanes';
+import type { LaneMode } from './lanes';
 
 export type { VizMode, ThemeId, Theme };
 export { THEMES, getTheme };
@@ -1928,6 +1930,10 @@ export class BloomVisualization {
   private _showAxis = false;
   private _showNoteLabels = false;
   private _showChanStrip = false;
+  private _showLanes = false;
+  private _clean = false;
+  private _listMode: LaneMode = null;
+  private _lanes = new Lanes();
 
   // Flash / playhead state
   private petalFlash: number[] = [];
@@ -1953,7 +1959,9 @@ export class BloomVisualization {
 
   // ─── Public API ─────────────────────────────────────────────────────────────
 
-  setBloom(bloom: Bloom): void {
+  /** `trace: false` for display-only blooms (the looper's rotated view), so they aren't shown as edits. */
+  setBloom(bloom: Bloom, trace = true): void {
+    if (trace) this._lanes.observe(bloom);
     this.bloom = bloom;
     this.petalFlash = new Array(bloom.notes.length).fill(0);
     this.playheadIndex = -1;
@@ -1983,6 +1991,14 @@ export class BloomVisualization {
   toggleNoteLabels(): boolean { this._showNoteLabels = !this._showNoteLabels; return this._showNoteLabels; }
   /** Show the channel strip (channel-edit mode) */
   setChanStrip(show: boolean): void { this._showChanStrip = show; }
+  /** Which list mode is active, so its lane is lit */
+  setListMode(m: LaneMode): void { this._listMode = m; }
+  /** Bloom lanes: the four lists on one time axis under the view */
+  toggleLanes(): boolean { this._showLanes = !this._showLanes; return this._showLanes; }
+  setLanes(show: boolean): void { this._showLanes = show; }
+  get showLanes(): boolean { return this._showLanes; }
+  /** Clean: the picture alone, no strips or overlays (for recording) */
+  setClean(on: boolean): void { this._clean = on; }
 
   getMode(): VizMode { return this._mode; }
   getTheme(): ThemeId { return this._theme.id; }
@@ -2083,7 +2099,9 @@ export class BloomVisualization {
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.width / dpr;
-    const H = canvas.height / dpr;
+    const fullH = canvas.height / dpr;
+    const lanesOn = this._showLanes && !this._clean;
+    const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : fullH;
     const theme = this._theme;
 
     ctx.save();
@@ -2102,9 +2120,9 @@ export class BloomVisualization {
     }
 
     // Standard clear + background
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, fullH);
     ctx.fillStyle = theme.bg;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, fullH);
 
     if (!bloom || bloom.notes.length === 0) {
       this._drawEmpty(ctx, W / 2, H / 2, theme);
@@ -2176,7 +2194,16 @@ export class BloomVisualization {
         break;
     }
 
-    if (this._showChanStrip) this._drawChanStrip(ctx, W, H, bloom, theme);
+    if (lanesOn) {
+      let progress = 0;
+      if (this.playheadIndex >= 0 && this._beadActivatedAt > 0) {
+        const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
+        progress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
+      }
+      this._lanes.draw(ctx, 0, H, W, bloom, theme, this._listMode, this.playheadIndex, progress);
+    } else if (this._showChanStrip && !this._clean) {
+      this._drawChanStrip(ctx, W, H, bloom, theme);
+    }
 
     ctx.restore();
   }
