@@ -568,7 +568,7 @@
             <input type="number" id="fixed-dur-amount" min="0.5" max="16" step="0.5" value="4" disabled>
             <select id="fixed-dur-mode" disabled>
               <option value="trim">trim</option>
-              <option value="scale">scale</option>
+              <option value="scale">stretch</option>
             </select>
           </label>
           <label title="quantize to a fixed time grid before each play">grid
@@ -760,7 +760,8 @@ same keys, same verbs, one list</div>
             <div class="hf-body"><b>p</b>    pitch (scale)
 <b>t r</b>  rhythm (durations)
 <b>v</b>    dynamics      <b>c</b>   channels
-<b>d</b>    duration      <b>g</b>   grid
+<b>d</b>    duration: trim → stretch → off
+<b>g</b>    grid
 each key toggles; esc cancels</div>
           </div>
           <div class="hf-sec">

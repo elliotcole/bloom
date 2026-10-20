@@ -211,7 +211,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   function updateFreezeBadge() {
     const badge = document.getElementById('freeze-badge');
     if (!badge) return;
-    const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key);
+    const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key === 'd' ? `d:${durMode() === 'scale' ? 'stretch' : 'trim'}` : f.key);
     badge.textContent = on.length ? `❄ ${on.join(' ')}` : '';
     badge.classList.toggle('active', on.length > 0);
     badge.classList.remove('menu');
@@ -227,6 +227,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     const box = freezeBox(f);
     if (!box) return;
+    if (f.key === 'd') { cycleDuration(box); return; }
     box.checked = !box.checked;
     box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click
     updateFreezeBadge();
@@ -234,8 +235,35 @@ export function createKeyHandler(state: KeyHandlerState) {
     status(`${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
   }
 
+  function durMode(): string {
+    return (document.getElementById('fixed-dur-mode') as HTMLSelectElement | null)?.value ?? 'trim';
+  }
+
+  /** F d cycles: off → trim to duration → stretch to duration → off */
+  function cycleDuration(box: HTMLInputElement) {
+    const sel = document.getElementById('fixed-dur-mode') as HTMLSelectElement | null;
+    const setMode = (m: 'trim' | 'scale') => {
+      if (sel) { sel.value = m; sel.dispatchEvent(new Event('change')); }
+    };
+    let msg: string;
+    if (!box.checked) {
+      setMode('trim');
+      box.checked = true; box.dispatchEvent(new Event('change'));
+      msg = 'duration frozen ❄ trim to duration';
+    } else if (durMode() === 'trim') {
+      setMode('scale');
+      msg = 'duration frozen ❄ stretch to duration';
+    } else {
+      box.checked = false; box.dispatchEvent(new Event('change'));
+      msg = 'duration unfrozen';
+    }
+    updateFreezeBadge();
+    refresh(msg);
+    status(msg);
+  }
+
   // Clicks in the settings bar update the badge too
-  document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-grid-enabled')
+  document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-dur-mode, #fixed-grid-enabled')
     .forEach(el => el.addEventListener('change', updateFreezeBadge));
 
   /** Handle a key in a list mode. Returns true if the key was consumed. */

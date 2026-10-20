@@ -182,11 +182,11 @@ set of values. Press **`F`**, then:
 | `t` (or `r`) | rhythm | the durations in use right now |
 | `v` | dynamics | the velocity levels in use right now |
 | `c` | channels | the channels in use right now |
-| `d` | duration | the total length (amount and trim/scale mode set in ⚙ settings) |
+| `d` | duration | the total length (amount set in ⚙ settings). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
 | `g` | grid | a time grid (size set in ⚙ settings) |
 
-Each key toggles one freeze and closes the menu. `esc` cancels. The header shows
-what's frozen, e.g. `❄ p t`. The same switches are in ⚙ settings under
+Each key toggles one freeze (`d` cycles through three states) and closes the menu. `esc` cancels. The header shows
+what's frozen, e.g. `❄ p t d:trim`. The same switches are in ⚙ settings under
 **freeze** and **palette**, and the two always agree.
 
 - **Palette freezes capture the palette when you switch them on.** To take a
