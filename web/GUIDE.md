@@ -164,7 +164,9 @@ nearest class still in use); `H` brings in an unused note of the scale or,
 once the scale is all used, the chromatic note that makes a named scale. The
 scale follows along, and the notice shows the count and the scale's name,
 e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
-scale. Chords keep their shape.
+scale. Chords keep their shape. `(` `)` pivot (invert, keeping the highest
+or the loudest note where it is). The scale keys `k K j J`, center range `E`
+and the interval keys `5`–`8` work in pitch mode as they do at home.
 
 To travel further, `]` steps **sharpward** and `[` **flatward** round the
 circle of fifths: one pitch class of the scale moves a semitone and the notes

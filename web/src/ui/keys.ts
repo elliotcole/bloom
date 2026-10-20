@@ -359,6 +359,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh(`${tag} ${msg}`);
     };
 
+    // Pitch keys that live at home too: scales, center range, intervals
+    if (m === 'pitch' && 'kKjJE56^7&8*%'.includes(ch)) return false;
+    if (m === 'pitch' && (ch === '(' || ch === ')')) {
+      apply(ch === '(' ? 'pivot (highest)' : 'pivot (loudest)', () => (ch === '(' ? b.pivot() : b.pivotLoudest()));
+      return true;
+    }
     if (m === 'pitch' && (ch === '[' || ch === ']')) {
       const dir = ch === ']' ? 1 : -1;
       const name = dir === 1 ? 'sharpward' : 'flatward';
@@ -369,7 +375,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (m === 'pitch' && (ch === 'q' || ch === 'Q')) {
       if (ch === 'q') apply('snap to the scale', () => b.shapeList('notes', 'quantize'));
-      else status(`${tag} q snaps to the scale; k K j J change it`);
+      else status(`${tag} q snaps to the scale; k K j J choose it`);
       return true;
     }
     if (ch === 'q') {
