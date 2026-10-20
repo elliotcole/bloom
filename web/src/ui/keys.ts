@@ -212,27 +212,45 @@ export function createKeyHandler(state: KeyHandlerState) {
     const badge = document.getElementById('freeze-badge');
     if (!badge) return;
     const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key === 'd' ? `d:${durMode() === 'scale' ? 'stretch' : 'trim'}` : f.key);
-    badge.textContent = on.length ? `❄ ${on.join(' ')}` : '';
+    // in the menu: F, then what's frozen so far (or a ? when nothing is)
+    badge.textContent = _freezeMenu ? `F ❄ ${on.length ? on.join(' ') : '?'}` : on.length ? `❄ ${on.join(' ')}` : '';
     badge.classList.toggle('active', on.length > 0);
-    badge.classList.remove('menu');
+    badge.classList.toggle('menu', _freezeMenu);
   }
 
-  function onFreezeKey(e: KeyboardEvent) {
-    _freezeMenu = false;
+  function setFreezeMenu(open: boolean) {
+    _freezeMenu = open;
+    updateFreezeBadge();
+    status(open
+      ? `freeze: ${FREEZE_ITEMS.map(f => `${f.key} ${f.name}${isFrozen(f) ? ' ❄' : ''}`).join(' · ')}  (F or esc closes)`
+      : 'freeze menu closed');
+  }
+
+  /**
+   * The freeze menu is sticky, like the list modes: each key toggles its
+   * freeze and the menu stays open until F or esc. Playback, garden, view and
+   * opt keys pass through (returns false); anything else is held with a hint.
+   */
+  function onFreezeKey(e: KeyboardEvent): boolean {
+    if (e.code === 'Escape' || (e.key === 'F' && !e.altKey)) { setFreezeMenu(false); return true; }
+    if (e.altKey || e.metaKey || e.ctrlKey) return false;
     const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
     if (!f) {
-      updateFreezeBadge();
-      status(e.code === 'Escape' || e.key === 'F' ? 'freeze menu closed' : `freeze: nothing on ${e.key}`);
-      return;
+      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'p', 'P', 'l', 'L', '\\', '?']);
+      if (PASS.has(e.key)) return false;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) return false;
+      status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
+      return true;
     }
     const box = freezeBox(f);
-    if (!box) return;
-    if (f.key === 'd') { cycleDuration(box); return; }
+    if (!box) return true;
+    if (f.key === 'd') { cycleDuration(box); return true; }
     box.checked = !box.checked;
     box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click
     updateFreezeBadge();
     refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
     status(`${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
+    return true;
   }
 
   function durMode(): string {
@@ -344,15 +362,9 @@ export function createKeyHandler(state: KeyHandlerState) {
     const g = state.garden;
 
     // ─── Freeze menu: F, then the key for what to freeze ──────────────────────
-    if (_freezeMenu) {
-      onFreezeKey(e);
-      return;
-    }
-    if (ch === 'F' && !alt) {
-      _freezeMenu = true;
-      const badge = document.getElementById('freeze-badge');
-      if (badge) { badge.textContent = '❄ ?'; badge.classList.add('menu'); }
-      status(`freeze: ${FREEZE_ITEMS.map(f => `${f.key} ${f.name}${isFrozen(f) ? ' ❄' : ''}`).join(' · ')}  (esc cancels)`);
+    if (_freezeMenu && onFreezeKey(e)) return;
+    if (ch === 'F' && !alt && !_freezeMenu) {
+      setFreezeMenu(true);
       return;
     }
 

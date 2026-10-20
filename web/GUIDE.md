@@ -185,8 +185,8 @@ set of values. Press **`F`**, then:
 | `d` | duration | the total length (amount set in ⚙ settings). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
 | `g` | grid | a time grid (size set in ⚙ settings) |
 
-Each key toggles one freeze (`d` cycles through three states) and closes the menu. `esc` cancels. The header shows
-what's frozen, e.g. `❄ p t d:trim`. The same switches are in ⚙ settings under
+The menu is sticky, like the list modes: each key toggles one freeze (`d` cycles through three states) and the menu stays open, so you can set several or step `d` round. `F` or `esc` closes it. Playback, garden and view keys work while it's open. The header shows
+what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …`. The same switches are in ⚙ settings under
 **freeze** and **palette**, and the two always agree.
 
 - **Palette freezes capture the palette when you switch them on.** To take a
