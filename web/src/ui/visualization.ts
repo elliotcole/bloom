@@ -1934,6 +1934,10 @@ export class BloomVisualization {
   private _clean = false;
   private _listMode: LaneMode = null;
   private _lanes = new Lanes();
+  /** The bloom as written, for the lanes; the looper's display bloom is wrapped to one pass */
+  private _lanesBloom: Bloom | null = null;
+  /** Running count of notes played, so each lane's cursor cycles at its own length */
+  private _tick = -1;
 
   // Flash / playhead state
   private petalFlash: number[] = [];
@@ -1961,7 +1965,7 @@ export class BloomVisualization {
 
   /** `trace: false` for display-only blooms (the looper's rotated view), so they aren't shown as edits. */
   setBloom(bloom: Bloom, trace = true): void {
-    if (trace) this._lanes.observe(bloom);
+    if (trace) { this._lanes.observe(bloom); this._lanesBloom = bloom; }
     this.bloom = bloom;
     this.petalFlash = new Array(bloom.notes.length).fill(0);
     this.playheadIndex = -1;
@@ -2003,8 +2007,9 @@ export class BloomVisualization {
   getMode(): VizMode { return this._mode; }
   getTheme(): ThemeId { return this._theme.id; }
 
-  activateNote(index: number): void {
+  activateNote(index: number, tick = index): void {
     if (!this.bloom || index < 0 || index >= this.bloom.notes.length) return;
+    this._tick = tick;
     if (this.petalFlash.length !== this.bloom.notes.length)
       this.petalFlash = new Array(this.bloom.notes.length).fill(0);
     this.petalFlash[index] = 1.0;
@@ -2018,6 +2023,7 @@ export class BloomVisualization {
     this.petalFlash = this.petalFlash.map(() => 0);
     this.playheadIndex = -1;
     this._beadActivatedAt = 0;
+    this._tick = -1;
   }
 
   /** @deprecated — use setMode() instead; kept for callers that used toggleMode() */
@@ -2200,7 +2206,8 @@ export class BloomVisualization {
         const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
         progress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
       }
-      this._lanes.draw(ctx, 0, H, W, bloom, theme, this._listMode, this.playheadIndex, progress);
+      this._lanes.draw(ctx, 0, H, W, this._lanesBloom ?? bloom, theme, this._listMode,
+        this.playheadIndex >= 0 ? this._tick : -1, progress);
     } else if (this._showChanStrip && !this._clean) {
       this._drawChanStrip(ctx, W, H, bloom, theme);
     }

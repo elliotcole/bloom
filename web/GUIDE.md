@@ -20,6 +20,8 @@ A bloom is a set of parallel lists:
 
 The lists don't have to be the same length. Each one cycles at its own length,
 so a 5-note bloom with 4 velocities drifts in and out of phase as it loops.
+That holds in the loop (`,`) and the pulsar (`/`); a single play (space)
+always starts every list at its beginning.
 
 ## Four levels of control
 
@@ -207,9 +209,10 @@ what's frozen, e.g. `❄ p t`. The same switches are in ⚙ settings under
 ## Seeing it
 
 - **Lanes: `L`.** A strip under the view showing the four lists (pitch, time,
-  velocity, channels) on one time axis, two loop passes wide. Each lane shows
-  its length (×n); its shading alternates each time that list wraps, so when
-  lists of different lengths phase, you can see where. The lane for the
+  velocity, channels), each at its own length (×n). The time lane is drawn to
+  scale. While playing, each lane has its own cursor, which cycles at that
+  list's length, so you can watch lists of different lengths drift against
+  each other. The lane for the
   current list mode is lit amber, a frozen list shows ❄, recently breezed
   values glow, and whatever the last key changed is boxed for a moment. The
   setting is remembered.

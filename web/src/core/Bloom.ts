@@ -2376,13 +2376,14 @@ export class Bloom {
   // ─── Playback interface (consumed by scheduler) ────────────────────────────
 
   /** Returns flat list of { note, velocity, time, chan } events for playback */
-  toEvents(): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
+  /** One pass of the notes. `tick` is the running count the other lists are read at, so they keep phasing across passes. */
+  toEvents(tick = 0): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
     return this.notes.map((note, i) => ({
       note: Array.isArray(note) ? (note as number[]) : note as number,
-      added: this.addedNotesAt(i),
-      velocity: wrapAt(this.velocities, i),
-      time: wrapAt(this.timeIntervals, i),
-      chan: wrapAt(this.chans, i),
+      added: this.addedNotesAt(i, tick + i),
+      velocity: wrapAt(this.velocities, tick + i),
+      time: wrapAt(this.timeIntervals, tick + i),
+      chan: wrapAt(this.chans, tick + i),
     }));
   }
 

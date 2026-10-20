@@ -163,7 +163,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (!state.out) { refresh('No MIDI output'); return; }
     state.cancelLastPlay?.();
     bloom.resolveFixed();
-    const onNoteOn = (idx: number) => state.viz?.activateNote(idx);
+    const onNoteOn = (idx: number, tick: number) => state.viz?.activateNote(idx, tick);
     const cancel = playOnce(bloom, state.out, undefined, undefined, onNoteOn);
     state.cancelLastPlay = cancel;
     refresh(msg ?? '');
@@ -870,7 +870,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         startLooper(
           b,
           state.out!,
-          idx => state.viz?.activateNote(idx),
+          (idx, tick) => state.viz?.activateNote(idx, tick),
           (vel, time, chan, intervals) => {
             // Reuse a single display bloom; import notes/scale from the live bloom each cycle
             if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
@@ -908,7 +908,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (ch === '/' && !alt) {
       b.resolveFixed();
-      if (!isPulsing()) startPulsar(b, state.out!, getPulsarRate(), idx => state.viz?.activateNote(idx));
+      if (!isPulsing()) startPulsar(b, state.out!, getPulsarRate(), (idx, tick) => state.viz?.activateNote(idx, tick));
       updatePulsar(b);
       status(`pulsar [${getPulsarRate()}b]`);
       return;

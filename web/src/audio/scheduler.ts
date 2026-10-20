@@ -41,9 +41,10 @@ export function playOnce(
   out: MidiOutput,
   legato = bloom.legato,
   sustain = bloom.sustain,
-  onNoteOn?: (index: number) => void,
+  onNoteOn?: (index: number, tick: number) => void,
+  tick = 0,
 ): () => void {
-  const events = bloom.toEvents();
+  const events = bloom.toEvents(tick);
   const now = performance.now();
   let cursor = 0; // ms offset from now
   const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -71,7 +72,7 @@ export function playOnce(
           noteOn(out, chan, n, addedVelocity(vel), now + onAt);
         });
       }
-      onNoteOn?.(i);
+      onNoteOn?.(i, tick + i);
     }, onAt);
     timeouts.push(t);
 
@@ -106,7 +107,7 @@ interface LoopState {
   nextEventTime: number; // ms absolute
   /** Persistent counter across loop boundaries — each list wraps at its own length */
   globalTick: number;
-  onNoteOn?: (index: number) => void;
+  onNoteOn?: (index: number, tick: number) => void;
   /** Called at the start of every notes cycle with the effective vel/time/chan arrays for that cycle */
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void;
   onLoop?: () => void;
@@ -124,7 +125,7 @@ function buildCycleSlice<T>(
 export function startLooper(
   bloom: Bloom,
   out: MidiOutput,
-  onNoteOn?: (index: number) => void,
+  onNoteOn?: (index: number, tick: number) => void,
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void,
   onLoop?: () => void,
 ): void {
@@ -196,9 +197,9 @@ export function startLooper(
       }
 
       // Fire visual callback at actual note-on time
-      const tickSnap = noteIdx;
+      const idxSnap = noteIdx, tickSnap = state.globalTick;
       const visualDelay = Math.max(0, atMs - now);
-      setTimeout(() => state.onNoteOn?.(tickSnap), visualDelay);
+      setTimeout(() => state.onNoteOn?.(idxSnap, tickSnap), visualDelay);
 
       state.globalTick++;
       state.nextEventTime += beatsToMs(time);
@@ -230,9 +231,11 @@ interface PulsarState {
   out: MidiOutput;
   rateBeats: number;
   intervalId: ReturnType<typeof setInterval>;
-  onNoteOn?: (index: number) => void;
+  onNoteOn?: (index: number, tick: number) => void;
   onFire?: () => void;
   cancelLastPlay?: () => void;
+  /** Running count across fires, so lists of other lengths keep phasing as in the looper */
+  tick: number;
 }
 
 let _pulsar: PulsarState | null = null;
@@ -241,14 +244,17 @@ export function startPulsar(
   bloom: Bloom,
   out: MidiOutput,
   rateBeats = 8,
-  onNoteOn?: (index: number) => void,
+  onNoteOn?: (index: number, tick: number) => void,
   onFire?: () => void,
+  startTick = 0,
 ): void {
   stopPulsar();
 
   const fire = () => {
-    _pulsar!.cancelLastPlay?.();
-    _pulsar!.cancelLastPlay = playOnce(_pulsar!.bloom, out, undefined, undefined, _pulsar!.onNoteOn);
+    const p = _pulsar!;
+    p.cancelLastPlay?.();
+    p.cancelLastPlay = playOnce(p.bloom, out, p.bloom.legato, p.bloom.sustain, p.onNoteOn, p.tick);
+    p.tick += p.bloom.notes.length;
     onFire?.();
   };
 
@@ -259,6 +265,7 @@ export function startPulsar(
     intervalId: setInterval(fire, beatsToMs(rateBeats)),
     onNoteOn,
     onFire,
+    tick: startTick,
   };
 
   _pulsar = state;
@@ -271,8 +278,8 @@ export function updatePulsar(bloom: Bloom): void {
 
 export function setPulsarRate(rateBeats: number): void {
   if (!_pulsar) return;
-  const { bloom, out, onNoteOn, onFire } = _pulsar;
-  startPulsar(bloom, out, rateBeats, onNoteOn, onFire);
+  const { bloom, out, onNoteOn, onFire, tick } = _pulsar;
+  startPulsar(bloom, out, rateBeats, onNoteOn, onFire, tick);
 }
 
 export function getPulsarRate(): number {

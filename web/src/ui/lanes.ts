@@ -1,5 +1,5 @@
-// Bloom lanes — the four parallel lists drawn on one time axis, two loop passes
-// wide so phasing shows. Each press leaves a short trace of what it changed.
+// Bloom lanes — the four parallel lists, each at its own length, with a cursor
+// per list as it cycles. Each press leaves a short trace of what it changed.
 
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
@@ -8,7 +8,6 @@ import type { Theme } from './theme';
 type LaneKey = 'notes' | 'time' | 'vel' | 'chan';
 export type LaneMode = 'time' | 'vel' | 'chan' | null;
 
-const PASSES = 2;
 const LANE_H = 24;
 const LABEL_W = 70;
 const TRACE_MS = 1400;
@@ -30,7 +29,6 @@ const FRACS: Record<string, string> = {
   '1': '1', '1.5': '1½', '2': '2', '3': '3', '4': '4',
 };
 const fmtT = (t: number) => FRACS[String(Math.round(t * 1e4) / 1e4)] ?? t.toFixed(2);
-const wrap = <T>(a: T[], i: number): T => a[((i % a.length) + a.length) % a.length];
 const chanHue = (c: number) => (c * 360) / 16;
 const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
 const amber = (a: number) => `rgba(232,163,58,${Math.max(0, Math.min(1, a))})`;
@@ -73,29 +71,24 @@ export class Lanes {
   /** Forget the previous state (e.g. a new bloom), so the next change isn't traced against it. */
   reset(b: Bloom): void { this.last = snapshot(b); this.changed = null; }
 
+  /**
+   * Each lane is its own list at its own length. The time lane is drawn to
+   * scale; the others in equal cells. `tick` is the running count of notes
+   * played (-1 when stopped): each lane's cursor sits at tick mod its length,
+   * so lists of different lengths visibly cycle against each other.
+   */
   draw(
     ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number,
-    b: Bloom, theme: Theme, mode: LaneMode, playIndex: number, playProgress: number,
+    b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number,
   ): void {
     const n = b.notes.length;
     if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length) return;
     const fade = this.changed ? Math.max(0, 1 - (performance.now() - this.changedAt) / TRACE_MS) : 0;
     if (fade === 0) this.changed = null;
 
-    // Timeline: the looper advances every list by its own running count, so
-    // lists of other lengths line up differently on the second pass.
     const len: Record<LaneKey, number> = {
       notes: n, time: b.timeIntervals.length, vel: b.velocities.length, chan: b.chans.length,
     };
-    const evs: { pass: number; i: number; tick: number; t: number; dt: number; vel: number; chan: number; note: unknown }[] = [];
-    let total = 0;
-    for (let p = 0; p < PASSES; p++) for (let i = 0; i < n; i++) {
-      const tick = p * n + i;
-      const dt = Math.max(0.0001, wrap(b.timeIntervals, tick));
-      evs.push({ pass: p, i, tick, t: total, dt, vel: wrap(b.velocities, tick), chan: wrap(b.chans, tick), note: b.notes[i] });
-      total += dt;
-    }
-    const X = (t: number) => x0 + LABEL_W + (t / total) * (w - LABEL_W - 8);
     const heat = {
       notes: null as number[] | null,
       time: b.breezeHeat('time'), vel: b.breezeHeat('vel'), chan: b.breezeHeat('chan'),
@@ -109,6 +102,18 @@ export class Lanes {
         const h = Math.max(...ph.slice(k, k + c), 0); k += c; return h;
       });
     }
+
+    // cell edges per lane, as fractions of the lane's width
+    const times = b.timeIntervals.map(t => Math.max(0.0001, t));
+    const totalT = times.reduce((a, t) => a + t, 0);
+    const edges = (k: LaneKey): number[] => {
+      const e = [0];
+      if (k === 'time') { let acc = 0; for (const t of times) { acc += t; e.push(acc / totalT); } }
+      else for (let i = 1; i <= len[k]; i++) e.push(i / len[k]);
+      return e;
+    };
+    const innerW = w - LABEL_W - 8;
+    const X = (f: number) => x0 + LABEL_W + f * innerW;
 
     ctx.save();
     ctx.font = '10px ui-monospace, Menlo, monospace';
@@ -131,15 +136,13 @@ export class Lanes {
       ctx.fillText(`×${len[L.key]}`, x0 + LABEL_W - 6, mid);
       ctx.textAlign = 'left';
 
-      for (const e of evs) {
-        const cx0 = X(e.t) + 1, cx1 = X(e.t + e.dt) - 1, cw = cx1 - cx0;
+      const E = edges(L.key);
+      const cur = tick >= 0 ? tick % len[L.key] : -1;
+      for (let li = 0; li < len[L.key]; li++) {
+        const cx0 = X(E[li]) + 1, cx1 = X(E[li + 1]) - 1, cw = cx1 - cx0;
         if (cw <= 0) continue;
-        const li = L.key === 'notes' ? e.i : e.tick % len[L.key];
-        const cycle = Math.floor(e.tick / len[L.key]);
-        // alternate shading per cycle of this list: where it changes, the list wrapped
-        ctx.fillStyle = ink(cycle % 2 ? 0.03 : 0.065);
+        ctx.fillStyle = ink(li % 2 ? 0.05 : 0.075);
         ctx.fillRect(cx0, top + 1, cw, LANE_H - 5);
-        if (li === 0) { ctx.fillStyle = active ? MODE : ink(0.3); ctx.fillRect(cx0, top + 1, 2, LANE_H - 5); }
 
         const h = heat[L.key]?.[li] ?? 0;
         if (h > 0.05) { ctx.fillStyle = amber(0.18 * Math.min(1, h)); ctx.fillRect(cx0, top + 1, cw, LANE_H - 5); }
@@ -147,41 +150,38 @@ export class Lanes {
           ctx.strokeStyle = amber(fade); ctx.lineWidth = 1.5;
           ctx.strokeRect(cx0 + 0.5, top + 1.5, cw - 1, LANE_H - 6); ctx.lineWidth = 1;
         }
-        if (e.pass === 0 && e.i === playIndex) {
-          ctx.fillStyle = ink(0.12);
-          ctx.fillRect(cx0, top + 1, cw * Math.max(0.04, playProgress), LANE_H - 5);
+        // this list's own cursor
+        if (li === cur) {
+          ctx.fillStyle = ink(0.16);
+          ctx.fillRect(cx0, top + 1, cw * Math.max(0.04, progress), LANE_H - 5);
+          ctx.strokeStyle = ink(0.7); ctx.lineWidth = 1;
+          ctx.strokeRect(cx0 + 0.5, top + 1.5, cw - 1, LANE_H - 6);
         }
         if (cw < 14) continue;
 
-        const dim = e.pass ? 0.5 : 1;
         ctx.save();
         ctx.beginPath(); ctx.rect(cx0, top, cw, LANE_H); ctx.clip();
-        ctx.fillStyle = ink(0.8 * dim);
+        const a = li === cur ? 1 : 0.8;
+        ctx.fillStyle = ink(a);
         if (L.key === 'notes') {
-          const ps = flatNotes([e.note] as Parameters<typeof flatNotes>[0]) as number[];
+          const ps = flatNotes([b.notes[li]]) as number[];
           ctx.fillText(ps.length > 1 ? nameOf(ps[0]) + '+' : nameOf(ps[0]), cx0 + 4, mid);
         } else if (L.key === 'time') {
-          ctx.fillText(fmtT(e.dt), cx0 + 4, mid);
+          ctx.fillText(fmtT(b.timeIntervals[li]), cx0 + 4, mid);
         } else if (L.key === 'vel') {
-          const bh = (LANE_H - 9) * e.vel / 127;
-          ctx.fillStyle = ink(0.25 * dim); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
-          ctx.fillStyle = ink(0.8 * dim); ctx.fillText(String(e.vel), cx0 + 8, mid);
+          const v = b.velocities[li];
+          const bh = (LANE_H - 9) * v / 127;
+          ctx.fillStyle = ink(0.25); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
+          ctx.fillStyle = ink(a); ctx.fillText(String(v), cx0 + 8, mid);
         } else {
-          ctx.fillStyle = `hsla(${chanHue(e.chan)},70%,55%,${0.9 * dim})`;
+          const c = b.chans[li];
+          ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;
           ctx.beginPath(); ctx.arc(cx0 + 8, mid, 4, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = ink(0.8 * dim); ctx.fillText(String(e.chan), cx0 + 16, mid);
+          ctx.fillStyle = ink(a); ctx.fillText(String(c), cx0 + 16, mid);
         }
         ctx.restore();
       }
     });
-
-    // the pass boundary
-    const p2 = evs[n];
-    if (p2) {
-      ctx.strokeStyle = ink(0.3); ctx.setLineDash([3, 4]);
-      ctx.beginPath(); ctx.moveTo(X(p2.t), y0 + 2); ctx.lineTo(X(p2.t), y0 + LANES_HEIGHT - 4); ctx.stroke();
-      ctx.setLineDash([]);
-    }
     ctx.restore();
   }
 
