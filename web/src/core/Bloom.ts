@@ -2276,16 +2276,26 @@ export class Bloom {
     return this;
   }
 
-  /** Widen (or with a negative n, narrow) every interval; steps of 0 stay off */
+  /**
+   * Widen (or with a negative n, narrow) the intervals: each added note moves
+   * further from (or closer to) its parent, above or below alike. In a stacked
+   * step the k-th closest note moves k, so the stack's own spacing opens out
+   * too ([3, 7] → [4, 9]) instead of the whole stack shifting. Narrowing stops
+   * at 1, 2, 3… for the stack's notes; steps of 0 stay off.
+   */
   incrementIntervals(n = 1): this {
-    const bump = (iv: number): number => {
-      if (iv === 0) return 0;
-      const next = iv + n;
-      // passing through 0 would switch the step off, so step over it
-      return next === 0 || Math.sign(next) !== Math.sign(iv) ? next + Math.sign(n) : next;
+    const widen = (ivs: number[]): number[] => {
+      const order = ivs.map((_, i) => i).filter(i => ivs[i] !== 0)
+        .sort((x, y) => Math.abs(ivs[x]) - Math.abs(ivs[y]));
+      const out = [...ivs];
+      order.forEach((i, rank) => {
+        const mag = Math.max(rank + 1, Math.abs(ivs[i]) + n * (rank + 1));
+        out[i] = Math.sign(ivs[i]) * mag;
+      });
+      return out;
     };
     this.intervals = this.intervals.map(step =>
-      Array.isArray(step) ? step.map(bump) : bump(step),
+      Array.isArray(step) ? widen(step) : widen([step])[0],
     );
     return this;
   }
