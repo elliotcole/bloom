@@ -688,22 +688,10 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('rotate <<');
       return;
     }
-    if (ch === '(') {
-      status('rotate pitches <<');
-      b.rotateNotes(-1);
-      refresh('rotate pitches <<');
-      return;
-    }
     if (ch === '0') {
       status('rotate notes >>');
       b.rotate(1);
       refresh('rotate >>');
-      return;
-    }
-    if (ch === ')') {
-      status('rotate pitches >>');
-      b.rotateNotes(1);
-      refresh('rotate pitches >>');
       return;
     }
 
@@ -836,16 +824,24 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('breeze +1');
       return;
     }
-    if (ch === '[') {
+    // ( ) pivot and [ ] flatward / sharpward: the same keys as in pitch mode
+    if (ch === '(') {
       status('pivot (highest)');
       b.pivot();
       refresh('pivot');
       return;
     }
-    if (ch === ']') {
+    if (ch === ')') {
       status('pivot (loudest)');
       b.pivotLoudest();
       refresh('pivotLoudest');
+      return;
+    }
+    if (ch === '[' || ch === ']') {
+      const name = ch === ']' ? 'sharpward' : 'flatward';
+      const moved = b.fifthsward(ch === ']' ? 1 : -1);
+      if (moved) { status(`${name}: ${moved}`); refresh(name); }
+      else status(`no ${name} step from here`);
       return;
     }
     if (ch === 'w' && !shift && !alt) {

@@ -86,8 +86,8 @@ The settings are in `GESTURE` (`breeze`, `breezePull`, `breezeMemory`). In the
 list modes, `#` `$` do the same with a palette step, with the same memory.
 
 **Pitches only**: hold **opt** with `s S R u U d D` to move only the pitches.
-Rhythm, dynamics and channels stay where they are. `(` `)` rotate the pitches
-alone; opt + digits already change the view.
+Rhythm, dynamics and channels stay where they are. To rotate the pitches
+alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Pitch (home)
 
@@ -96,9 +96,9 @@ alone; opt + digits already change the view.
 | `m` | mutate (scale steps) | `M` | mutate (chromatic) |
 | `1` `2` | ∓ semitone | `!` `@` | ∓ octave |
 | `3` `4` | ∓ scale step | `#` `$` | **breeze**: some notes ∓ a scale step |
-| `e` / `E` | shear / centre range | | |
+| `e` / `E` | shear / centre range | `[` / `]` | step flatward / sharpward |
 | `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
-| `[` / `]` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
+| `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
 | `;` / `:` | clump / flatten chords | `k K j J` | scales: choose, slant, lift, reduce |
 
 ## Other home keys
@@ -165,8 +165,9 @@ once the scale is all used, the chromatic note that makes a named scale. The
 scale follows along, and the notice shows the count and the scale's name,
 e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
 scale. Chords keep their shape. `(` `)` pivot (invert, keeping the highest
-or the loudest note where it is). The scale keys `k K j J`, center range `E`
-and the interval keys `5`–`8` work in pitch mode as they do at home.
+or the loudest note where it is). Every pitch key from home works in pitch
+mode and means the same thing there, including `k K j J`, `E`, `[ ]` and the
+interval keys `5`–`8`.
 
 To travel further, `]` steps **sharpward** and `[` **flatward** round the
 circle of fifths: one pitch class of the scale moves a semitone and the notes
