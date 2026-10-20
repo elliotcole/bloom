@@ -80,8 +80,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   // vocabulary
   m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
   M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
-  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'fewer distinct pitches' } },
-  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'more distinct pitches' } },
+  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer' } },
+  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more' } },
   n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches' } },
 };
 

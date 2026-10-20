@@ -158,8 +158,12 @@ point: stutter only the velocities and the accent pattern drifts.
 **In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
 semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
 `y` puts every note on the commonest pitch, `i` mirrors high and low, `e`
-tilts the line up or down, `w` draws a contour. `h H` merge the rarest pitch
-into its neighbour or split a repeated pitch to a new one. `q` snaps to the
+tilts the line up or down, `w` draws a contour. `h H` take away or add one
+**pitch class**: `h` removes the least-used class (its notes move to the
+nearest class still in use); `H` brings in an unused note of the scale or,
+once the scale is all used, the chromatic note that makes a named scale. The
+scale follows along, and the notice shows the count and the scale's name,
+e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
 scale. Chords keep their shape.
 
 ### Vocabulary ("palette")

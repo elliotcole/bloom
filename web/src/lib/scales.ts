@@ -127,6 +127,25 @@ export function slantMatch(targetDegrees: number[]): Scale[] {
   return nonEmpty[nonEmpty.length - 2];
 }
 
+const PC_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+/**
+ * Name a set of pitch classes after a catalogue scale it matches on some root,
+ * e.g. [2, 4, 5, 7, 9, 11, 0] → "D Dorian". Empty string when nothing matches.
+ */
+export function nameScaleDegrees(pcs: number[]): string {
+  const set = [...new Set(pcs.map(d => ((d % 12) + 12) % 12))].sort((a, b) => a - b);
+  const key = set.join(',');
+  for (const sc of ALL_SCALES) {
+    if (sc.pitchesPerOctave !== 12 || sc.degrees.length !== set.length) continue;
+    for (let root = 0; root < 12; root++) {
+      const t = sc.degrees.map(d => (d + root) % 12).sort((a, b) => a - b).join(',');
+      if (t === key) return `${PC_NAMES[root]} ${sc.name}`;
+    }
+  }
+  return '';
+}
+
 /** Transpose scale degrees by t semitones (mod 12, sorted) */
 export function scaleTranspose(s: Scale, t: number): Scale {
   return {

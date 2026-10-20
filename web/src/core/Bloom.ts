@@ -18,7 +18,7 @@ import {
 import type { Scale } from '../lib/scales';
 import {
   SCALES, mostSimilarTo, slantMatch,
-  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr,
+  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr, nameScaleDegrees,
 } from '../lib/scales';
 
 // ─── Class-level defaults ──────────────────────────────────────────────────────
@@ -1824,29 +1824,8 @@ export class Bloom {
       }
       case 'sortUp': this.sortNotes(); break;
       case 'sortDown': this.sortNotes(true); break;
-      // the rarest pitch joins its nearest neighbour among the pitches used
-      case 'fewer': {
-        const used = [...new Set(flat)];
-        if (used.length < 2) break;
-        const count = (m: number) => flat.filter(x => x === m).length;
-        const rare = used.reduce((a, m) => (count(m) < count(a) ? m : a));
-        const others = used.filter(m => m !== rare);
-        const near = others.reduce((a, m) => (Math.abs(m - rare) < Math.abs(a - rare) ? m : a));
-        this.saveNest(); this.notes = flat.map(m => (m === rare ? near : m)); this.restoreNest();
-        break;
-      }
-      // one repeated pitch steps to a scale neighbour nobody uses yet
-      case 'more': {
-        const seen = new Set<number>();
-        const repeats = flat.map((m, i) => (seen.has(m) ? i : (seen.add(m), -1))).filter(i => i >= 0);
-        if (!repeats.length) break;
-        const i = pick(repeats);
-        const options = [-2, -1, 1, 2].map(k => toKey(degs[i] + k)).filter(m => !flat.includes(m));
-        if (!options.length) break;
-        const out = [...flat]; out[i] = pick(options);
-        this.saveNest(); this.notes = out; this.restoreNest(); this.enforceRange();
-        break;
-      }
+      case 'fewer': this.fewerPitchClasses(); break;
+      case 'more': this.morePitchClasses(); break;
       case 'quantize': this.applyScale(scale); break;
       case 'renew': setDegs(() => toDeg(Math.round(rrand(this.lowestSeedNote, this.highestSeedNote)))); break;
       case 'dropLast': if (this.notes.length > 1) this.notes = this.notes.slice(0, -1); break;
@@ -1855,6 +1834,83 @@ export class Bloom {
       default: return false;
     }
     return true;
+  }
+
+  // ─── Pitch classes ──────────────────────────────────────────────────────────
+  // The scale follows: one class fewer takes it out of the scale, one more adds
+  // it, so scale steps and a pitch freeze keep agreeing with what's played.
+
+  private pcOf = (m: number) => ((Math.round(m) % 12) + 12) % 12;
+
+  /** The scale as absolute pitch classes, named after the catalogue when it matches */
+  private setScalePcs(pcs: number[]): void {
+    const degrees = [...new Set(pcs.map(this.pcOf))].sort((a, b) => a - b);
+    this.appliedScale = { degrees, pitchesPerOctave: 12, name: nameScaleDegrees(degrees) };
+  }
+
+  /** The nearest pitch to m whose class is in `pcs` (ties broken at random) */
+  private nearestWithPc(m: number, pcs: Set<number>): number {
+    for (let k = 1; k <= 6; k++) {
+      const opts = [m - k, m + k].filter(x => pcs.has(this.pcOf(x)));
+      if (opts.length) return pick(opts);
+    }
+    return m;
+  }
+
+  /** One pitch class fewer: the least-used class goes, its notes move to the nearest class still in use */
+  fewerPitchClasses(): this {
+    const flat = flatNotes(this.notes) as number[];
+    const count = new Map<number, number>();
+    flat.forEach(m => count.set(this.pcOf(m), (count.get(this.pcOf(m)) ?? 0) + 1));
+    if (count.size < 2) return this;
+    const least = Math.min(...count.values());
+    const gone = pick([...count.keys()].filter(pc => count.get(pc) === least));
+    const keep = new Set([...count.keys()].filter(pc => pc !== gone));
+    const scaleBefore = (this.appliedScale ?? this.asScale()).degrees;
+    this.saveNest();
+    this.notes = flat.map(m => (this.pcOf(m) === gone ? this.nearestWithPc(m, keep) : m));
+    this.restoreNest();
+    this.enforceRange();
+    this.setScalePcs([...scaleBefore.filter(d => this.pcOf(d) !== gone), ...keep]);
+    return this;
+  }
+
+  /**
+   * One pitch class more. An unused note of the scale comes in if there is
+   * one; otherwise the scale gains the chromatic note that makes a named scale
+   * (else any). A note whose class is doubled moves there; if every note has
+   * its own class, a note is added instead.
+   */
+  morePitchClasses(): this {
+    const flat = flatNotes(this.notes) as number[];
+    if (!flat.length) return this;
+    const used = new Set(flat.map(this.pcOf));
+    const scalePcs = new Set((this.appliedScale ?? this.asScale()).degrees.map(this.pcOf));
+    flat.forEach(m => scalePcs.add(this.pcOf(m)));
+    let fresh = [...scalePcs].filter(pc => !used.has(pc));
+    if (!fresh.length) {
+      const outside = Array.from({ length: 12 }, (_, i) => i).filter(pc => !scalePcs.has(pc));
+      if (!outside.length) return this;   // all twelve already
+      const named = outside.filter(pc => nameScaleDegrees([...scalePcs, pc]) !== '');
+      fresh = named.length ? named : outside;
+    }
+    const pc = pick(fresh);
+    const doubled = flat.map((_, i) => i).filter(i => flat.filter(x => this.pcOf(x) === this.pcOf(flat[i])).length > 1);
+    if (doubled.length) {
+      // the doubled note closest to the new class moves
+      const dist = (i: number) => Math.abs(this.nearestWithPc(flat[i], new Set([pc])) - flat[i]);
+      const best = Math.min(...doubled.map(dist));
+      const i = pick(doubled.filter(j => dist(j) === best));
+      const out = [...flat];
+      out[i] = this.nearestWithPc(flat[i], new Set([pc]));
+      this.saveNest(); this.notes = out; this.restoreNest();
+    } else {
+      const mid = [...flat].sort((a, b) => a - b)[Math.floor(flat.length / 2)];
+      this.notes = [...this.notes, this.nearestWithPc(mid, new Set([pc]))];
+    }
+    this.enforceRange();
+    this.setScalePcs([...scalePcs, pc]);
+    return this;
   }
 
   // Time verbs work along the palette where they can (halves and doubles of the

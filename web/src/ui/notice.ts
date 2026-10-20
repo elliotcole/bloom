@@ -65,7 +65,7 @@ export class Notice {
 /** A snapshot small enough to keep per key, and to compare */
 export interface Snap {
   notes: string; flat: number[]; time: number[]; vel: number[]; chan: number[]; intervals: string;
-  scaleName: string; scaleDegs: string; nNotes: number;
+  scaleName: string; scaleDegs: string; nNotes: number; pcs: number;
 }
 
 export function snap(b: Bloom): Snap {
@@ -74,6 +74,7 @@ export function snap(b: Bloom): Snap {
     notes: JSON.stringify(b.notes), flat: flatNotes(b.notes) as number[],
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
     intervals: JSON.stringify(b.intervals), nNotes: b.notes.length,
+    pcs: new Set((flatNotes(b.notes) as number[]).map(m => ((Math.round(m) % 12) + 12) % 12)).size,
     scaleName: sc.name, scaleDegs: [...sc.degrees].sort((x, y) => x - y).join(','),
   };
 }
@@ -89,6 +90,7 @@ const scaleText = (s: Snap) =>
 /** One line saying what changed between two states, most telling first */
 export function describeChange(a: Snap, z: Snap): string {
   const parts: string[] = [];
+  if (a.pcs !== z.pcs) parts.push(`pitch classes ${a.pcs} → ${z.pcs}`);
   if (a.scaleDegs !== z.scaleDegs || (z.scaleName && a.scaleName !== z.scaleName)) parts.push(`scale ${scaleText(z)}`);
 
   const len = (name: string, x: number, y: number) => { if (x !== y) parts.push(`${name} ${x} → ${y}`); };
