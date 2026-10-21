@@ -1900,8 +1900,13 @@ export class Bloom {
       case 'quantize': this.applyScale(scale); break;
       case 'renew': setDegs(() => toDeg(Math.round(rrand(this.lowestSeedNote, this.highestSeedNote)))); break;
       case 'dropLast': if (this.notes.length > 1) this.notes = this.notes.slice(0, -1); break;
-      case 'addFromPalette': this.notes = [...this.notes, JSON.parse(JSON.stringify(pick(this.notes)))]; break;
-      case 'addRandom': this.notes = [...this.notes, toKey(rrand(Math.min(...degs) - 2, Math.max(...degs) + 2))]; break;
+      // as at home: a adds a note in the scale (pitch's palette), A any note
+      case 'addFromPalette': this.notes = [...this.notes, toKey(rrand(Math.min(...degs) - 2, Math.max(...degs) + 2))]; break;
+      case 'addRandom': {
+        const flat = flatNotes(this.notes) as number[];
+        this.notes = [...this.notes, Math.round(rrand(Math.min(...flat) - 2, Math.max(...flat) + 2))];
+        break;
+      }
       default: return false;
     }
     return true;

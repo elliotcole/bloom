@@ -58,8 +58,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo' } },
   O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo' } },
   z: { verb: 'dropLast', label: 'drop last' },
-  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one (a pitch in use)' } },
-  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (in scale)' } },
+  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale' } },
+  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)' } },
   // values
   '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1' } },
   '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1' } },
