@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bloom keys</title>
+<style>
+  @page { size: letter portrait; margin: 0.38in 0.42in; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0; color: #111; background: #fff;
+    font: 8.5pt/1.28 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .page { page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1.5pt solid #111; padding-bottom: 3pt; margin-bottom: 7pt; }
+  header h1 { font-size: 15pt; margin: 0; letter-spacing: 0.5pt; }
+  header .sub { font-size: 8pt; color: #555; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14pt; }
+  section { break-inside: avoid; margin: 0 0 7pt; }
+  h2 { font-size: 8.6pt; text-transform: uppercase; letter-spacing: 0.8pt; margin: 0 0 2.5pt;
+    padding-bottom: 1.5pt; border-bottom: 0.6pt solid #999; }
+  h2 small { text-transform: none; letter-spacing: 0; font-weight: normal; color: #555; }
+  table.k { border-collapse: collapse; width: 100%; }
+  table.k td { padding: 0.9pt 0; vertical-align: top; }
+  table.k { table-layout: fixed; }
+  table.k td:first-child { width: 50pt; padding-right: 5pt; }
+  table.k.wide td:first-child { width: 60pt; }
+  kbd {
+    font: 600 8pt/1 Menlo, "SF Mono", Consolas, monospace;
+    border: 0.6pt solid #888; border-radius: 2pt; padding: 0.6pt 2.4pt; background: #f2f2f2;
+    display: inline-block; min-width: 9pt; text-align: center;
+  }
+  .note { color: #444; font-size: 7.8pt; margin: 2pt 0 0; }
+  .idea { border: 0.8pt solid #111; border-radius: 3pt; padding: 4pt 5.5pt; margin-bottom: 6pt; break-inside: avoid; font-size: 8.2pt; }
+  .idea h3 { margin: 0 0 2pt; font-size: 8.6pt; }
+  .idea p { margin: 0 0 3pt; }
+  .idea p:last-child { margin-bottom: 0; }
+  .ideas { column-count: 3; column-gap: 10pt; }
+  .ideas .idea { display: inline-block; width: 100%; }
+
+  table.m { border-collapse: collapse; width: 100%; margin-bottom: 6pt; font-size: 7.8pt; line-height: 1.22; }
+  table.m th, table.m td { border: 0.5pt solid #aaa; padding: 1pt 3pt; text-align: left; vertical-align: top; }
+  table.m th { background: #e6e6e6; font-size: 7.8pt; text-transform: uppercase; letter-spacing: 0.4pt; }
+  table.m td:first-child { white-space: nowrap; }
+  table.m tr.same td { background: #f6f6f6; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; }
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12pt; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ PAGE 1: HOME ════════════════════ -->
+<div class="page">
+  <header>
+    <h1>BLOOM · keys at home</h1>
+    <span class="sub"><kbd>?</kbd> shows the keys on screen · <kbd>cmd</kbd><kbd>Z</kbd> undoes anything · page 2: list modes, freezes, ideas</span>
+  </header>
+
+  <div class="grid3">
+   <div class="col">
+    <section>
+      <h2>Play</h2>
+      <table class="k wide">
+        <tr><td><kbd>space</kbd></td><td>play once (every list starts at its beginning)</td></tr>
+        <tr><td><kbd>,</kbd></td><td>loop (lists phase against each other)</td></tr>
+        <tr><td><kbd>/</kbd></td><td>pulsar: replay every few beats</td></tr>
+        <tr><td><kbd>&lt;</kbd> <kbd>&gt;</kbd></td><td>pulsar slower / faster</td></tr>
+        <tr><td><kbd>.</kbd></td><td>stop everything</td></tr>
+        <tr><td><kbd>⇧</kbd><kbd>space</kbd></td><td>play the selected garden slot</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>,</kbd><br><kbd>opt</kbd><kbd>/</kbd></td><td>loop / pulse the whole garden</td></tr>
+        <tr><td><kbd>~</kbd></td><td>sustain pedal</td></tr>
+        <tr><td><kbd>`</kbd></td><td>record / stop</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>New, undo, save points</h2>
+      <table class="k wide">
+        <tr><td><kbd>n</kbd></td><td>new bloom</td></tr>
+        <tr><td><kbd>N</kbd></td><td>new bloom, same scale</td></tr>
+        <tr><td><kbd>b</kbd></td><td>new shape</td></tr>
+        <tr><td><kbd>B</kbd></td><td>new bloom, same scale and shape</td></tr>
+        <tr><td><kbd>cmd</kbd><kbd>z</kbd></td><td>undo (last 300 changes)</td></tr>
+        <tr><td><kbd>cmd</kbd><kbd>⇧</kbd><kbd>z</kbd></td><td>redo</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>p</kbd></td><td>push a save point</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>P</kbd></td><td>pop back to it</td></tr>
+        <tr><td><kbd>cmd</kbd><kbd>S</kbd><br><kbd>cmd</kbd><kbd>O</kbd></td><td>save / load the garden</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Gestures <small>· whole bloom, small steps</small></h2>
+      <table class="k">
+        <tr><td><kbd>-</kbd></td><td><b>calm</b>: merge a note, soften, pitches inward</td></tr>
+        <tr><td><kbd>=</kbd></td><td><b>intensify</b>: split a note, louder, pitches outward</td></tr>
+        <tr><td><kbd>'</kbd></td><td><b>vary</b>: a little of everything moves</td></tr>
+        <tr><td><kbd>{</kbd> <kbd>}</kbd></td><td>merge two notes / split one in half</td></tr>
+      </table>
+      <p class="note">Rhythm only splits and merges, so the total length and your durations (halves and doubles) survive.</p>
+    </section>
+    <div class="idea">
+      <h3>A bloom is five lists</h3>
+      <p><b>pitch</b> (a sub-list is a chord) · <b>time</b> to the next note, in beats · <b>velocity</b> (0 = rest) · <b>channel</b> · <b>intervals</b>. Each list can have its own length.</p>
+    </div>
+    <div class="idea">
+      <h3>Phasing</h3>
+      <p>Lists of different lengths cycle on their own: 5 pitches over 4 velocities shift the accent each time round. You hear it in the <b>loop</b> and <b>pulsar</b>; <kbd>space</kbd> always starts every list together. <kbd>L</kbd> shows a cursor per list.</p>
+    </div>
+   </div>
+   <div class="col">
+    <section>
+      <h2>Whole notes <small>· each keeps its time, vel, chan</small></h2>
+      <table class="k">
+        <tr><td><kbd>s</kbd> <kbd>S</kbd></td><td>scramble / perfect shuffle</td></tr>
+        <tr><td><kbd>R</kbd></td><td>mirror</td></tr>
+        <tr><td><kbd>9</kbd> <kbd>0</kbd></td><td>rotate ← →</td></tr>
+        <tr><td><kbd>u</kbd> <kbd>U</kbd></td><td>stutter / sputter</td></tr>
+        <tr><td><kbd>d</kbd> <kbd>D</kbd></td><td>braid / pyramid</td></tr>
+        <tr><td><kbd>Y</kbd> <kbd>r</kbd></td><td>spray / ratchet</td></tr>
+        <tr><td><kbd>h</kbd> <kbd>H</kbd></td><td>thin / thicken</td></tr>
+        <tr><td><kbd>g</kbd> <kbd>G</kbd></td><td>insert / remove a gap</td></tr>
+        <tr><td><kbd>z</kbd></td><td>drop last</td></tr>
+        <tr><td><kbd>a</kbd> <kbd>A</kbd></td><td>add a note: in the scale / any</td></tr>
+        <tr><td><kbd>;</kbd> <kbd>:</kbd></td><td>clump into chords / flatten chords</td></tr>
+        <tr><td><kbd>W</kbd></td><td>remove doubled notes</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>w</kbd></td><td>wheels within wheels: one accent drifting each cycle</td></tr>
+      </table>
+      <p class="note"><kbd>opt</kbd> + <kbd>s S R u U d D</kbd>: the same patterns on the pitches only.</p>
+    </section>
+    <section>
+      <h2>Pitch <small>· also in pitch mode</small></h2>
+      <table class="k">
+        <tr><td><kbd>1</kbd> <kbd>2</kbd></td><td>semitone down / up</td></tr>
+        <tr><td><kbd>!</kbd> <kbd>@</kbd></td><td>octave down / up</td></tr>
+        <tr><td><kbd>3</kbd> <kbd>4</kbd></td><td>scale step down / up</td></tr>
+        <tr><td><kbd>#</kbd> <kbd>$</kbd></td><td><b>breeze</b>: some notes a step down / up</td></tr>
+        <tr><td><kbd>m</kbd> <kbd>M</kbd></td><td>mutate: in the scale / chromatic</td></tr>
+        <tr><td><kbd>i</kbd> <kbd>I</kbd></td><td>invert / invert around the mean</td></tr>
+        <tr><td><kbd>(</kbd> <kbd>)</kbd></td><td><b>pivot</b>: invert, keeping the highest / loudest note</td></tr>
+        <tr><td><kbd>e</kbd> <kbd>E</kbd></td><td>shear / center the range</td></tr>
+        <tr><td><kbd>w</kbd></td><td>draw a contour (in the scale)</td></tr>
+        <tr><td><kbd>o</kbd> <kbd>O</kbd></td><td>sort pitches up / down</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Scales and keys <small>· also in pitch mode</small></h2>
+      <table class="k">
+        <tr><td><kbd>k</kbd></td><td>snap to the nearest named scale</td></tr>
+        <tr><td><kbd>K</kbd></td><td><b>slant</b>: a neighbouring scale, any root</td></tr>
+        <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>one step <b>flatward / sharpward</b> (circle of fifths)</td></tr>
+        <tr><td><kbd>j</kbd></td><td>lift the garden slot's scale</td></tr>
+        <tr><td><kbd>J</kbd></td><td>reduce the scale</td></tr>
+      </table>
+    </section>
+    <div class="idea">
+      <h3>Home or mode?</h3>
+      <p>Home keys act on <b>whole notes</b> or the whole bloom; a mode applies the same verb to <b>one list</b>. <kbd>s</kbd> at home scrambles notes with their rhythm; <kbd>t</kbd> then <kbd>s</kbd> scrambles only the rhythm.</p>
+    </div>
+   </div>
+   <div class="col">
+    <section>
+      <h2>Garden <small>· the row of slots</small></h2>
+      <table class="k">
+        <tr><td><kbd>↓</kbd></td><td>save the bloom into the slot</td></tr>
+        <tr><td><kbd>↑</kbd></td><td>lift the slot into the bloom</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>move · with <kbd>⇧</kbd>, move and play</td></tr>
+        <tr><td><kbd>↵</kbd> <kbd>⌫</kbd></td><td>new slot / clear slot</td></tr>
+        <tr><td><kbd>x</kbd> <kbd>X</kbd></td><td>interlace / blend with the slot</td></tr>
+        <tr><td><kbd>f</kbd></td><td>take the slot's rhythm, dynamics, channels</td></tr>
+        <tr><td><kbd>C</kbd></td><td>cast: your pitch classes on the slot's contour and rhythm</td></tr>
+        <tr><td><kbd>|</kbd></td><td>merge the garden into the bloom</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>|</kbd></td><td>curdle: the bloom into the garden</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Modes and menus</h2>
+      <table class="k wide">
+        <tr><td><kbd>p</kbd><kbd>t</kbd><kbd>v</kbd><kbd>c</kbd><kbd>5</kbd></td><td>pitch, time, velocity, channel, intervals mode (page 2)</td></tr>
+        <tr><td><kbd>esc</kbd></td><td>back home</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Freeze <small>· <kbd>F</kbd>, then…</small></h2>
+      <table class="k">
+        <tr><td><kbd>p</kbd></td><td>pitch: lock to the scale</td></tr>
+        <tr><td><kbd>t</kbd> <kbd>r</kbd></td><td>rhythm: the durations in use</td></tr>
+        <tr><td><kbd>v</kbd></td><td>dynamics: the levels in use</td></tr>
+        <tr><td><kbd>c</kbd></td><td>channels in use</td></tr>
+        <tr><td><kbd>5</kbd></td><td>intervals: the steps in use</td></tr>
+        <tr><td><kbd>d</kbd></td><td>total duration: trim → stretch → off</td></tr>
+        <tr><td><kbd>g</kbd></td><td>time grid</td></tr>
+      </table>
+      <p class="note">The menu stays open so you can set several; <kbd>F</kbd> or <kbd>esc</kbd> closes. The header shows what's frozen, e.g. <b>❄ p t d:trim</b>.</p>
+    </section>
+    <section>
+      <h2>View</h2>
+      <table class="k">
+        <tr><td><kbd>L</kbd></td><td>lanes: every list, each with its own cursor</td></tr>
+        <tr><td><kbd>l</kbd></td><td>note labels</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>1–9</kbd></td><td>picture style</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>c</kbd></td><td>clean view for video (<kbd>esc</kbd> leaves)</td></tr>
+        <tr><td><kbd>\</kbd></td><td>console</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>e</kbd></td><td>edit the bloom as text</td></tr>
+        <tr><td><kbd>cmd</kbd><kbd>k</kbd></td><td>command palette: every operation by name</td></tr>
+      </table>
+    </section>
+    <section>
+      <h2>Intervals <small>· notes added at playback</small></h2>
+      <table class="k">
+        <tr><td><kbd>5</kbd></td><td><b>intervals mode</b> (randomize there with <kbd>n</kbd>)</td></tr>
+        <tr><td><kbd>6</kbd> <kbd>^</kbd></td><td>widen / narrow</td></tr>
+        <tr><td><kbd>7</kbd> <kbd>&amp;</kbd></td><td>add / drop a step</td></tr>
+        <tr><td><kbd>8</kbd></td><td>reset (nothing added)</td></tr>
+        <tr><td><kbd>%</kbd></td><td>count in semitones ↔ scale steps</td></tr>
+        <tr><td><kbd>*</kbd></td><td>bake into the notes as chords</td></tr>
+      </table>
+    </section>
+   </div>
+  </div>
+</div>
+
+<!-- ════════════════════ PAGE 2: MODES, FREEZE, IDEAS ════════════════════ -->
+<div class="page">
+  <header>
+    <h1>BLOOM · list modes</h1>
+    <span class="sub"><kbd>p</kbd> <kbd>t</kbd> <kbd>v</kbd> <kbd>c</kbd> <kbd>5</kbd> enter a mode · its key or <kbd>esc</kbd> goes home · another mode key switches across</span>
+  </header>
+
+  <p style="margin:0 0 5pt">In a mode every key acts on <b>that one list</b>; the others stay put. A key means the same verb in every mode. Play, garden, view, undo and <kbd>F</kbd> work as usual; anything else just shows a hint.</p>
+
+  <table class="m">
+    <tr><th>key</th><th>verb</th><th>pitch <kbd>p</kbd></th><th>time <kbd>t</kbd></th><th>velocity <kbd>v</kbd></th><th>channels <kbd>c</kbd></th><th>intervals <kbd>5</kbd></th></tr>
+    <tr class="same"><td><kbd>s S R 9 0</kbd><br><kbd>u U d D</kbd></td><td colspan="6">scramble, shuffle, mirror, rotate, stutter, sputter, braid, pyramid: <b>the same in every list</b>. Changing one list's length makes it phase against the others.</td></tr>
+    <tr class="same"><td><kbd>o O</kbd></td><td>sort up / down</td><td>low → high</td><td>short → long</td><td>crescendo</td><td>low → high</td><td>close → wide</td></tr>
+    <tr class="same"><td><kbd>z a A</kbd></td><td>drop last / add</td><td>add in scale / any</td><td colspan="3">add one from the palette / at random</td><td>add a step in use / a fresh one</td></tr>
+    <tr><td><kbd>1 2</kbd></td><td>down / up</td><td>semitone</td><td>faster / slower ×1.2</td><td>softer / louder</td><td>channel ∓1</td><td>every interval ∓1</td></tr>
+    <tr><td><kbd>! @</kbd></td><td>big down / up</td><td>octave</td><td>double / half time</td><td>much softer / louder</td><td>—</td><td>an octave across (+7 ↔ −5)</td></tr>
+    <tr><td><kbd>3 4</kbd></td><td>one palette step</td><td>scale step</td><td>next duration you use</td><td>next level you use</td><td>next channel in use</td><td>next size in use</td></tr>
+    <tr><td><kbd># $</kbd></td><td>breeze</td><td colspan="5">as <kbd>3 4</kbd>, but only some values move, and the same ones tend to keep moving</td></tr>
+    <tr><td><kbd>- =</kbd></td><td>converge / diverge</td><td>narrower / wider range</td><td>evener / more uneven</td><td>flatter / wider dynamics</td><td>toward / away from the main channel</td><td>narrower / wider</td></tr>
+    <tr><td><kbd>y</kbd></td><td>unify</td><td>all the commonest pitch</td><td>all the commonest duration</td><td>all the average level</td><td>all the main channel</td><td>all the commonest step</td></tr>
+    <tr><td><kbd>i</kbd> / <kbd>I</kbd></td><td>invert / around the middle</td><td>high ↔ low / around the mean</td><td>long ↔ short</td><td>loud ↔ quiet</td><td>across the range / around the main</td><td>above ↔ below / wide ↔ close</td></tr>
+    <tr><td><kbd>e</kbd></td><td>shear</td><td>tilt up or down</td><td>accel. or rit.</td><td>dynamic ramp</td><td>drift across channels</td><td>closing in or opening out</td></tr>
+    <tr><td><kbd>w</kbd></td><td>curve</td><td>contour</td><td>rubato</td><td>hairpins</td><td>smooth path</td><td>swell of widths</td></tr>
+    <tr><td><kbd>m M</kbd></td><td>mutate gently / wildly</td><td>scale steps / chromatic</td><td colspan="4">from the palette / anything</td></tr>
+    <tr><td><kbd>h H</kbd></td><td>fewer / more distinct values</td><td>one pitch class fewer / more</td><td>durations</td><td>levels</td><td>channels</td><td>kinds of step</td></tr>
+    <tr><td><kbd>q</kbd> / <kbd>Q</kbd></td><td>quantize / choose the setting</td><td>snap to the scale</td><td>to the grid / pick grid</td><td colspan="2">to at most N levels / pick N</td><td>at most N kinds of step</td></tr>
+    <tr><td><kbd>n</kbd></td><td>new list</td><td>new pitches</td><td>new times (from the palette)</td><td>new dynamics</td><td>new channels</td><td>new intervals</td></tr>
+    <tr><td><kbd>x</kbd> / <kbd>f</kbd></td><td>with the garden slot</td><td colspan="5">lace this list with the slot's / copy the slot's</td></tr>
+    <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>E</kbd> center · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
+    <tr><td colspan="2"><b>Also in pitch &amp; intervals mode</b></td><td colspan="5"><kbd>6 ^ 7 &amp; 8 % *</kbd> mean what they mean at home</td></tr>
+  </table>
+
+  <div class="ideas">
+    <div class="idea">
+      <h3>Palette</h3>
+      <p>The distinct values a list already uses: your durations, dynamic levels, channels, interval steps. For pitch, the palette is the scale. “Step” keys move <b>along your own vocabulary</b>, so a groove of 1, ½, ¼ stays in halves and doubles.</p>
+    </div>
+    <div class="idea">
+      <h3>How a freeze works</h3>
+      <p>Switching one on takes a <b>snapshot</b> of what the list uses now. Anything outside it then <b>snaps to the nearest</b> allowed value: on every play, and after every change while a loop or pulsar runs.</p>
+      <p>Snapping rewrites the bloom; unfreezing doesn't undo it. Freeze again for a new snapshot.</p>
+    </div>
+    <div class="idea">
+      <h3>Undo vs save points</h3>
+      <p><kbd>cmd</kbd><kbd>z</kbd> steps back <b>one change at a time</b>. <kbd>opt</kbd><kbd>p</kbd> marks a place you like; wander as far as you want and <kbd>opt</kbd><kbd>P</kbd> jumps straight back. The <b>notice</b> top-left names each change for 5 s.</p>
+    </div>
+    <div class="idea">
+      <h3>Breeze</h3>
+      <p><kbd>#</kbd> <kbd>$</kbd> move only <b>some</b> values a step. Notes that just moved are likelier to move again, so repeated presses drift a line rather than shuffle the whole thing.</p>
+    </div>
+    <div class="idea">
+      <h3>Intervals</h3>
+      <p>Each step adds notes <b>above (+) or below (−)</b> the note it falls on, at playback; 0 adds nothing. They count semitones or scale steps (<kbd>%</kbd>). The list cycles at its own length, so harmony phases too. <kbd>*</kbd> writes them into the notes as chords.</p>
+    </div>
+    <div class="idea">
+      <h3>Moving through keys</h3>
+      <p><kbd>K</kbd> <b>slant</b> jumps to a near-neighbour scale on any root and avoids the last few it visited, so it wanders outward.</p>
+      <p><kbd>[</kbd> <kbd>]</kbd> travel <b>steadily</b>: one scale note moves a semitone per press, C → G → D… sharpward or the reverse.</p>
+    </div>
+    <div class="idea">
+      <h3>Pivot and pitch classes</h3>
+      <p><kbd>( )</kbd> turn the melody upside down while the highest (or loudest) note stays put.</p>
+      <p>In pitch mode <kbd>h</kbd> <kbd>H</kbd> remove or add one <b>pitch class</b>; the scale follows.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
