@@ -7,7 +7,8 @@ import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
-import { saveGarden, loadGarden, autosaveGarden, restoreAutosave } from './io/garden-io';
+import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
+import { askRestore } from './ui/restorePrompt';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
 import type { VizMode, ThemeId } from './ui/theme';
@@ -31,7 +32,10 @@ async function main() {
   // ─── Core state ─────────────────────────────────────────────────────────────
   const bloom = new Bloom().seed();
   const garden = new Garden();
-  const restored = restoreAutosave(bloom, garden);
+  // A past session is offered, not assumed: restore it or start fresh
+  const saved = peekAutosave();
+  const restored = saved !== null && await askRestore(saved) && restoreAutosave(saved.raw, bloom, garden);
+  if (saved && !restored) autosaveGarden(bloom, garden);   // the fresh start replaces it
 
   // ─── UI ─────────────────────────────────────────────────────────────────────
   const viz = new BloomVisualization(canvas);
@@ -565,8 +569,9 @@ async function main() {
     });
   }
 
-  document.getElementById('save-garden')?.addEventListener('click', doSave);
-  document.getElementById('load-garden')?.addEventListener('click', doLoad);
+  // blur after a click so a later space plays rather than pressing the button again
+  document.getElementById('save-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); doSave(); });
+  document.getElementById('load-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); doLoad(); });
 
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); doSave(); }

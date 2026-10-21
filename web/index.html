@@ -107,8 +107,8 @@
       body[data-theme="minimal"] #garden-area { background: #0a0a0a; border-color: #1a1a1a; }
       body[data-theme="minimal"] #canvas-area { background: #0c0c0c; }
 
-      #help-toggle {
-        margin-left: auto;
+      .hdr-right { margin-left: auto; }
+      .hdr-btn {
         background: transparent;
         color: #666;
         border: 1px solid #333;
@@ -117,7 +117,7 @@
         cursor: pointer;
         font-family: inherit;
       }
-      #help-toggle:hover { color: #aaa; border-color: #555; }
+      .hdr-btn:hover { color: #aaa; border-color: #555; }
       /* margin-left: auto on help-toggle pushes panel-toggle before it to center-right area */
 
       /* Settings panel */
@@ -425,6 +425,42 @@
       .be-btns button:hover { color: #aab; border-color: #4455aa; }
 
       /* ─── Command Palette ───────────────────────────────────────────────────── */
+      #restore-prompt {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 500;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+      }
+      #restore-prompt.open { display: flex; }
+      #rp-box {
+        background: #0c0c18;
+        border: 1px solid #2a2a44;
+        width: min(380px, 100%);
+        padding: 16px 18px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 12px;
+        color: #aab;
+      }
+      .rp-detail { font-size: 11px; color: #667; }
+      .rp-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+      .rp-buttons button {
+        background: transparent;
+        color: #aab;
+        border: 1px solid #333;
+        padding: 4px 10px;
+        font-size: 11px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .rp-buttons button:hover { color: #fff; border-color: #666; }
+      .rp-buttons kbd { color: #667; font-family: inherit; }
+
       #cmd-palette {
         display: none;
         position: fixed;
@@ -546,7 +582,9 @@
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c d g toggles"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
-      <button id="help-toggle">? help</button>
+      <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
+      <button id="load-garden" class="hdr-btn" title="load a .bloom file (cmd-o)">load</button>
+      <button id="help-toggle" class="hdr-btn">? help</button>
     </header>
 
     <div id="settings-bar">
@@ -660,10 +698,17 @@
           </label>
         </span>
 
-        <span class="s-section">
-          <button class="s-btn" id="save-garden" title="save garden (ctrl+s)">save</button>
-          <button class="s-btn" id="load-garden" title="load garden (ctrl+o)">load</button>
-        </span>
+      </div>
+    </div>
+
+    <div id="restore-prompt">
+      <div id="rp-box">
+        <div>pick up where you left off?</div>
+        <div class="rp-detail"></div>
+        <div class="rp-buttons">
+          <button id="rp-new">start new <kbd>n</kbd></button>
+          <button id="rp-restore">restore <kbd>↵</kbd></button>
+        </div>
       </div>
     </div>
 
@@ -689,7 +734,8 @@
 <b>b</b>      new bloom shape
 <b>B</b>      new bloom, same scale + shape
 <b>cmd-z</b>  undo   <b>cmd-shift-z</b> redo
-<b>opt-p</b>  push   <b>opt-P</b> pop (save points)</div>
+<b>opt-p</b>  push   <b>opt-P</b> pop (save points)
+<b>cmd-s</b>  save   <b>cmd-o</b> load (or the buttons up top)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Gestures (whole bloom)</div>

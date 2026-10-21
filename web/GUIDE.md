@@ -290,7 +290,8 @@ the notice and centres it: for screen recordings.
 
 ## Saving
 
-- **Save the garden:** cmd-S.
-- **Load a garden:** cmd-O.
-- **Autosave:** the working state is saved in the browser after every change
-  and restored when you reload.
+- **Save the garden:** cmd-S, or **save** at the top right. Writes a `.bloom` file.
+- **Load a garden:** cmd-O, or **load** at the top right.
+- **Autosave:** the working state is saved in the browser after every change.
+  When you come back, Bloom asks whether to **restore** it (↵) or **start
+  new** (n).

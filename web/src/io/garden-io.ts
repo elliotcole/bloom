@@ -28,6 +28,7 @@ interface BloomJSON {
 
 interface GardenFile {
   version: 1;
+  savedAt?: number;         // ms since epoch — autosave only
   bloom: BloomJSON;
   garden: {
     cursor: number;
@@ -114,18 +115,43 @@ export function autosaveGarden(bloom: Bloom, garden: Garden): void {
   _autosaveTimer = setTimeout(() => {
     _autosaveTimer = null;
     try {
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(toGardenFile(bloom, garden)));
+      const file = { ...toGardenFile(bloom, garden), savedAt: Date.now() };
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(file));
     } catch {
       // storage full or unavailable — autosave is best-effort
     }
   }, 250);
 }
 
-/** Restore the last autosaved state, if any. Returns true if state was restored. */
-export function restoreAutosave(bloom: Bloom, garden: Garden): boolean {
+export interface AutosaveInfo {
+  raw: string;
+  savedAt: number | null;
+  blooms: number;           // filled garden slots
+  notes: number;            // notes in the current bloom
+}
+
+/** Look at the last autosave without applying it; null if there is none. */
+export function peekAutosave(): AutosaveInfo | null {
   try {
     const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return false;
+    if (!raw) return null;
+    const data = JSON.parse(raw) as GardenFile;
+    if (data.version !== 1) return null;
+    const notes = Array.isArray(data.bloom.notes) ? data.bloom.notes.length : 0;
+    return {
+      raw,
+      savedAt: data.savedAt ?? null,
+      blooms: data.garden.slots.filter(Boolean).length,
+      notes,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Apply an autosave found by peekAutosave. Returns true if state was restored. */
+export function restoreAutosave(raw: string, bloom: Bloom, garden: Garden): boolean {
+  try {
     applyGardenFile(JSON.parse(raw) as GardenFile, bloom, garden);
     return true;
   } catch {
