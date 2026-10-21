@@ -1062,14 +1062,16 @@ export function createKeyHandler(state: KeyHandlerState) {
     // ─── Garden navigation ────────────────────────────────────────────────────
     if (e.code === 'ArrowDown' && !shift) {
       e.preventDefault();
-      g.save(b);
+      // opt-↓ inserts before this slot; plain ↓ overwrites it
+      if (alt) g.insert(b); else g.save(b);
       // Update garden visibility BEFORE animateSave so getBoundingClientRect()
       // returns real geometry (garden may have been hidden on first save).
       state.gardenViz?.update(state.garden);
       const mc = document.getElementById('bloom-canvas') as HTMLCanvasElement;
       state.gardenViz?.animateSave(b, mc);
-      status(`saved [${g.index}]`);
-      refresh(`saved [${g.index}]`);
+      const verb = alt ? 'inserted' : 'saved';
+      status(`${verb} [${g.index}]`);
+      refresh(`${verb} [${g.index}]`);
       return;
     }
     if (e.code === 'ArrowDown' && shift) {

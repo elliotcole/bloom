@@ -35,6 +35,12 @@ export class Garden {
     }
   }
 
+  /** Insert the bloom at the cursor, sliding this slot and the rest right. Fills an empty slot instead. */
+  insert(bloom: Bloom): void {
+    if (this.current === null) { this.save(bloom); return; }
+    this.slots.splice(this.cursor, 0, bloom.clone());
+  }
+
   /** Insert empty slot at cursor */
   insertEmpty(): void {
     this.slots.splice(this.cursor, 0, null);

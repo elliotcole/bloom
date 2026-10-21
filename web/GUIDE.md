@@ -104,6 +104,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Other home keys
 
+- **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
 - **Merge and split the garden:** `|` and opt-`|`.
