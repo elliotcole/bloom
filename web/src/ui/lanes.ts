@@ -1,23 +1,24 @@
-// Bloom lanes — the four parallel lists, each at its own length, with a cursor
+// Bloom lanes — the five parallel lists, each at its own length, with a cursor
 // per list as it cycles. Each press leaves a short trace of what it changed.
 
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
 
-type LaneKey = 'notes' | 'time' | 'vel' | 'chan';
-export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | null;
+type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv';
+export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | null;
 
 const LANE_H = 24;
 const LABEL_W = 70;
 const TRACE_MS = 1400;
-export const LANES_HEIGHT = 4 * LANE_H + 10;
+export const LANES_HEIGHT = 5 * LANE_H + 10;
 
-const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze: 'pitch' | 'time' | 'vel' | 'chan' }[] = [
+const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze: 'pitch' | 'time' | 'vel' | 'chan' | 'iv' }[] = [
   { key: 'notes', name: 'pitch', mode: 'pitch', freeze: 'pitch' },
   { key: 'time',  name: 'time',  mode: 'time', freeze: 'time' },
   { key: 'vel',   name: 'vel',   mode: 'vel',  freeze: 'vel' },
   { key: 'chan',  name: 'chan',  mode: 'chan', freeze: 'chan' },
+  { key: 'iv',    name: 'int',   mode: 'iv',   freeze: 'iv' },
 ];
 
 const MODE = '#e8a33a';
@@ -33,12 +34,13 @@ const chanHue = (c: number) => (c * 360) / 16;
 const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
 const amber = (a: number) => `rgba(232,163,58,${Math.max(0, Math.min(1, a))})`;
 
-interface Snapshot { notes: string[]; time: number[]; vel: number[]; chan: number[] }
+interface Snapshot { notes: string[]; time: number[]; vel: number[]; chan: number[]; iv: string[] }
 
 function snapshot(b: Bloom): Snapshot {
   return {
     notes: b.notes.map(n => JSON.stringify(n)),
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
+    iv: b.intervals.map(s => JSON.stringify(s)),
   };
 }
 
@@ -60,7 +62,7 @@ export class Lanes {
     };
     const changed = {
       notes: diff(prev.notes, now.notes), time: diff(prev.time, now.time),
-      vel: diff(prev.vel, now.vel), chan: diff(prev.chan, now.chan),
+      vel: diff(prev.vel, now.vel), chan: diff(prev.chan, now.chan), iv: diff(prev.iv, now.iv),
     };
     if (Object.values(changed).some(s => s.size)) {
       this.changed = changed;
@@ -82,16 +84,17 @@ export class Lanes {
     b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number,
   ): void {
     const n = b.notes.length;
-    if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length) return;
+    if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length || !b.intervals.length) return;
     const fade = this.changed ? Math.max(0, 1 - (performance.now() - this.changedAt) / TRACE_MS) : 0;
     if (fade === 0) this.changed = null;
 
     const len: Record<LaneKey, number> = {
       notes: n, time: b.timeIntervals.length, vel: b.velocities.length, chan: b.chans.length,
+      iv: b.intervals.length,
     };
     const heat = {
       notes: null as number[] | null,
-      time: b.breezeHeat('time'), vel: b.breezeHeat('vel'), chan: b.breezeHeat('chan'),
+      time: b.breezeHeat('time'), vel: b.breezeHeat('vel'), chan: b.breezeHeat('chan'), iv: b.breezeHeat('iv'),
     };
     // pitch heat is per flat note; fold chords to their hottest tone
     const ph = b.breezeHeat('pitch');
@@ -130,7 +133,9 @@ export class Lanes {
       if (active) { ctx.fillStyle = amber(0.07); ctx.fillRect(x0, top, w, LANE_H - 3); }
       ctx.textAlign = 'left';
       ctx.fillStyle = active ? MODE : frozen ? ICE : ink(0.45);
-      ctx.fillText(`${frozen ? '❄ ' : ''}${L.name}`, x0 + 8, mid);
+      // intervals in scale steps are marked °
+      const name = L.key === 'iv' && b.intervalsDiatonic ? `${L.name}°` : L.name;
+      ctx.fillText(`${frozen ? '❄ ' : ''}${name}`, x0 + 8, mid);
       ctx.fillStyle = ink(0.25);
       ctx.textAlign = 'right';
       ctx.fillText(`×${len[L.key]}`, x0 + LABEL_W - 6, mid);
@@ -173,6 +178,11 @@ export class Lanes {
           const bh = (LANE_H - 9) * v / 127;
           ctx.fillStyle = ink(0.25); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
           ctx.fillStyle = ink(a); ctx.fillText(String(v), cx0 + 8, mid);
+        } else if (L.key === 'iv') {
+          const step = b.intervals[li];
+          const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
+          ctx.fillStyle = ink(ivs.length ? a : 0.3);
+          ctx.fillText(ivs.length ? ivs.map(x => (x > 0 ? `+${x}` : String(x))).join(' ') : '·', cx0 + 4, mid);
         } else {
           const c = b.chans[li];
           ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;

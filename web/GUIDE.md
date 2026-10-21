@@ -16,7 +16,7 @@ A bloom is a set of parallel lists:
 | **time** | the time from each note to the next, in beats |
 | **velocities** | 1–127; 0 is a rest |
 | **channels** | which MIDI channel (instrument) plays each note |
-| **intervals** | notes added at playback (5 6 7 8 keys) |
+| **intervals** | notes added at playback above or below each note; 0 adds nothing (intervals mode: `5`) |
 
 The lists don't have to be the same length. Each one cycles at its own length,
 so a 5-note bloom with 4 velocities drifts in and out of phase as it loops.
@@ -104,7 +104,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 ## Other home keys
 
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
-- **Intervals:** `5`–`8`, `%`, `*`.
+- **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
 - **Merge and split the garden:** `|` and opt-`|`.
 - **Storage:** `n N b B`.
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
@@ -114,9 +114,9 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ---
 
-## List modes: `p` `t` `v` `c`
+## List modes: `p` `t` `v` `c` `5`
 
-`p` pitch · `t` time · `v` velocity · `c` channels. The badge in the header shows the mode.
+`p` pitch · `t` time · `v` velocity · `c` channels · `5` intervals. The badge in the header shows the mode.
 The mode's own key or `esc` takes you home, and pressing another mode key
 switches straight across. Playback, garden, undo, `F` and every opt key work
 as usual. Any
@@ -168,7 +168,7 @@ e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
 scale. Chords keep their shape. `(` `)` pivot (invert, keeping the highest
 or the loudest note where it is). Every pitch key from home works in pitch
 mode and means the same thing there, including `k K j J`, `E`, `[ ]` and the
-interval keys `5`–`8`.
+interval keys `6`–`8` `%` `*`.
 
 To travel further, `]` steps **sharpward** and `[` **flatward** round the
 circle of fifths: one pitch class of the scale moves a semitone and the notes
@@ -178,6 +178,19 @@ shape, then one that makes a named scale. Keep pressing to modulate steadily;
 the notice names each step ("sharpward: F → F# · scale G Major"). Slant
 (`K`, at home) now looks on every root and avoids the last few scales it
 visited, so repeated slants wander outward instead of circling.
+
+**Intervals mode (`5`) treats the intervals as a list like the others.** Each
+step adds notes above (+) or below (−) its note; a step of 0 adds nothing
+and, like a rest, is left alone. The palette is the steps in use. `1 2`
+move every interval a semitone (or scale step), `3 4` narrow / widen each one
+to the next size in use, `- =` narrow / widen (a stack's spacing opens too),
+`! @` an octave (so +7 becomes −5: the same note on the other side), `i`
+flips above ↔ below, `I` swaps wide ↔ close, `y` makes every step the
+commonest, `h H` one kind of step fewer / more, `n` new intervals, `a A`
+add a step (one in use / a fresh one). The order keys work as on any list,
+and `6 ^ 7 & 8 * %` mean what they mean at home. `F 5` freezes the steps in
+use. The intervals list cycles at its own length, so it phases against the
+notes in the loop and the pulsar.
 
 ### Vocabulary ("palette")
 A list's **palette** is the set of distinct values it uses: the bloom's
@@ -209,6 +222,7 @@ set of values. Press **`F`**, then:
 | `t` (or `r`) | rhythm | the durations in use right now |
 | `v` | dynamics | the velocity levels in use right now |
 | `c` | channels | the channels in use right now |
+| `5` | intervals | the interval steps in use right now (steps of 0 stay 0) |
 | `d` | duration | the total length (amount set in ⚙ settings). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
 | `g` | grid | a time grid (size set in ⚙ settings) |
 
@@ -235,8 +249,8 @@ what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …
 
 ## Seeing it
 
-- **Lanes: `L`.** A strip under the view showing the four lists (pitch, time,
-  velocity, channels), each at its own length (×n). The time lane is drawn to
+- **Lanes: `L`.** A strip under the view showing the five lists (pitch, time,
+  velocity, channels, intervals), each at its own length (×n). The time lane is drawn to
   scale. While playing, each lane has its own cursor, which cycles at that
   list's length, so you can watch lists of different lengths drift against
   each other. The lane for the

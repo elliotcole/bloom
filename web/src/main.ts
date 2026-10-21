@@ -213,6 +213,7 @@ async function main() {
     const PATTERN_NAMES: PatternOp[] = ['scramble', 'shuffle', 'mirror', 'stutter', 'sputter', 'braid', 'pyramid'];
     const LIST_SUFFIX: Array<[ListKey, string, string]> = [
       ['notes', 'P', 'pitches'], ['time', 'T', 'times'], ['vel', 'V', 'velocities'], ['chan', 'C', 'channels'],
+      ['iv', 'I', 'intervals'],
     ];
     LIST_SUFFIX.forEach(([k, suffix, name]) => {
       PATTERN_NAMES.forEach(op => reg(`${op}${suffix}`, `${op} ${name} only`, b => b.patternList(k, op)));
@@ -473,7 +474,7 @@ async function main() {
   // Palette freezes — one per list, captured from the bloom when ticked
   document.querySelectorAll<HTMLInputElement>('.freeze-palette').forEach(cb => {
     cb.addEventListener('change', () => {
-      const list = cb.dataset.list as 'pitch' | 'time' | 'vel' | 'chan';
+      const list = cb.dataset.list as 'pitch' | 'time' | 'vel' | 'chan' | 'iv';
       bloom.freeze(list, cb.checked);
       cb.blur();   // keep keystrokes going to the bloom
     });

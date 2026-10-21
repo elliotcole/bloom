@@ -46,6 +46,23 @@ export const ADDED_NOTE_VELOCITY = 0.85;
 const CHROMATIC_INTERVALS = [-12, -9, -8, -7, -5, -4, -3, 3, 4, 5, 7, 8, 9, 12];
 const DIATONIC_INTERVALS = [-7, -5, -4, -3, -2, 2, 3, 4, 5, 7];
 const MAX_BAKED_LENGTH = 256;
+const MAX_INTERVAL = 24;
+
+// An intervals step as its added intervals (0s dropped), and back: [] → 0, [x] → x
+const ivArr = (s: IntervalVal): number[] => (Array.isArray(s) ? s : [s]).filter(x => x !== 0);
+function ivVal(a: number[]): IntervalVal {
+  const u = [...new Set(a.filter(x => x !== 0).map(x => Math.max(-MAX_INTERVAL, Math.min(MAX_INTERVAL, x))))]
+    .sort((x, y) => x - y);
+  return u.length === 0 ? 0 : u.length === 1 ? u[0] : u;
+}
+const ivKey = (s: IntervalVal): string => JSON.stringify(ivVal(ivArr(s)));
+/** How far apart two steps are: per added note, plus an octave per note one has and the other lacks */
+function ivDist(a: IntervalVal, b: IntervalVal): number {
+  const x = ivArr(a).sort((p, q) => p - q), y = ivArr(b).sort((p, q) => p - q);
+  let d = 12 * Math.abs(x.length - y.length);
+  for (let i = 0; i < Math.min(x.length, y.length); i++) d += Math.abs(x[i] - y[i]);
+  return d;
+}
 
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
@@ -53,8 +70,8 @@ function gcd(a: number, b: number): number {
 
 // ─── Lists, patterns, verbs ───────────────────────────────────────────────────
 
-/** The four parallel lists of a bloom */
-export type ListKey = 'notes' | 'time' | 'vel' | 'chan';
+/** The parallel lists of a bloom: pitches, times, velocities, channels, intervals */
+export type ListKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv';
 
 /** Order and length patterns: identical on any list, or on whole notes */
 export type PatternOp =
@@ -1762,6 +1779,7 @@ export class Bloom {
       case 'time': return this.timeIntervals;
       case 'vel': return this.velocities;
       case 'chan': return this.chans;
+      case 'iv': return this.intervals;
     }
   }
 
@@ -1771,6 +1789,7 @@ export class Bloom {
       case 'time': this.timeIntervals = arr as number[]; break;
       case 'vel': this.velocities = arr as number[]; break;
       case 'chan': this.chans = arr as number[]; break;
+      case 'iv': this.intervals = arr as IntervalVal[]; break;
     }
   }
 
@@ -1840,6 +1859,7 @@ export class Bloom {
     if (k === 'notes') return this.shapePitch(verb);
     if (k === 'time') return this.shapeTimes(verb, amount);
     if (k === 'vel') return this.shapeVels(verb, amount);
+    if (k === 'iv') return this.shapeIntervals(verb, amount);
     return this.shapeChans(verb, amount);
   }
 
@@ -2195,6 +2215,160 @@ export class Bloom {
     return true;
   }
 
+  /** The distinct steps the intervals list uses (a step that adds nothing isn't one) */
+  intervalPalette(): IntervalVal[] {
+    const seen = new Map<string, IntervalVal>();
+    this.intervals.forEach(s => { const v = ivVal(ivArr(s)); if (v !== 0) seen.set(JSON.stringify(v), v); });
+    const size = (v: IntervalVal) => ivArr(v).reduce((a, x) => a + Math.abs(x), 0);
+    return [...seen.values()].sort((a, b) => ivArr(a).length - ivArr(b).length || size(a) - size(b));
+  }
+
+  /**
+   * Widen (k > 0) or narrow an interval k places along a ladder of sizes,
+   * keeping its side; off either end it moves by the ladder's end gap.
+   */
+  private stepInterval(iv: number, k: number, ladder: number[]): number {
+    const size = Math.abs(iv);
+    let to: number;
+    if (ladder.length < 2) to = size + k;
+    else {
+      const j = nearestLinear(ladder, size) + k;
+      const last = ladder.length - 1;
+      to = j < 0 ? ladder[0] + j * (ladder[1] - ladder[0])
+        : j > last ? ladder[last] + (j - last) * (ladder[last] - ladder[last - 1])
+        : ladder[j];
+    }
+    return Math.sign(iv) * Math.max(1, Math.min(MAX_INTERVAL, to));
+  }
+
+  /**
+   * The intervals list as a list like any other. Each step adds notes above or
+   * below its parent (0 adds nothing and, like a rest, is left alone). Values
+   * count semitones, or scale steps when the intervals are diatonic. The
+   * palette is the bloom's own distinct steps; the steps along it are the
+   * single intervals in use, else the consonant pool.
+   */
+  private shapeIntervals(verb: ListVerb, amount: number): boolean {
+    if (this.intervals.length === 0) this.intervals = [0];
+    const st = this.intervals;
+    const n = st.length;
+    const pool = [...(this.intervalsDiatonic ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS)].sort((a, b) => a - b);
+    const octave = this.intervalsDiatonic ? 7 : 12;
+    const singles = [...new Set(st.flatMap(ivArr))].sort((a, b) => a - b);
+    // sizes in use, else the pool's
+    const sizesInUse = [...new Set(singles.map(Math.abs))].sort((a, b) => a - b);
+    const ladder = sizesInUse.length >= 2 ? sizesInUse : [...new Set(pool.map(Math.abs))].sort((a, b) => a - b);
+    const pal = this.intervalPalette();
+    // an interval that lands on 0 (unison) goes past it instead
+    const each = (fn: (iv: number, i: number) => number) => {
+      this.intervals = st.map((s, i) => ivVal(ivArr(s).map(iv => {
+        const x = Math.round(fn(iv, i));
+        return x === 0 ? -Math.sign(iv) : x;
+      })));
+    };
+    const mag = (iv: number, m: number) => Math.sign(iv) * Math.max(1, m);
+    const live = st.map((_, i) => i).filter(i => ivArr(st[i]).length > 0);
+    const randomStep = (): IntervalVal => (coin(0.15) ? ivVal([this.randomInterval(), this.randomInterval()]) : this.randomInterval());
+    const nearestOther = (s: IntervalVal, others: IntervalVal[]) =>
+      others.reduce((best, o) => (ivDist(s, o) < ivDist(s, best) ? o : best), others[0]);
+    const fewer = () => {
+      const p = this.intervalPalette();
+      if (p.length < 2) return;
+      const count = (v: IntervalVal) => this.intervals.filter(s => ivKey(s) === JSON.stringify(v)).length;
+      const least = Math.min(...p.map(count));
+      const gone = pick(p.filter(v => count(v) === least));
+      const rest = p.filter(v => v !== gone);
+      const to = nearestOther(gone, rest);
+      this.intervals = this.intervals.map(s => (ivKey(s) === JSON.stringify(gone) ? JSON.parse(JSON.stringify(to)) : s));
+    };
+
+    switch (verb) {
+      // some steps become another step already in use (or a fresh one)
+      case 'mutate':
+        this.intervals = st.map(s => {
+          if (!coin(0.5) || !ivArr(s).length) return s;
+          const others = pal.filter(v => JSON.stringify(v) !== ivKey(s));
+          return others.length ? JSON.parse(JSON.stringify(pick(others))) : randomStep();
+        });
+        break;
+      case 'mutateWild': this.intervals = st.map(s => (coin(0.5) ? this.randomIntervalStep() : s)); break;
+      case 'nudgeDown': each(iv => iv - 1); break;
+      case 'nudgeUp': each(iv => iv + 1); break;
+      // the same pitch class, on the other side or an octave further
+      case 'octaveDown': each(iv => iv - octave); break;
+      case 'octaveUp': each(iv => iv + octave); break;
+      case 'stepDown': each(iv => this.stepInterval(iv, -1, ladder)); break;
+      case 'stepUp': each(iv => this.stepInterval(iv, 1, ladder)); break;
+      case 'breezeDown': case 'breezeUp': {
+        const heat = this.breezeHeatFor('iv', st);
+        const moving = someIndices(n, GESTURE.breeze, heat);
+        const k = verb === 'breezeUp' ? 1 : -1;
+        each((iv, i) => (moving.has(i) ? this.stepInterval(iv, k, ladder) : iv));
+        this.rememberBreeze('iv', heat, moving, this.intervals);
+        break;
+      }
+      case 'converge': this.incrementIntervals(-1); break;
+      case 'diverge': this.incrementIntervals(1); break;
+      // every step that adds something adds the commonest step
+      case 'unify': {
+        if (!pal.length) break;
+        const common = modeOf(live.map(i => pal.findIndex(v => JSON.stringify(v) === ivKey(st[i]))));
+        this.intervals = st.map(s => (ivArr(s).length ? JSON.parse(JSON.stringify(pal[common])) : s));
+        break;
+      }
+      // above ↔ below
+      case 'invert': each(iv => -iv); break;
+      // wide ↔ close: the k-th smallest size becomes the k-th largest
+      case 'invertMid': {
+        const sizes = [...new Set(singles.map(Math.abs))].sort((a, b) => a - b);
+        each(iv => mag(iv, sizes[sizes.length - 1 - sizes.indexOf(Math.abs(iv))]));
+        break;
+      }
+      // closing in or opening out across the list
+      case 'shear': {
+        const dir = coin(0.5) ? 1 : -1;
+        each((iv, i) => mag(iv, Math.abs(iv) + Math.round(dir * (i / Math.max(1, n - 1) - 0.5) * 6)));
+        break;
+      }
+      case 'curve': {
+        const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-3, 3));
+        const offs = resamp1(ctrl, n);
+        each((iv, i) => mag(iv, Math.abs(iv) + Math.round(offs[i])));
+        break;
+      }
+      case 'sortUp': case 'sortDown': {
+        const size = (s: IntervalVal) => ivArr(s).reduce((a, x) => a + Math.abs(x), 0);
+        this.intervals = [...st].sort((a, b) => (verb === 'sortUp' ? size(a) - size(b) : size(b) - size(a)));
+        break;
+      }
+      case 'fewer': fewer(); break;
+      // a repeated step (or a step adding nothing) becomes one not yet in use
+      case 'more': {
+        const keys = st.map(ivKey);
+        const repeated = st.map((_, i) => i).filter(i => keys[i] !== '0' && keys.filter(k => k === keys[i]).length > 1);
+        const empty = st.map((_, i) => i).filter(i => keys[i] === '0');
+        const fresh = pool.filter(iv => !keys.includes(JSON.stringify(iv)));
+        if (!fresh.length) break;
+        const iv = pick(fresh);
+        if (repeated.length) this.intervals[pick(repeated)] = iv;
+        else if (empty.length) this.intervals[pick(empty)] = iv;
+        else this.intervals = [...st, iv];
+        break;
+      }
+      case 'quantize': {
+        let guard = 64;
+        while (this.intervalPalette().length > Math.max(1, amount) && guard-- > 0) fewer();
+        break;
+      }
+      case 'renew': this.randIntervals(); break;
+      case 'dropLast': this.dropInterval(); break;
+      case 'addFromPalette': this.intervals = [...st, pal.length ? JSON.parse(JSON.stringify(pick(pal))) : this.randomInterval()]; break;
+      case 'addRandom': this.intervals = [...st, randomStep()]; break;
+      default: return false;
+    }
+    return true;
+  }
+
   // ─── Split / merge ─────────────────────────────────────────────────────────
   // Groove-safe rhythm edits. A split turns a note into two repeats of half its
   // length; a merge lets a note absorb the next one's time. The total stays the
@@ -2422,12 +2596,12 @@ export class Bloom {
       const out = [...ivs];
       order.forEach((i, rank) => {
         const mag = Math.max(rank + 1, Math.abs(ivs[i]) + n * (rank + 1));
-        out[i] = Math.sign(ivs[i]) * mag;
+        out[i] = Math.sign(ivs[i]) * Math.min(MAX_INTERVAL, mag);
       });
       return out;
     };
     this.intervals = this.intervals.map(step =>
-      Array.isArray(step) ? widen(step) : widen([step])[0],
+      Array.isArray(step) ? ivVal(widen(step)) : widen([step])[0],
     );
     return this;
   }
@@ -2586,11 +2760,14 @@ export class Bloom {
    * channels for the others) and, before each play, snaps anything off-palette
    * to its nearest value. Durations are compared by ratio.
    */
-  frozen: { pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false } =
-    { pitch: false, time: false, vel: false, chan: false };
+  frozen: {
+    pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false;
+    iv: IntervalVal[] | false;
+  } = { pitch: false, time: false, vel: false, chan: false, iv: false };
 
-  freeze(k: 'pitch' | 'time' | 'vel' | 'chan', on: boolean): this {
+  freeze(k: 'pitch' | 'time' | 'vel' | 'chan' | 'iv', on: boolean): this {
     if (k === 'pitch') this.frozen.pitch = on ? this.scale : false;
+    else if (k === 'iv') this.frozen.iv = on && this.intervalPalette().length ? this.intervalPalette() : false;
     else this.frozen[k] = on && this.paletteOf(k).length ? this.paletteOf(k) : false;
     return this;
   }
@@ -2612,6 +2789,11 @@ export class Bloom {
     if (fv) this.velocities = this.velocities.map(v => (v === 0 ? 0 : fv[nearestLinear(fv, v)]));
     const fc = this.frozen.chan;
     if (fc) this.chans = this.chans.map(c => fc[nearestLinear(fc, c)]);
+    const fi = this.frozen.iv;
+    if (fi) {
+      this.intervals = this.intervals.map(s => (ivArr(s).length === 0 ? s
+        : JSON.parse(JSON.stringify(fi.reduce((best, o) => (ivDist(s, o) < ivDist(s, best) ? o : best), fi[0])))));
+    }
     return this;
   }
 

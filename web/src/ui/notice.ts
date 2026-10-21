@@ -65,7 +65,7 @@ export class Notice {
 /** A snapshot small enough to keep per key, and to compare */
 export interface Snap {
   notes: string; flat: number[]; time: number[]; vel: number[]; chan: number[]; intervals: string;
-  scaleName: string; scaleDegs: string; nNotes: number; pcs: number;
+  scaleName: string; scaleDegs: string; nNotes: number; pcs: number; nIv: number; ivMode: boolean;
 }
 
 export function snap(b: Bloom): Snap {
@@ -73,14 +73,15 @@ export function snap(b: Bloom): Snap {
   return {
     notes: JSON.stringify(b.notes), flat: flatNotes(b.notes) as number[],
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
-    intervals: JSON.stringify(b.intervals), nNotes: b.notes.length,
+    intervals: JSON.stringify(b.intervals), nNotes: b.notes.length, nIv: b.intervals.length,
+    ivMode: b.intervalsDiatonic,
     pcs: new Set((flatNotes(b.notes) as number[]).map(m => ((Math.round(m) % 12) + 12) % 12)).size,
     scaleName: sc.name, scaleDegs: [...sc.degrees].sort((x, y) => x - y).join(','),
   };
 }
 
 export function sameSnap(a: Snap, z: Snap): boolean {
-  return a.notes === z.notes && a.intervals === z.intervals && a.scaleDegs === z.scaleDegs
+  return a.notes === z.notes && a.intervals === z.intervals && a.ivMode === z.ivMode && a.scaleDegs === z.scaleDegs
     && a.time.join() === z.time.join() && a.vel.join() === z.vel.join() && a.chan.join() === z.chan.join();
 }
 
@@ -98,6 +99,7 @@ export function describeChange(a: Snap, z: Snap): string {
   len('times', a.time.length, z.time.length);
   len('vels', a.vel.length, z.vel.length);
   len('chans', a.chan.length, z.chan.length);
+  len('intervals', a.nIv, z.nIv);
 
   if (a.notes !== z.notes && a.nNotes === z.nNotes) {
     if (a.flat.length === z.flat.length) {
@@ -117,6 +119,12 @@ export function describeChange(a: Snap, z: Snap): string {
   values('times', a.time, z.time);
   values('vels', a.vel, z.vel);
   values('chans', a.chan, z.chan);
-  if (a.intervals !== z.intervals) parts.push('intervals changed');
+  if (a.intervals !== z.intervals && a.nIv === z.nIv) {
+    const x = JSON.parse(a.intervals) as unknown[], y = JSON.parse(z.intervals) as unknown[];
+    const changed = y.filter((v, i) => JSON.stringify(v) !== JSON.stringify(x[i])).length;
+    const same = x.map(v => JSON.stringify(v)).sort().join() === y.map(v => JSON.stringify(v)).sort().join();
+    parts.push(same ? 'intervals reordered' : `${changed} intervals changed`);
+  }
+  if (a.ivMode !== z.ivMode) parts.push(`intervals in ${z.ivMode ? 'scale steps' : 'semitones'}`);
   return parts.slice(0, 3).join(' · ');
 }

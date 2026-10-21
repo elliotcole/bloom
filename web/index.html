@@ -545,7 +545,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c d g toggles"></span>
-      <span id="list-mode-badge" title="list mode — keys act on one list (t / v / c or esc goes home)"></span>
+      <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="help-toggle">? help</button>
     </header>
 
@@ -588,6 +588,9 @@
           </label>
           <label title="channels: lock to the channels in use">chan
             <input type="checkbox" class="freeze-palette" data-list="chan">
+          </label>
+          <label title="intervals: lock to the interval steps in use">int
+            <input type="checkbox" class="freeze-palette" data-list="iv">
           </label>
         </span>
 
@@ -749,6 +752,7 @@
 <b>t</b>    time mode
 <b>v</b>    velocity mode
 <b>c</b>    channel mode
+<b>5</b>    intervals mode
 same keys, same verbs, one list
 pitch mode has every pitch key from home</div>
           </div>
@@ -757,6 +761,7 @@ pitch mode has every pitch key from home</div>
             <div class="hf-body"><b>p</b>    pitch (scale)
 <b>t r</b>  rhythm (durations)
 <b>v</b>    dynamics      <b>c</b>   channels
+<b>5</b>    intervals
 <b>d</b>    duration: trim → stretch → off
 <b>g</b>    grid
 menu stays open; F or esc closes</div>
@@ -768,7 +773,7 @@ menu stays open; F or esc closes</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Intervals (added at playback)</div>
-            <div class="hf-body"><b>5</b>    rand         <b>8</b>    reset
+            <div class="hf-body"><b>5</b>    intervals mode <b>8</b>  reset
 <b>7</b>    add step     <b>&amp;</b>    drop step
 <b>6</b>    widen        <b>^</b>    narrow
 <b>%</b>    semitones / scale steps
@@ -792,7 +797,7 @@ menu stays open; F or esc closes</div>
 <b>o O</b>    sort up / down
 <b>z a A</b>  drop / add (palette / any)
 
-<b>1 2</b>    down / up (semitone, faster, softer, ch −1…)
+<b>1 2</b>    down / up (semitone, faster, softer, ch −1, interval −1)
 <b>! @</b>    octave · double / half time · much softer / louder
 <b>3 4</b>    one palette (scale) step down / up
 <b># $</b>    breeze: some values a step
@@ -805,6 +810,8 @@ menu stays open; F or esc closes</div>
 <b>h H</b>    fewer / more distinct values (pitch: classes)
 <b>q Q</b>    quantize / set grid or levels (pitch: snap to scale)
 <b>n</b>      new list
+intervals: <b>i</b> above ↔ below, <b>- =</b> narrower / wider,
+<b>! @</b> same note an octave across; <b>6 ^ 7 &amp; 8 * %</b> as at home
 <b>x f</b>    lace / copy from slot
 
 <b>p t v c</b> switch list

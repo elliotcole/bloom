@@ -32,13 +32,13 @@ function nextQuantize(): number {
 
 // ─── List modes ───────────────────────────────────────────────────────────────
 
-type ListMode = 'pitch' | 'time' | 'vel' | 'chan';
+type ListMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv';
 
-const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan' };
-const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c' };
-const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH' };
-const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel' };
-const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan' };
+const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan', '5': 'iv' };
+const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c', iv: '5' };
+const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH', iv: 'IV' };
+const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel', iv: 'intervals' };
+const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan', iv: 'iv' };
 
 /** One key, one verb, in every list mode. `labels` names what the verb does to a particular list. */
 type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } &
@@ -61,28 +61,28 @@ const LIST_KEYS: Record<string, ListAction> = {
   a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale' } },
   A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)' } },
   // values
-  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1' } },
-  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1' } },
-  '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer' } },
-  '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder' } },
+  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1', iv: 'all one lower' } },
+  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1', iv: 'all one higher' } },
+  '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer', iv: 'an octave lower' } },
+  '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder', iv: 'an octave higher' } },
   '3': { verb: 'stepDown', label: 'palette step down', labels: { pitch: 'scale step down' } },
   '4': { verb: 'stepUp', label: 'palette step up', labels: { pitch: 'scale step up' } },
   '#': { verb: 'breezeDown', label: 'breeze: some a step down' },
   '$': { verb: 'breezeUp', label: 'breeze: some a step up' },
-  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics' } },
-  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics' } },
-  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics' } },
+  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics', iv: 'narrower' } },
+  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'wider' } },
+  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'wider' } },
   y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
-  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet' } },
-  I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean' } },
-  e: { verb: 'shear', label: 'shear', labels: { pitch: 'tilt', time: 'accel / rit', vel: 'dynamic ramp' } },
-  w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins' } },
+  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below' } },
+  I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
+  e: { verb: 'shear', label: 'shear', labels: { pitch: 'tilt', time: 'accel / rit', vel: 'dynamic ramp', iv: 'closing in / opening out' } },
+  w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins', iv: 'swell of widths' } },
   // vocabulary
   m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
   M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
   h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer' } },
   H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches', iv: 'new intervals' } },
 };
 
 function own<T extends object>(obj: T, key: string): boolean {
@@ -100,6 +100,7 @@ const FREEZE_ITEMS: FreezeItem[] = [
   { key: 'v', name: 'dynamics', selector: '.freeze-palette[data-list="vel"]' },
   { key: 'c', name: 'channels', selector: '.freeze-palette[data-list="chan"]' },
   { key: 'd', name: 'duration', selector: '#fixed-dur-enabled' },
+  { key: '5', name: 'intervals', selector: '.freeze-palette[data-list="iv"]' },
   { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
 ];
 
@@ -360,7 +361,9 @@ export function createKeyHandler(state: KeyHandlerState) {
     };
 
     // Pitch keys that live at home too: scales, center range, intervals
-    if (m === 'pitch' && 'kKjJE56^7&8*%'.includes(ch)) return false;
+    if (m === 'pitch' && 'kKjJE'.includes(ch)) return false;
+    // the home interval keys mean the same in pitch and intervals mode
+    if ((m === 'pitch' || m === 'iv') && '6^7&8*%'.includes(ch)) return false;
     if (m === 'pitch' && (ch === '(' || ch === ')')) {
       apply(ch === '(' ? 'pivot (highest)' : 'pivot (loudest)', () => (ch === '(' ? b.pivot() : b.pivotLoudest()));
       return true;
@@ -380,12 +383,12 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (ch === 'q') {
       const q = currentQuantize();
-      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
+      apply(m === 'time' ? `quantize [1/${q}]` : m === 'iv' ? `≤ ${q} kinds of step` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
       return true;
     }
     if (ch === 'Q') {
       const q = nextQuantize();
-      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`}`);
+      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : m === 'iv' ? `≤ ${q} kinds of step` : `≤ ${q} levels`}`);
       return true;
     }
     if (ch === 'x' || ch === 'f') {
@@ -908,7 +911,6 @@ export function createKeyHandler(state: KeyHandlerState) {
     // Notes added at playback; the bloom's own notes are untouched
     if (!alt) {
       const intervalKeys: Record<string, [string, () => void]> = {
-        '5': ['randomize intervals', () => b.randIntervals()],
         '6': ['widen intervals', () => b.incrementIntervals(1)],
         '^': ['narrow intervals', () => b.incrementIntervals(-1)],
         '7': ['add interval', () => b.addInterval()],
