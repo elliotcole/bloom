@@ -1,6 +1,7 @@
 // Playback scheduler — uses performance.now() + Web MIDI timestamps (no Tone.js Transport)
 
 import { Bloom, ADDED_NOTE_VELOCITY } from '../core/Bloom';
+import { applyTuning } from './tuningOut';
 import type { IntervalVal } from '../core/Bloom';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
@@ -76,6 +77,7 @@ export function playOnce(
   onNoteOn?: (index: number, tick: number) => void,
   tick = 0,
 ): () => void {
+  applyTuning(bloom);   // each bloom sounds in its own tuning, garden slots included
   const events = bloom.toEvents(tick);
   const now = performance.now();
   let cursor = 0; // ms offset from now

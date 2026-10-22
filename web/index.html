@@ -240,6 +240,24 @@
       }
       #selection-badge.active { display: inline-block; }
 
+      /* The bloom's tuning: ◊ name @ root */
+      #tuning-badge {
+        display: none;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: #e9c;
+        border: 1px solid #745;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+        max-width: 18em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #tuning-badge.active { display: inline-block; }
+      .s-note { font-size: 10px; opacity: 0.6; }
+
       /* Help views are separated by mode: list-mode help only in a list mode,
          home help only at home */
       #hf-list-sec { display: none; }
@@ -594,6 +612,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
+      <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — b / B step through the loaded tunings"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
@@ -718,6 +737,14 @@
           <button class="s-btn" id="curdle-bloom" title="split the bloom into pieces, inserted into the garden after this slot">curdle bloom → garden</button>
         </span>
 
+        <span class="s-section">
+          <span class="s-section-label">tuning</span>
+          <select id="tuning-select" title="this bloom's tuning (b / B step through them)"></select>
+          <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
+          <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">clear</button>
+          <span id="tuning-status" class="s-note"></span>
+        </span>
+
       </div>
     </div>
 
@@ -802,7 +829,10 @@
             <div class="hf-h">Diatonicism</div>
             <div class="hf-body"><b>k</b>    choose nearest scale
 <b>K</b>    slant scale  <b>j</b>    lift scale
-<b>J</b>    reduce scale</div>
+<b>J</b>    reduce scale
+<b>b B</b>  next / previous tuning
+     (load .scl files in ⚙ settings;
+      the tuning's root follows the key)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Chords</div>

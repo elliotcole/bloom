@@ -10,12 +10,11 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
-- `b`  *(tilt moved to `l`)*
 - `q`  `y`  *(quantize and unify in the list modes)*
 
 ## Shift keys
 
-- `B`  `P`  `Q`  `T`  `V`  `Z`  *(`L` is tilt up)*
+- `P`  `Q`  `T`  `V`  `Z`  *(`b` / `B` step through tunings; `L` is tilt up)*
 - `"`  `_`  *(`#` `$` are breeze)*
 
 ## Option (alt) keys

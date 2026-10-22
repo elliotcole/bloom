@@ -20,6 +20,8 @@ import { Display } from './display';
 import type { VizMode } from './theme';
 import { Notice, snap, sameSnap, describeChange } from './notice';
 import { extractSelection, mergeSelection } from './selection';
+import { applyTuning, tuningKey, tuningLibrary, stepTuning } from '../audio/tuningOut';
+import { spell } from '../lib/numbers';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
 
@@ -86,7 +88,7 @@ const LIST_KEYS: Record<string, ListAction> = {
   N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new intervals' } },
 };
 
-// opt-\ tilts down and | (shift-\) up, in every list; \ alone is the console
+// l tilts down and L up, in every list
 const TILT_LABELS: Record<'tiltDown' | 'tiltUp', Record<ListMode, string>> = {
   tiltDown: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in' },
   tiltUp: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out' },
@@ -315,6 +317,31 @@ export function createKeyHandler(state: KeyHandlerState) {
     selectionChanged();
   }
 
+  // ─── Tuning ──────────────────────────────────────────────────────────────────
+  // b / B step through the loaded tunings (12-TET first). The badge names the
+  // tuning and the root it sits on, which follows the key.
+  let _ownTuning = '';
+
+  function updateTuningBadge() {
+    const badge = document.getElementById('tuning-badge');
+    if (!badge) return;
+    const t = state.bloom.tuning;
+    badge.textContent = t ? `◊ ${t.name} @ ${spell(state.bloom.tuningRoot)}` : '';
+    badge.classList.toggle('active', t !== null);
+    const sel = document.getElementById('tuning-select') as HTMLSelectElement | null;
+    if (sel) sel.value = t?.name ?? '12-TET';
+  }
+
+  function stepTuningBy(dir: 1 | -1) {
+    const lib = tuningLibrary();
+    if (lib.length < 2) { status('no tunings loaded — ⚙ settings → tuning → load .scl files'); return; }
+    state.bloom.tuning = stepTuning(state.bloom.tuning, dir);
+    const t = state.bloom.tuning;
+    const msg = `tuning: ${t ? `${t.name} @ ${spell(state.bloom.followTuningRoot().tuningRoot)}` : '12-TET'}`;
+    status(msg);
+    refresh(msg);
+  }
+
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
@@ -325,6 +352,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
     if (_pinned.size && hold) holdPins();
+    // the tuning follows the key; a change to it is heard straight away
+    state.bloom.followTuningRoot();
+    const tk = tuningKey(state.bloom);
+    if (tk !== _ownTuning) { _ownTuning = tk; applyTuning(state.bloom); updateTuningBadge(); }
     const what = record();
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
@@ -476,7 +507,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const g = state.garden;
     const tag = `[${MODE_TAG[m].toLowerCase()}]`;
 
-    // opt-\ / | tilt this list, as they tilt the pitches at home
+    // l / L tilt this list, as they tilt the pitches at home
     const tilt = tiltKey(e);
     if (tilt) {
       const label = TILT_LABELS[tilt][m];
@@ -493,7 +524,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'b', 'B']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
@@ -677,7 +708,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom');
       return;
     }
-    // tilt: opt-\ down, | up, each press one scale step steeper
+    // tuning: b the next one loaded, B the one before (12-TET is first)
+    if ((ch === 'b' || ch === 'B') && !alt) {
+      stepTuningBy(ch === 'b' ? 1 : -1);
+      return;
+    }
+    // tilt: l down, L up, each press one scale step steeper
     const tilt = tiltKey(e);
     if (tilt) {
       e.preventDefault();
@@ -1265,7 +1301,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // ─── View: the \\ key holds the display toggles ─────────────────────────────
-    // \\ console, | note labels, opt-\\ lanes
+    // \ console, | note labels, opt-\ lanes
     if (e.code === 'Backslash' && shift && !alt) {
       const next = state.viz?.toggleNoteLabels() ?? false;
       const cb = document.getElementById('show-note-labels') as HTMLInputElement | null;
@@ -1322,5 +1358,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins, select, clearSelection, refresh, mergeGarden, curdle };
+  return { onKey, togglePin, clearPins, select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy };
 }

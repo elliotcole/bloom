@@ -9,6 +9,7 @@ import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
 import { askRestore } from './ui/restorePrompt';
+import { tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus } from './audio/tuningOut';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
 import type { VizMode, ThemeId } from './ui/theme';
@@ -293,7 +294,56 @@ async function main() {
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
   keyRefresh = keysRefresh;
   viz.onNodeClick = togglePin;
-viz.onSelect = select;
+  viz.onSelect = select;
+
+  // ─── Tuning: a library of .scl files; each bloom picks one ──────────────────
+  const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;
+  const tuningStatus = document.getElementById('tuning-status');
+  const fillTuningSelect = () => {
+    if (!tuningSelect) return;
+    tuningSelect.innerHTML = '';
+    for (const t of tuningLibrary()) {
+      const o = document.createElement('option');
+      o.value = t.name;
+      o.textContent = t.name;
+      if (t.description) o.title = t.description;
+      tuningSelect.appendChild(o);
+    }
+    tuningSelect.value = bloom.tuning?.name ?? '12-TET';
+  };
+  fillTuningSelect();
+  tuningSelect?.addEventListener('change', () => {
+    const t = tuningLibrary().find(x => x.name === tuningSelect.value);
+    bloom.tuning = !t || t.name === '12-TET' ? null : { ...t, cents: [...t.cents] };
+    tuningSelect.blur();
+    keysRefresh(`tuning: ${tuningSelect.value}`);
+  });
+  document.getElementById('tuning-load')?.addEventListener('click', (e) => {
+    (e.currentTarget as HTMLElement).blur();
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.scl';
+    input.onchange = async () => {
+      if (!input.files) return;
+      const { added, skipped } = await loadScalaFiles(input.files);
+      fillTuningSelect();
+      const note = `${added} tuning${added === 1 ? '' : 's'} loaded`
+        + (skipped.length ? ` · ${skipped.length} skipped (${skipped.slice(0, 3).join('; ')}${skipped.length > 3 ? ' …' : ''})` : '');
+      display.setStatus(note);
+      if (tuningStatus) tuningStatus.textContent = helperStatus();
+    };
+    input.click();
+  });
+  document.getElementById('tuning-clear')?.addEventListener('click', (e) => {
+    (e.currentTarget as HTMLElement).blur();
+    clearLibrary();
+    fillTuningSelect();
+    display.setStatus('tuning library cleared (blooms keep their tunings)');
+  });
+  onHelperStatus(s => { if (tuningStatus) tuningStatus.textContent = s; });
+  if (tuningStatus) tuningStatus.textContent = helperStatus();
+  if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open

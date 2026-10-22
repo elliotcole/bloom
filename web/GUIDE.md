@@ -115,6 +115,29 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
   back to it.
 
+## Tunings: `b` `B`
+
+Load Scala (`.scl`) files in ⚙ settings → **tuning**: pick several at once.
+Scales of twelve notes to the period are taken; others are listed as skipped,
+with the reason. The library stays in this browser.
+
+- **Each bloom has its own tuning.** `b` steps to the next loaded tuning, `B`
+  to the one before; 12-TET comes first. The settings menu picks one too. A
+  bloom keeps its tuning in the garden and in saved files, and the garden loop
+  retunes as each bloom comes round. `n` keeps the tuning, as it keeps the scale.
+- **The root follows the key.** Degree 0 of the file sits on the key the scale
+  implies, as a key signature names it: C major, A minor and C pentatonic all
+  put it on C, and `]` (one more sharp) moves it to G. A set too spread to
+  imply a key (whole tone, chromatic) keeps the last root. The root keeps its
+  12-TET pitch; the other notes are tuned from it.
+- **What you see:** the header shows `◊ ji-5 @ D`, and the console's `tuning:`
+  line gives each pitch class's distance from 12-TET in cents.
+- **What you hear:** the Built-in Piano plays in the tuning. For synths in
+  Ableton (or any host), run the **bloom-mts** helper (in `mts-helper/` in the
+  repository): it is an MTS-ESP master that takes its tuning from Bloom, so
+  every MTS-ESP client plugin follows it. The browser asks once for permission
+  to send it SysEx; the settings menu says whether the helper is connected.
+
 ---
 
 ## List modes: `p` `t` `v` `c` `5`

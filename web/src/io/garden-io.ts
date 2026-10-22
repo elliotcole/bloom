@@ -3,6 +3,7 @@
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { Scale } from '../lib/scales';
+import type { Tuning } from '../lib/tuning';
 
 // ─── JSON types ───────────────────────────────────────────────────────────────
 
@@ -24,6 +25,8 @@ interface BloomJSON {
   appliedScale: Scale | null;
   keyRoot: number;
   name: string;
+  tuning?: Tuning | null;   // absent in files saved before tunings existed
+  tuningRoot?: number;
 }
 
 interface GardenFile {
@@ -59,6 +62,8 @@ function bloomToJSON(b: Bloom): BloomJSON {
       : null,
     keyRoot: b.keyRoot,
     name: b.name,
+    tuning: b.tuning ? { ...b.tuning, cents: [...b.tuning.cents] } : null,
+    tuningRoot: b.tuningRoot,
   };
 }
 
@@ -83,6 +88,8 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   b.appliedScale = json.appliedScale;
   b.keyRoot = json.keyRoot;
   b.name = json.name ?? '';
+  b.tuning = json.tuning ?? null;
+  b.tuningRoot = json.tuningRoot ?? 0;
   return b;
 }
 

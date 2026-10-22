@@ -66,6 +66,7 @@ export class Notice {
 export interface Snap {
   notes: string; flat: number[]; time: number[]; vel: number[]; chan: number[]; intervals: string;
   scaleName: string; scaleDegs: string; nNotes: number; pcs: number; nIv: number; ivMode: boolean;
+  tuning: string; tuningName: string;
 }
 
 export function snap(b: Bloom): Snap {
@@ -77,12 +78,15 @@ export function snap(b: Bloom): Snap {
     ivMode: b.intervalsDiatonic,
     pcs: new Set((flatNotes(b.notes) as number[]).map(m => ((Math.round(m) % 12) + 12) % 12)).size,
     scaleName: sc.name, scaleDegs: [...sc.degrees].sort((x, y) => x - y).join(','),
+    tuning: b.tuning ? `${b.tuning.name} ${b.tuning.cents.map(c => c.toFixed(3)).join(',')} ${b.tuning.period}` : '',
+    tuningName: b.tuning?.name ?? '12-TET',
   };
 }
 
 export function sameSnap(a: Snap, z: Snap): boolean {
   return a.notes === z.notes && a.intervals === z.intervals && a.ivMode === z.ivMode && a.scaleDegs === z.scaleDegs
-    && a.time.join() === z.time.join() && a.vel.join() === z.vel.join() && a.chan.join() === z.chan.join();
+    && a.time.join() === z.time.join() && a.vel.join() === z.vel.join() && a.chan.join() === z.chan.join()
+    && a.tuning === z.tuning;
 }
 
 const scaleText = (s: Snap) =>
@@ -93,6 +97,7 @@ export function describeChange(a: Snap, z: Snap): string {
   const parts: string[] = [];
   if (a.pcs !== z.pcs) parts.push(`pitch classes ${a.pcs} → ${z.pcs}`);
   if (a.scaleDegs !== z.scaleDegs || (z.scaleName && a.scaleName !== z.scaleName)) parts.push(`scale ${scaleText(z)}`);
+  if (a.tuning !== z.tuning) parts.push(`tuning ${z.tuningName}`);
 
   const len = (name: string, x: number, y: number) => { if (x !== y) parts.push(`${name} ${x} → ${y}`); };
   len('notes', a.nNotes, z.nNotes);

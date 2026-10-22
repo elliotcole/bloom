@@ -1,6 +1,8 @@
 // Core Bloom class — ported from Bloom.sc
 
 import type { NoteVal, NoteArray } from '../lib/arrays';
+import { keyRootOf } from '../lib/tuning';
+import type { Tuning } from '../lib/tuning';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
   wrapAt, wrapExtend, flatNotes, coin, exprand, rrand,
@@ -238,6 +240,9 @@ export class Bloom {
   appliedScale: Scale | null;
   keyRoot: number;
   name: string;
+  /** null: 12-TET. Degree 0 of the tuning sits on tuningRoot, which follows the key */
+  tuning: Tuning | null;
+  tuningRoot: number;
 
   stack: Bloom[];
   private saved: Bloom | null = null;
@@ -264,6 +269,8 @@ export class Bloom {
     this.appliedScale = null;
     this.keyRoot = 0;
     this.name = '';
+    this.tuning = null;
+    this.tuningRoot = 0;
     this.stack = [];
 
     const n = notes !== undefined ? notes : 60;
@@ -303,6 +310,8 @@ export class Bloom {
       : null;
     b.keyRoot = this.keyRoot;
     b.name = this.name;
+    b.tuning = this.tuning ? { ...this.tuning, cents: [...this.tuning.cents] } : null;
+    b.tuningRoot = this.tuningRoot;
     b.stack = this.stack.map(s => s.clone());
     b.saved = this.saved ? this.saved.clone() : null;
     b.savedTimeIntervals = this.savedTimeIntervals ? [...this.savedTimeIntervals] : null;
@@ -329,6 +338,8 @@ export class Bloom {
     this.appliedScale = b.appliedScale;
     this.keyRoot = b.keyRoot;
     this.name = b.name;
+    this.tuning = b.tuning;
+    this.tuningRoot = b.tuningRoot;
     // don't copy stack
     return this;
   }
@@ -1263,6 +1274,13 @@ export class Bloom {
   }
 
   // ─── Scale / Diatonicism ───────────────────────────────────────────────────
+
+  /** Move the tuning's root to the key the scale implies (kept when it implies none) */
+  followTuningRoot(): this {
+    const r = keyRootOf(this.scale.degrees);
+    if (r !== null) this.tuningRoot = r;
+    return this;
+  }
 
   get scale(): Scale {
     return this.appliedScale ?? this.asScale();

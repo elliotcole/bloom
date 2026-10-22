@@ -2,7 +2,8 @@
 
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
-import { spellOctave } from '../lib/numbers';
+import { spell, spellOctave } from '../lib/numbers';
+import { deviations } from '../lib/tuning';
 
 const MAX_HISTORY = 50;
 
@@ -79,6 +80,9 @@ export class Display {
         ? `${intvLabel.padEnd(8)}${intvStrs.join('  ')}   ${bloom.intervalsDiatonic ? 'scale steps' : 'semitones'}`
         : '',
       `scale:  ${scaleStr}   dur: ${dur}b`,
+      bloom.tuning ? `tuning: ${bloom.tuning.name} @ ${spell(bloom.tuningRoot)}   ${
+        deviations(bloom.tuning, bloom.tuningRoot)
+          .map((c, pc) => `${spell(pc)}${c >= 0 ? '+' : ''}${Math.round(c)}`).join(' ')}` : '',
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,
       status ? `> ${status}` : '',

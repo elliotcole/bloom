@@ -95,6 +95,19 @@ export function setReverbDecay(seconds: number): void {
   _reverb.generate();
 }
 
+// ─── Tuning ───────────────────────────────────────────────────────────────────
+// With a tuning, each note plays at its frequency from the table; the sampler
+// repitches the nearest sample. A note's release uses the frequency it started
+// with, so a retune while it sounds can't strand it.
+
+let _freqs: number[] | null = null;
+const _sounding = new Map<number, number | string>();
+
+/** Frequencies for MIDI notes 0–127, or null for 12-TET */
+export function setPianoTuning(freqs: number[] | null): void {
+  _freqs = freqs;
+}
+
 // ─── MidiOutput adapter ──────────────────────────────────────────────────────
 
 /** Ensure the AudioContext is running (browsers require a user gesture). */
@@ -130,15 +143,17 @@ export const pianoOutput: MidiOutput = {
 
     if (status === 0x90 && vel > 0) {
       // Note on — scale velocity to tame the Salamander samples
+      const pitch = _freqs ? _freqs[note] : midiToNoteName(note);
+      _sounding.set(note, pitch);
       ensureContext().then(() => {
-        const name = midiToNoteName(note);
         const amp = (vel / 127) * (_velCeiling / 127);
-        _sampler!.triggerAttack(name, toneTime(atMs), amp);
+        _sampler!.triggerAttack(pitch, toneTime(atMs), amp);
       });
     } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
       // Note off
-      const name = midiToNoteName(note);
-      _sampler?.triggerRelease(name, toneTime(atMs));
+      const pitch = _sounding.get(note) ?? midiToNoteName(note);
+      _sounding.delete(note);
+      _sampler?.triggerRelease(pitch, toneTime(atMs));
     } else if (status === 0xb0) {
       const cc = data[1];
       if (cc === 123) {
