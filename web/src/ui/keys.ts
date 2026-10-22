@@ -19,6 +19,7 @@ import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
 import type { VizMode } from './theme';
 import { Notice, snap, sameSnap, describeChange } from './notice';
+import { extractSelection, mergeSelection } from './selection';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
 
@@ -75,8 +76,6 @@ const LIST_KEYS: Record<string, ListAction> = {
   y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
   i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below' } },
   I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
-  b: { verb: 'tiltDown', label: 'tilt down', labels: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in' } },
-  B: { verb: 'tiltUp', label: 'tilt up', labels: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out' } },
   w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins', iv: 'swell of widths' } },
   // vocabulary
   m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
@@ -86,6 +85,16 @@ const LIST_KEYS: Record<string, ListAction> = {
   n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new intervals' } },
   N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new intervals' } },
 };
+
+// opt-\ tilts down and | (shift-\) up, in every list; \ alone is the console
+const TILT_LABELS: Record<'tiltDown' | 'tiltUp', Record<ListMode, string>> = {
+  tiltDown: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in' },
+  tiltUp: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out' },
+};
+function tiltKey(e: KeyboardEvent): 'tiltDown' | 'tiltUp' | null {
+  if (e.code !== 'KeyL' || e.altKey) return null;
+  return e.shiftKey ? 'tiltUp' : 'tiltDown';
+}
 
 function own<T extends object>(obj: T, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -252,10 +261,66 @@ export function createKeyHandler(state: KeyHandlerState) {
     b.intervals = holdList(before.intervals, b.intervals, slotsIn(before.intervals.length));
   }
 
+  // ─── Selection ───────────────────────────────────────────────────────────────
+  // Dragging a box round some nodes selects their events. Until it's cleared
+  // (a click on empty space, or esc), every key that changes the bloom works on
+  // those events alone, as if they were the whole bloom: the selection is lifted
+  // out, the key acts on it, and the result goes back into its places.
+  let _selection: number[] = [];
+  let _working: { full: Bloom; sel: number[]; extracted: Bloom } | null = null;
+
+  function selectionChanged() {
+    _selection = _selection.filter(i => i < state.bloom.notes.length);
+    state.viz?.setSelected(new Set(_selection));
+    const badge = document.getElementById('selection-badge');
+    if (badge) {
+      badge.textContent = _selection.length ? `▣ ${_selection.length}` : '';
+      badge.classList.toggle('active', _selection.length > 0);
+    }
+  }
+
+  function select(idx: number[]) {
+    if (_previewResetId !== null) return;   // the picture is a garden slot, not the bloom
+    const had = _selection.length;
+    _selection = [...new Set(idx)].sort((a, b) => a - b);
+    selectionChanged();
+    const n = _selection.length;
+    if (n) status(`${n} event${n === 1 ? '' : 's'} selected — keys change only these (esc or a click on empty space clears)`);
+    else if (had) status('selection cleared');
+  }
+
+  function clearSelection() { select([]); }
+
+  /** Keys that play, view, move through the garden or switch modes see the whole bloom */
+  const WHOLE_BLOOM_CODES = new Set([
+    'Space', 'Comma', 'Period', 'Slash', 'Backquote', 'Escape',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete',
+  ]);
+  function worksOnSelection(e: KeyboardEvent): boolean {
+    if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
+    if (WHOLE_BLOOM_CODES.has(e.code)) return false;
+    if (e.code === 'Backslash') return false;
+    if (!e.altKey && own(MODE_KEYS, e.key)) return false;
+    if (e.altKey && (e.code.startsWith('Digit') || ['KeyC', 'KeyE', 'KeyP'].includes(e.code))) return false;
+    return true;
+  }
+
+  /** The key has acted on the lifted-out selection: put it back in the bloom */
+  function settleSelection() {
+    const w = _working!;
+    _working = null;
+    const { bloom, sel } = mergeSelection(w.full, w.sel, w.extracted, state.bloom);
+    state.bloom.import(bloom);
+    _selection = sel;
+    selectionChanged();
+  }
+
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
+    if (_working) settleSelection();
+    else if (_selection.length) selectionChanged();
     // While a loop or the pulsar runs, every change passes through the freezes,
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
@@ -356,7 +421,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
     if (!f) {
-      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', 'l', 'L', '\\', '?']);
+      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?']);
       if (PASS.has(e.key)) return false;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) return false;
       status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
@@ -406,11 +471,21 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** Handle a key in a list mode. Returns true if the key was consumed. */
   function onListKey(e: KeyboardEvent, m: ListMode): boolean {
-    if (e.altKey) return false;   // all opt combos keep their home meaning
     const ch = e.key;
     const b = state.bloom;
     const g = state.garden;
     const tag = `[${MODE_TAG[m].toLowerCase()}]`;
+
+    // opt-\ / | tilt this list, as they tilt the pitches at home
+    const tilt = tiltKey(e);
+    if (tilt) {
+      const label = TILT_LABELS[tilt][m];
+      b.shapeList(LIST_OF_MODE[m], tilt);
+      status(`${tag} ${label}`);
+      refresh(`${tag} ${label}`);
+      return true;
+    }
+    if (e.altKey) return false;   // all other opt combos keep their home meaning
 
     if (e.code === 'Escape') {
       setListMode(null);
@@ -418,7 +493,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', 'l', 'L', '\\', '?', 'F']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
@@ -491,6 +566,21 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   function onKey(e: KeyboardEvent): void {
+    if (!_selection.length || !worksOnSelection(e)
+      || ['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) { handleKey(e); return; }
+    const full = snapshotOf(state.bloom);
+    const extracted = extractSelection(full, _selection);
+    _working = { full, sel: _selection, extracted };
+    state.bloom.import(extracted);
+    try {
+      handleKey(e);
+    } finally {
+      // nothing changed (refresh wasn't reached): the whole bloom comes back as it was
+      if (_working) { state.bloom.import(full); _working = null; }
+    }
+  }
+
+  function handleKey(e: KeyboardEvent): void {
     // cmd-z / cmd-shift-z: undo / redo any change
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ' && !e.altKey) {
       e.preventDefault();
@@ -587,11 +677,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom');
       return;
     }
-    // tilt: each press one scale step steeper, down or up (as p b / p B)
-    if ((ch === 'b' || ch === 'B') && !alt) {
-      const label = ch === 'b' ? 'tilt down' : 'tilt up';
+    // tilt: opt-\ down, | up, each press one scale step steeper
+    const tilt = tiltKey(e);
+    if (tilt) {
+      e.preventDefault();
+      const label = TILT_LABELS[tilt].pitch;
       status(label);
-      b.shapeList('notes', ch === 'b' ? 'tiltDown' : 'tiltUp');
+      b.shapeList('notes', tilt);
       refresh(label);
       return;
     }
@@ -1134,7 +1226,8 @@ export function createKeyHandler(state: KeyHandlerState) {
         b.import(lifted);
         if (isLooping()) updateLooper(b);
         if (isPulsing()) updatePulsar(b);
-        clearPins();   // the pins belonged to the bloom that was replaced
+        clearPins();   // the pins and selection belonged to the bloom that was replaced
+        clearSelection();
         status(`lifted [${g.index}]`);
         refresh(`lifted [${g.index}]`, false);
       } else {
@@ -1171,8 +1264,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
-    // ─── View ─────────────────────────────────────────────────────────────────
-    if (ch === 'l' && !shift && !alt) {
+    // ─── View: the \\ key holds the display toggles ─────────────────────────────
+    // \\ console, | note labels, opt-\\ lanes
+    if (e.code === 'Backslash' && shift && !alt) {
       const next = state.viz?.toggleNoteLabels() ?? false;
       const cb = document.getElementById('show-note-labels') as HTMLInputElement | null;
       if (cb) cb.checked = next;
@@ -1180,14 +1274,15 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
-    if (ch === 'L' && !alt) {
+    if (e.code === 'Backslash' && alt && !shift) {
+      e.preventDefault();
       const on = state.viz?.toggleLanes() ?? false;
       try { localStorage.setItem('bloom.lanes', on ? '1' : '0'); } catch { /* private window */ }
       status(on ? 'lanes on' : 'lanes off');
       return;
     }
 
-    if (ch === '\\') {
+    if (e.code === 'Backslash' && !shift && !alt) {
       state.consoleToggleFn?.();
       return;
     }
@@ -1199,6 +1294,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (e.code === 'Escape' && document.body.classList.contains('clean')) {
       setClean(false);
+      return;
+    }
+    if (e.code === 'Escape' && _selection.length) {
+      clearSelection();
       return;
     }
     if (e.code === 'Escape') {
@@ -1223,5 +1322,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins, refresh, mergeGarden, curdle };
+  return { onKey, togglePin, clearPins, select, clearSelection, refresh, mergeGarden, curdle };
 }

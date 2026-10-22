@@ -10,13 +10,13 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
+- `b`  *(tilt moved to `l`)*
 - `q`  `y`  *(quantize and unify in the list modes)*
 
 ## Shift keys
 
-- `P`  `Q`  `T`  `V`  `Z`  *(`B` is now tilt up)*  *(`L` is lanes)*
+- `B`  `P`  `Q`  `T`  `V`  `Z`  *(`L` is tilt up)*
 - `"`  `_`  *(`#` `$` are breeze)*
-- `|`  *(merge moved to a settings button)*
 
 ## Option (alt) keys
 
@@ -30,7 +30,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 **Symbol keys**
 - `` opt-` ``  `opt--`  `opt-=`  `opt-[`  `opt-]`
-- `opt-\`  `opt-|`  *(curdle moved to a settings button)*
+- `opt-|`  *(curdle moved to a settings button)*
 - `opt-;`  `opt-'`  `opt-.`
 
 ---
@@ -40,6 +40,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 - `opt-s` `opt-r` `opt-u` `opt-d` and their shifts: pitch-only patterns
 - `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-p` / `opt-P` push / pop
 - `opt-,` loop garden · `opt-/` pulse garden
+- `opt-\` lanes (`\` console, `|` labels: the display toggles share the key)
 
 On macOS, option keys produce Unicode characters (e.g. opt+e = ´), but bindings
 use `e.code` so they work regardless.

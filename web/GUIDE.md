@@ -98,7 +98,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 | `1` `2` | ∓ semitone | `!` `@` | ∓ octave |
 | `3` `4` | ∓ scale step | `#` `$` | **breeze**: some notes ∓ a scale step |
 | `e` / `E` | shear (a third of the notes an octave outward, same pitch class) / centre range |
-| `b` / `B` | tilt down / up (each press a scale step steeper) | | | `[` / `]` | step flatward / sharpward |
+| `l` / `L` | tilt down / up (each press a scale step steeper) | | | `[` / `]` | step flatward / sharpward |
 | `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
 | `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
 | `;` / `:` | clump / flatten chords | `k K j J` | scales: choose, slant, lift, reduce |
@@ -155,12 +155,12 @@ point: stutter only the velocities and the accent pattern drifts.
 | `-` `=` | converge / diverge | evener / more uneven | flatter / wider dynamics | toward / away from the most-used channel |
 | `y` | unify | all the commonest duration | all the average level | all the most-used channel |
 | `i` / `I` | invert / around the middle | longest ↔ shortest | loud ↔ quiet | across the range / around the most-used |
-| `b` / `B` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
+| `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 
 **In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
 semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
-`y` puts every note on the commonest pitch, `i` mirrors high and low, `b` `B`
+`y` puts every note on the commonest pitch, `i` mirrors high and low, `l` `L`
 tilt the line down or up (each press a step steeper, the first note staying put), `e` sends some notes an octave outward, `w` draws a contour. `a` adds a note in the scale, `A`
 any note, as at home. `h H` take away or add one
 **pitch class**: `h` removes the least-used class (its notes move to the
@@ -266,11 +266,26 @@ than events.
   around a note you like. Lifting a garden slot or loading a file clears pins.
 - **Undo and hand edits aren't blocked** by pins.
 
+### Selecting events: drag a box
+
+Drag a box round some nodes to **select** their events (in deep and spiral,
+where a drag turns the view, shift-drag). Until you clear it, every key that
+changes the bloom works on the selection alone, as if it were the whole bloom:
+sort sorts just those events, tilt ramps across them, `a` adds a note among
+them, `n` regenerates only that stretch. The rest stay as they were. Selected
+nodes sit on a soft disc and the header shows `▣ 4`.
+
+- **`esc` or a click on empty space clears** the selection.
+- **Playing, the garden, views and modes** still see the whole bloom.
+- **Pins still hold** inside a selection.
+- The command palette and the editor work on the whole bloom.
+- Lifting a garden slot or loading a file clears the selection.
+
 ---
 
 ## Seeing it
 
-- **Lanes: `L`.** A strip under the view showing the five lists (pitch, time,
+- **Lanes: opt-`\`.** A strip under the view showing the five lists (pitch, time,
   velocity, channels, intervals), each at its own length (×n). The time lane is drawn to
   scale. While playing, each lane has its own cursor, which cycles at that
   list's length, so you can watch lists of different lengths drift against
@@ -282,7 +297,8 @@ than events.
   or cursor. Made for recording video. Keys still work. `esc` or opt-`c`
   leaves. For a whole-screen picture, also make the browser full screen
   (ctrl-cmd-F).
-- **Views:** opt-`1`…`9`. Note labels: `l`. Console: `\`.
+- **Views:** opt-`1`…`9`. The `\` key holds the display toggles: `\`
+  console, `|` note labels, opt-`\` lanes.
 
 ## Command palette: cmd-K
 

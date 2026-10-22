@@ -227,6 +227,19 @@
       #freeze-badge.active, #freeze-badge.menu { display: inline-block; }
       #freeze-badge.menu { color: #fff; border-color: #8cf; }
 
+      /* Selected events (drag a box round nodes): keys change only these */
+      #selection-badge {
+        display: none;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        color: #cfc;
+        border: 1px solid #575;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+      }
+      #selection-badge.active { display: inline-block; }
+
       /* Help views are separated by mode: list-mode help only in a list mode,
          home help only at home */
       #hf-list-sec { display: none; }
@@ -581,6 +594,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
+      <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
       <button id="load-garden" class="hdr-btn" title="load a .bloom file (cmd-o)">load</button>
@@ -772,7 +786,7 @@
             <div class="hf-body"><b>m</b>    mutate (diatonic)
 <b>M</b>    mutate (chromatic)
 <b>e</b>    shear (some an octave out)  <b>E</b> center range
-<b>b</b>    tilt down    <b>B</b>    tilt up (each press steeper)
+<b>l</b>    tilt down    <b>L</b>    tilt up (each press steeper)
 <b>i</b>    invert       <b>I</b>    invert mean
 <b>1/2</b>  −/+ semitone  <b>!/@</b>  −/+ octave
 <b>3/4</b>  −/+ scale step
@@ -817,7 +831,10 @@ pitch mode has every pitch key from home</div>
 <b>g</b>    grid
 <b>e</b>    unpin all events
 menu stays open; F or esc closes
-click a node: pin / unpin its event</div>
+click a node: pin / unpin its event
+drag a box: select events — keys
+  change only those (shift-drag in
+  deep / spiral); esc clears</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Blending</div>
@@ -852,7 +869,7 @@ click a node: pin / unpin its event</div>
 <b>- =</b>    converge / diverge (pitch: range)
 <b>y</b>      unify
 <b>i I</b>    invert / around the middle
-<b>b B</b>    tilt down / up, a step steeper per press
+<b>l L</b>    tilt down / up, a step steeper per press
 <b>w</b>      curve
 
 <b>m M</b>    mutate (palette / wild)
@@ -888,9 +905,9 @@ playback &amp; garden keys unchanged</div>
           <div class="hf-sec">
             <div class="hf-h">View</div>
             <div class="hf-body"><b>\</b>       toggle console
-<b>L</b>        lanes (each list, own cursor)
+<b>|</b>        note labels
+<b>opt-\</b>    lanes (each list, own cursor)
 <b>opt-c</b>    clean view (esc leaves)
-<b>l</b>        note labels
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>

@@ -1974,6 +1974,11 @@ export class BloomVisualization {
   private _lastHits: NodeHit[] = [];
   /** Called with the event index when a node is clicked */
   onNodeClick: ((i: number) => void) | null = null;
+  // Selected events: boxed by a drag, marked with a soft fill
+  private _selected = new Set<number>();
+  private _box: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** Called with the events inside a dragged box (empty when a click lands on no node) */
+  onSelect: ((idx: number[]) => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -1987,6 +1992,10 @@ export class BloomVisualization {
 
   setPinned(pinned: Set<number>): void {
     this._pinned = new Set(pinned);
+  }
+
+  setSelected(sel: Set<number>): void {
+    this._selected = new Set(sel);
   }
 
   /** The event under a point in CSS pixels, or -1: the nearest node within its reach */
@@ -2094,27 +2103,54 @@ export class BloomVisualization {
     // Initial cursor for default mode (deep)
     if (this._mode === 'deep' || this._mode === 'spiral') el.style.cursor = 'grab';
 
-    // A click that didn't drag pins or unpins the node under it
+    // A click that didn't drag pins or unpins the node under it; a click on
+    // empty space clears the selection. A drag draws a box that selects the
+    // nodes inside it (in deep and spiral, where a drag turns the view, shift-drag).
     let downX = 0, downY = 0;
     const local = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
       return [e.clientX - rect.left, e.clientY - rect.top] as const;
     };
-    el.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
+    const turns = () => this._mode === 'deep' || this._mode === 'spiral';
+    el.addEventListener('mousedown', (e) => {
+      downX = e.clientX; downY = e.clientY;
+      if (!turns() || e.shiftKey) {
+        const [x, y] = local(e);
+        this._box = { x0: x, y0: y, x1: x, y1: y };
+      }
+    });
     el.addEventListener('click', (e) => {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
       const i = this._nodeAt(...local(e));
       if (i >= 0) this.onNodeClick?.(i);
+      else if (this._selected.size) this.onSelect?.([]);
     });
     el.addEventListener('mousemove', (e) => {
+      if (this._box) {
+        [this._box.x1, this._box.y1] = local(e);
+        return;
+      }
       if (this._dragActive) return;
       const over = this._nodeAt(...local(e)) >= 0;
-      const rest = (this._mode === 'deep' || this._mode === 'spiral') ? 'grab' : '';
+      const rest = turns() ? 'grab' : '';
       el.style.cursor = over ? 'pointer' : rest;
     });
+    const endBox = (e: MouseEvent) => {
+      const box = this._box;
+      if (!box) return;
+      this._box = null;
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) <= 4) return;   // a click, not a box
+      const [xa, xb] = [Math.min(box.x0, box.x1), Math.max(box.x0, box.x1)];
+      const [ya, yb] = [Math.min(box.y0, box.y1), Math.max(box.y0, box.y1)];
+      const inside = new Set<number>();
+      for (const h of this._lastHits) if (h.x >= xa && h.x <= xb && h.y >= ya && h.y <= yb) inside.add(h.i);
+      this.onSelect?.([...inside]);
+    };
+    el.addEventListener('mouseup', endBox);
+    el.addEventListener('mouseleave', endBox);
 
     el.addEventListener('mousedown', (e) => {
-      if (this._mode !== 'deep' && this._mode !== 'spiral') return;
+      if (!turns() || e.shiftKey) return;
       this._dragActive = true;
       this._dragLastX = e.clientX;
       this._dragLastY = e.clientY;
@@ -2258,6 +2294,7 @@ export class BloomVisualization {
     }
     this._lastHits = _hits;
     _hits = null;
+    this._drawSelected(ctx, theme);
     this._drawPins(ctx, theme);
 
     if (lanesOn) {
@@ -2272,6 +2309,35 @@ export class BloomVisualization {
       this._drawChanStrip(ctx, W, H, bloom, theme);
     }
 
+    ctx.restore();
+  }
+
+  /** A soft disc behind every node of a selected event, and the box being dragged */
+  private _drawSelected(ctx: CanvasRenderingContext2D, theme: Theme): void {
+    ctx.save();
+    if (this._selected.size) {
+      ctx.fillStyle = withAlpha(theme.text, 0.16);
+      ctx.strokeStyle = withAlpha(theme.text, 0.55);
+      ctx.lineWidth = 1;
+      for (const h of this._lastHits) {
+        if (!this._selected.has(h.i)) continue;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, Math.max(9, h.r + 1), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    const b = this._box;
+    if (b && Math.hypot(b.x1 - b.x0, b.y1 - b.y0) > 4) {
+      ctx.fillStyle = withAlpha(theme.text, 0.06);
+      ctx.strokeStyle = withAlpha(theme.text, 0.6);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      const x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1);
+      const w = Math.abs(b.x1 - b.x0), hgt = Math.abs(b.y1 - b.y0);
+      ctx.fillRect(x, y, w, hgt);
+      ctx.strokeRect(x + 0.5, y + 0.5, w, hgt);
+    }
     ctx.restore();
   }
 
