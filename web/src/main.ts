@@ -108,12 +108,15 @@ async function main() {
     autosaveGarden(bloom, garden);
   }
 
-  const bloomEditor = new BloomEditor((b) => refreshAll(b, 'edited'));
+  const bloomEditor = new BloomEditor((b) => (keyRefresh ? keyRefresh('edited', false) : refreshAll(b, 'edited')));
 
   // ─── Command palette ──────────────────────────────────────────────────────────
+  // The key handler's refresh records undo and holds pinned events; it is
+  // made further down, so palette and load reach it through this
+  let keyRefresh: ((msg?: string, hold?: boolean) => void) | null = null;
   const commandPalette = new CommandPalette(
     () => bloom,
-    (b) => refreshAll(b, ''),
+    (b) => (keyRefresh ? keyRefresh('') : refreshAll(b, '')),
   );
 
   // Register commands
@@ -225,7 +228,7 @@ async function main() {
         'mutate', 'mutateWild', 'nudgeDown', 'nudgeUp', 'octaveDown', 'octaveUp', 'stepDown', 'stepUp',
         'breezeDown', 'breezeUp',
         'converge', 'diverge', 'unify', 'invert', 'invertMid', 'shear', 'curve', 'sortUp', 'sortDown',
-        'fewer', 'more', 'renew',
+        'fewer', 'more', 'renew', 'renewWild',
       ];
       VERBS.forEach(verb => reg(`${verb}${suffix}`, `${verb} ${name}`, b => { b.shapeList(k, verb); }));
     });
@@ -284,7 +287,9 @@ async function main() {
     },
   };
 
-  const { onKey } = createKeyHandler(keyState);
+  const { onKey, togglePin, clearPins, refresh: keysRefresh } = createKeyHandler(keyState);
+  keyRefresh = keysRefresh;
+  viz.onNodeClick = togglePin;
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open
@@ -565,7 +570,8 @@ async function main() {
   function doLoad() {
     loadGarden(bloom, garden, (err) => {
       if (err) { display.setStatus(err); return; }
-      refreshAll(bloom, 'loaded');
+      clearPins();
+      keysRefresh('loaded', false);
     });
   }
 

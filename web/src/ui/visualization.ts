@@ -19,6 +19,14 @@ export interface CameraParams {
 }
 export const DEFAULT_CAMERA: CameraParams = { azimuth: 0, elevation: 0 };
 
+// ─── Node hits ─────────────────────────────────────────────────────────────────
+// While the main view draws, each node notes where it went, so a click can
+// find its event. Garden thumbnails use the same draw functions with this off.
+
+interface NodeHit { i: number; x: number; y: number; r: number }
+let _hits: NodeHit[] | null = null;
+function hit(i: number, x: number, y: number, r: number): void { _hits?.push({ i, x, y, r }); }
+
 // ─── Small helpers ─────────────────────────────────────────────────────────────
 
 function pc(note: number): number { return ((Math.round(note) % 12) + 12) % 12; }
@@ -178,6 +186,7 @@ export function drawRadialAt(
       const baseHW = (vel / 127) * 16 + 4;                              // velocity → width
       const length = baseLength + flash * radius * 0.05;                // 5% flash boost
       const halfW = baseHW + flash * 2;
+      hit(i, cx - Math.sin(angle) * baseLength * 0.75, cy + Math.cos(angle) * baseLength * 0.75, Math.max(10, halfW));
 
       const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
 
@@ -356,6 +365,7 @@ export function drawPianoAt(
 
     chordNotes.forEach(pitch => {
       const ny = noteToY(pitch);
+      hit(i, nx, ny, baseR + 5);
       const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
 
       if (flash > 0.04 && theme.glowScale > 0) {
@@ -547,6 +557,7 @@ export function drawFieldAt(
 
     chordNotes.forEach(pitch => {
       const ny = noteToY(pitch);
+      hit(i, nx, ny, baseR + 5);
       const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
 
       if (flash > 0.04 && theme.glowScale > 0) {
@@ -782,6 +793,7 @@ export function drawDeepAt(
 
     chordNotes.forEach(pitch => {
       instances.push({ pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
+      hit(i, projX, noteToY(pitch) + depthToY(vel), 7 * dotScale + 4);
     });
     bloom.addedNotesAt(i).forEach(pitch => {
       instances.push({ added: true, pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
@@ -1069,6 +1081,7 @@ export function drawScoreAt(
 
       // Notehead — Canvas-drawn solid ellipse, hand-engraved tilt.
       drawNotehead(ctx, fx, ny, LINE_SPACING, scoreCol);
+      hit(i, fx, ny, Math.max(8, LINE_SPACING));
 
       // Flash ring — thin circle that expands and fades on note-on.
       if (flash > 0.01) {
@@ -1177,6 +1190,7 @@ export function drawOrbitAt(
       const px = cx + Math.cos(angle) * r;
       const py = cy + Math.sin(angle) * r;
       const planetR = 3 + (vel / 127) * 8 + flash * 5;
+      hit(i, px, py, planetR + 5);
       const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
 
       // Orbit ring (faint)
@@ -1682,6 +1696,7 @@ export function drawSpiralAt(
     pitches.forEach(midi => {
       const { x, y, sinT } = project(midi);
       positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi });
+      hit(i, x, y, 9);
     });
     bloom.addedNotesAt(i).forEach(midi => {
       const { x, y, sinT } = project(midi);
@@ -1861,6 +1876,7 @@ export function drawHelixAt(
     const avgPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
     const [h, s, l, a] = theme.noteHsla(pc(avgPitch), vel, flash);
     const r = 3.5 + flash * 6 + (vel / 127) * 4;
+    hit(i, px, py, r + 6);
 
     if (flash > 0.05 && theme.glowScale > 0) {
       const gr = ctx.createRadialGradient(px, py, 0, px, py, r * 2.5 * theme.glowScale);
@@ -1953,6 +1969,12 @@ export class BloomVisualization {
   private _dragLastX = 0;
   private _dragLastY = 0;
 
+  // Pinned events: clicked nodes, marked with a ring; where nodes were last drawn
+  private _pinned = new Set<number>();
+  private _lastHits: NodeHit[] = [];
+  /** Called with the event index when a node is clicked */
+  onNodeClick: ((i: number) => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -1962,6 +1984,20 @@ export class BloomVisualization {
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
+
+  setPinned(pinned: Set<number>): void {
+    this._pinned = new Set(pinned);
+  }
+
+  /** The event under a point in CSS pixels, or -1: the nearest node within its reach */
+  private _nodeAt(x: number, y: number): number {
+    let best = -1, bestD = Infinity;
+    for (const h of this._lastHits) {
+      const d = Math.hypot(h.x - x, h.y - y);
+      if (d <= h.r && d < bestD) { best = h.i; bestD = d; }
+    }
+    return best;
+  }
 
   /** `trace: false` for display-only blooms (the looper's rotated view), so they aren't shown as edits. */
   setBloom(bloom: Bloom, trace = true): void {
@@ -2058,6 +2094,25 @@ export class BloomVisualization {
     // Initial cursor for default mode (deep)
     if (this._mode === 'deep' || this._mode === 'spiral') el.style.cursor = 'grab';
 
+    // A click that didn't drag pins or unpins the node under it
+    let downX = 0, downY = 0;
+    const local = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      return [e.clientX - rect.left, e.clientY - rect.top] as const;
+    };
+    el.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; });
+    el.addEventListener('click', (e) => {
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
+      const i = this._nodeAt(...local(e));
+      if (i >= 0) this.onNodeClick?.(i);
+    });
+    el.addEventListener('mousemove', (e) => {
+      if (this._dragActive) return;
+      const over = this._nodeAt(...local(e)) >= 0;
+      const rest = (this._mode === 'deep' || this._mode === 'spiral') ? 'grab' : '';
+      el.style.cursor = over ? 'pointer' : rest;
+    });
+
     el.addEventListener('mousedown', (e) => {
       if (this._mode !== 'deep' && this._mode !== 'spiral') return;
       this._dragActive = true;
@@ -2131,6 +2186,7 @@ export class BloomVisualization {
     ctx.fillRect(0, 0, W, fullH);
 
     if (!bloom || bloom.notes.length === 0) {
+      this._lastHits = [];
       this._drawEmpty(ctx, W / 2, H / 2, theme);
       ctx.restore();
       return;
@@ -2140,6 +2196,7 @@ export class BloomVisualization {
     const cy = H / 2;
     const minDim = Math.min(W, H);
 
+    _hits = [];
     switch (this._mode) {
       case 'flower':
         drawRadialAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._showNoteLabels);
@@ -2199,6 +2256,9 @@ export class BloomVisualization {
         drawScoreAt(ctx, 0, 0, W, H, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
     }
+    this._lastHits = _hits;
+    _hits = null;
+    this._drawPins(ctx, theme);
 
     if (lanesOn) {
       let progress = 0;
@@ -2212,6 +2272,22 @@ export class BloomVisualization {
       this._drawChanStrip(ctx, W, H, bloom, theme);
     }
 
+    ctx.restore();
+  }
+
+  /** A dashed ring round every node of a pinned event */
+  private _drawPins(ctx: CanvasRenderingContext2D, theme: Theme): void {
+    if (this._pinned.size === 0) return;
+    ctx.save();
+    ctx.strokeStyle = withAlpha(theme.text, 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2.5, 2.5]);
+    for (const h of this._lastHits) {
+      if (!this._pinned.has(h.i)) continue;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, Math.max(7, h.r - 1), 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 

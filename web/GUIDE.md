@@ -108,7 +108,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
 - **Merge and split the garden:** `|` and opt-`|`.
-- **Storage:** `n N b B`.
+- **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches, `b` a new shape (times and dynamics) for the same pitches. Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
   change is remembered (the last 300).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
@@ -203,7 +203,8 @@ own rhythmic vocabulary, dynamic levels, instruments.
 | `m` / `M` | mutate gently (from the palette) / wildly |
 | `h` / `H` | fewer / more distinct values |
 | `q` / `Q` | quantize / choose the setting: the grid for time, the most levels for velocity and channels |
-| `n` | new random list (for time: drawn from the palette) |
+| `n` | new random list (for time: drawn from the palette; for pitch: in the scale) |
+| `N` | pitch mode only: new pitches on any of the twelve (elsewhere the same as `n`) |
 | `x` / `f` | lace with / copy from the selected garden slot |
 
 **Time verbs stay in your vocabulary wherever they can.** `3 4 - = y i e w`
@@ -246,6 +247,23 @@ what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …
 - **Freezes belong to the working bloom.** They stay on when you lift a garden
   slot (that bloom gets snapped). They aren't saved in `.bloom` files and don't
   apply to the garden loop and pulse (opt-`,`, opt-`/`).
+
+### Pinning events: click a node
+
+Click a node to **pin** its event; click again to unpin. A pinned event keeps
+its pitch, time, velocity, channel and interval whatever you press next, and a
+dashed ring marks it. The header shows how many, e.g. `❄ e2`; `F e` unpins them
+all. Works in every view except tonal and set, which draw pitch classes rather
+than events.
+
+- **Reorderings flow around pins.** Sorting, inverting or rotating rearranges
+  the other events in the spaces between the pinned ones.
+- **Pins are by position.** Event 3 stays event 3. If a list is shorter than
+  the notes, a pin holds the slot that event wraps to, and every event sharing
+  that slot with it.
+- **A new bloom keeps the pinned events** (`n`, `N`): regenerate everything
+  around a note you like. Lifting a garden slot or loading a file clears pins.
+- **Undo and hand edits aren't blocked** by pins.
 
 ---
 

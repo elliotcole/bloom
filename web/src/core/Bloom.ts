@@ -97,7 +97,7 @@ export type ListVerb =
   | 'nudgeDown' | 'nudgeUp' | 'octaveDown' | 'octaveUp' | 'stepDown' | 'stepUp'
   | 'breezeDown' | 'breezeUp'
   | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'shear' | 'curve'
-  | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew'
+  | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew' | 'renewWild'
   | 'dropLast' | 'addFromPalette' | 'addRandom';
 
 /** A note with everything that sounds with it */
@@ -1857,6 +1857,8 @@ export class Bloom {
    */
   shapeList(k: ListKey, verb: ListVerb, amount = 4): boolean {
     if (k === 'notes') return this.shapePitch(verb);
+    // only pitch has a key to leave; elsewhere N is n
+    if (verb === 'renewWild') verb = 'renew';
     if (k === 'time') return this.shapeTimes(verb, amount);
     if (k === 'vel') return this.shapeVels(verb, amount);
     if (k === 'iv') return this.shapeIntervals(verb, amount);
@@ -1919,6 +1921,14 @@ export class Bloom {
       case 'more': this.morePitchClasses(); break;
       case 'quantize': this.applyScale(scale); break;
       case 'renew': setDegs(() => toDeg(Math.round(rrand(this.lowestSeedNote, this.highestSeedNote)))); break;
+      // all twelve: the new pitches leave the scale behind, as a new bloom does
+      case 'renewWild':
+        this.saveNest();
+        this.notes = flat.map(() => Math.round(rrand(this.lowestSeedNote, this.highestSeedNote)));
+        this.restoreNest();
+        this.appliedScale = null;
+        this.enforceRange();
+        break;
       case 'dropLast': if (this.notes.length > 1) this.notes = this.notes.slice(0, -1); break;
       // as at home: a adds a note in the scale (pitch's palette), A any note
       case 'addFromPalette': this.notes = [...this.notes, toKey(rrand(Math.min(...degs) - 2, Math.max(...degs) + 2))]; break;

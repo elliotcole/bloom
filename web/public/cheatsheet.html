@@ -77,10 +77,9 @@
     <section>
       <h2>New, undo, save points</h2>
       <table class="k wide">
-        <tr><td><kbd>n</kbd></td><td>new bloom</td></tr>
-        <tr><td><kbd>N</kbd></td><td>new bloom, same scale</td></tr>
+        <tr><td><kbd>n</kbd></td><td>new bloom in the same scale</td></tr>
+        <tr><td><kbd>N</kbd></td><td>new bloom, any of the twelve</td></tr>
         <tr><td><kbd>b</kbd></td><td>new shape</td></tr>
-        <tr><td><kbd>B</kbd></td><td>new bloom, same scale and shape</td></tr>
         <tr><td><kbd>cmd</kbd><kbd>z</kbd></td><td>undo (last 300 changes)</td></tr>
         <tr><td><kbd>cmd</kbd><kbd>⇧</kbd><kbd>z</kbd></td><td>redo</td></tr>
         <tr><td><kbd>opt</kbd><kbd>p</kbd></td><td>push a save point</td></tr>
@@ -190,6 +189,7 @@
         <tr><td><kbd>5</kbd></td><td>intervals: the steps in use</td></tr>
         <tr><td><kbd>d</kbd></td><td>total duration: trim → stretch → off</td></tr>
         <tr><td><kbd>g</kbd></td><td>time grid</td></tr>
+        <tr><td><kbd>e</kbd></td><td>unpin all · <b>click a node</b> to pin its event</td></tr>
       </table>
       <p class="note">The menu stays open so you can set several; <kbd>F</kbd> or <kbd>esc</kbd> closes. The header shows what's frozen, e.g. <b>❄ p t d:trim</b>.</p>
     </section>
@@ -246,7 +246,7 @@
     <tr><td><kbd>m M</kbd></td><td>mutate gently / wildly</td><td>scale steps / chromatic</td><td colspan="4">from the palette / anything</td></tr>
     <tr><td><kbd>h H</kbd></td><td>fewer / more distinct values</td><td>one pitch class fewer / more</td><td>durations</td><td>levels</td><td>channels</td><td>kinds of step</td></tr>
     <tr><td><kbd>q</kbd> / <kbd>Q</kbd></td><td>quantize / choose the setting</td><td>snap to the scale</td><td>to the grid / pick grid</td><td colspan="2">to at most N levels / pick N</td><td>at most N kinds of step</td></tr>
-    <tr><td><kbd>n</kbd></td><td>new list</td><td>new pitches</td><td>new times (from the palette)</td><td>new dynamics</td><td>new channels</td><td>new intervals</td></tr>
+    <tr><td><kbd>n</kbd></td><td>new list</td><td>in scale · <kbd>N</kbd> any of 12</td><td>new times (from the palette)</td><td>new dynamics</td><td>new channels</td><td>new intervals</td></tr>
     <tr><td><kbd>x</kbd> / <kbd>f</kbd></td><td>with the garden slot</td><td colspan="5">lace this list with the slot's / copy the slot's</td></tr>
     <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>E</kbd> center · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
     <tr><td colspan="2"><b>Also in pitch &amp; intervals mode</b></td><td colspan="5"><kbd>6 ^ 7 &amp; 8 % *</kbd> mean what they mean at home</td></tr>
@@ -261,6 +261,7 @@
       <h3>How a freeze works</h3>
       <p>Switching one on takes a <b>snapshot</b> of what the list uses now. Anything outside it then <b>snaps to the nearest</b> allowed value: on every play, and after every change while a loop or pulsar runs.</p>
       <p>Snapping rewrites the bloom; unfreezing doesn't undo it. Freeze again for a new snapshot.</p>
+      <p><b>Pins</b> are per event, not per list: a pinned node keeps all its values. Sorts and rotations flow around it; a new bloom (<kbd>n</kbd>) grows around it.</p>
     </div>
     <div class="idea">
       <h3>Undo vs save points</h3>

@@ -82,7 +82,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
   h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer' } },
   H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches', iv: 'new intervals' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new intervals' } },
+  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new intervals' } },
 };
 
 function own<T extends object>(obj: T, key: string): boolean {
@@ -192,13 +193,74 @@ export function createKeyHandler(state: KeyHandlerState) {
     _notice?.setDetail('', what);
   }
 
-  function refresh(msg = '') {
+  // ─── Pinned events ─────────────────────────────────────────────────────────
+  // Clicking a node pins its event: whatever a key does next, that event keeps
+  // its pitch, time, velocity, channel and interval. An event's place in a
+  // shorter list is its index wrapped, as at playback, so a pin there holds
+  // that slot for every event that shares it.
+  const _pinned = new Set<number>();
+
+  function pinsChanged() {
+    for (const i of [..._pinned]) if (i >= state.bloom.notes.length) _pinned.delete(i);
+    state.viz?.setPinned(_pinned);
+    updateFreezeBadge();
+  }
+
+  function togglePin(i: number) {
+    if (_previewResetId !== null) return;   // the picture is a garden slot, not the bloom
+    if (_pinned.has(i)) _pinned.delete(i); else _pinned.add(i);
+    pinsChanged();
+    status(`event ${i + 1} ${_pinned.has(i) ? 'pinned' : 'unpinned'}${_pinned.size ? ` (${_pinned.size} pinned)` : ''}`);
+  }
+
+  function clearPins() {
+    _pinned.clear();
+    pinsChanged();
+  }
+
+  /** Put the pinned slots of one list back as they were. A reordering (same
+   *  values, new order) flows around them; any other change is overwritten. */
+  function holdList<T>(before: T[], after: T[], slots: Set<number>): T[] {
+    const key = (v: T) => JSON.stringify(v);
+    const copy = (v: T) => JSON.parse(key(v)) as T;
+    const reordered = before.length === after.length
+      && before.map(key).sort().join('|') === after.map(key).sort().join('|');
+    if (reordered) {
+      const rest = [...after];
+      for (const s of slots) {
+        const j = rest.findIndex(v => key(v) === key(before[s]));
+        if (j >= 0) rest.splice(j, 1);
+      }
+      let r = 0;
+      return after.map((_, i) => (slots.has(i) ? copy(before[i]) : rest[r++]));
+    }
+    const out = [...after];
+    for (const s of slots) if (s < out.length) out[s] = copy(before[s]);
+    return out;
+  }
+
+  function holdPins() {
+    const before = _prevBloom, b = state.bloom;
+    const n = before.notes.length;
+    const slotsIn = (len: number) =>
+      new Set([..._pinned].filter(i => i < n && len > 0).map(i => i % len));
+    b.notes = holdList(before.notes, b.notes, slotsIn(before.notes.length));
+    b.timeIntervals = holdList(before.timeIntervals, b.timeIntervals, slotsIn(before.timeIntervals.length));
+    b.velocities = holdList(before.velocities, b.velocities, slotsIn(before.velocities.length));
+    b.chans = holdList(before.chans, b.chans, slotsIn(before.chans.length));
+    b.intervals = holdList(before.intervals, b.intervals, slotsIn(before.intervals.length));
+  }
+
+  /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
+  function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
     // While a loop or the pulsar runs, every change passes through the freezes,
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
+    if (_pinned.size && hold) holdPins();
     const what = record();
+    if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
     if (state.gardenViz) state.gardenViz.update(state.garden);
@@ -263,6 +325,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (!badge) return;
     const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key === 'd' ? `d:${durMode() === 'scale' ? 'stretch' : 'trim'}` : f.key);
     // in the menu: F, then what's frozen so far (or a ? when nothing is)
+    if (_pinned.size) on.push(`e${_pinned.size}`);
     badge.textContent = _freezeMenu ? `F ❄ ${on.length ? on.join(' ') : '?'}` : on.length ? `❄ ${on.join(' ')}` : '';
     badge.classList.toggle('active', on.length > 0);
     badge.classList.toggle('menu', _freezeMenu);
@@ -272,7 +335,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     _freezeMenu = open;
     updateFreezeBadge();
     status(open
-      ? `freeze: ${FREEZE_ITEMS.map(f => `${f.key} ${f.name}${isFrozen(f) ? ' ❄' : ''}`).join(' · ')}  (F or esc closes)`
+      ? `freeze: ${FREEZE_ITEMS.map(f => `${f.key} ${f.name}${isFrozen(f) ? ' ❄' : ''}`).join(' · ')} · e unpin events  (F or esc closes)`
       : 'freeze menu closed');
   }
 
@@ -284,6 +347,12 @@ export function createKeyHandler(state: KeyHandlerState) {
   function onFreezeKey(e: KeyboardEvent): boolean {
     if (e.code === 'Escape' || (e.key === 'F' && !e.altKey)) { setFreezeMenu(false); return true; }
     if (e.altKey || e.metaKey || e.ctrlKey) return false;
+    if (e.key === 'e') {
+      const n = _pinned.size;
+      if (n) { clearPins(); status(`${n} event${n === 1 ? '' : 's'} unpinned`); }
+      else status('no pinned events — click a node to pin it');
+      return true;
+    }
     const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
     if (!f) {
       const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'l', 'L', '\\', '?']);
@@ -503,30 +572,18 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // ─── Storage ─────────────────────────────────────────────────────────────
+    // lowercase stays in the key, shift opens up to all twelve
     if (ch === 'n' && !shift && !alt) {
-      status('new bloom');
-      b.import(new Bloom().seed());
-      refresh('new bloom');
-      return;
-    }
-    if (ch === 'N' && shift) {
       status('new bloom (same scale)');
       const scale = b.scale;
       b.import(new Bloom().seed().applyScale(scale));
       refresh('new bloom (same scale)');
       return;
     }
-    if (ch === 'B' && shift) {
-      status('new bloom, same scale + shape');
-      const scale = b.scale;
-      const times = [...b.timeIntervals];
-      const vels = [...b.velocities];
-      const chans = [...b.chans];
-      b.import(new Bloom().seed(times.length).applyScale(scale));
-      b.timeIntervals = times;
-      b.velocities = vels;
-      b.chans = chans;
-      refresh('new bloom, same scale + shape');
+    if (ch === 'N' && shift) {
+      status('new bloom');
+      b.import(new Bloom().seed());
+      refresh('new bloom');
       return;
     }
     if (ch === 'b' && !alt) {
@@ -1090,8 +1147,9 @@ export function createKeyHandler(state: KeyHandlerState) {
         b.import(lifted);
         if (isLooping()) updateLooper(b);
         if (isPulsing()) updatePulsar(b);
+        clearPins();   // the pins belonged to the bloom that was replaced
         status(`lifted [${g.index}]`);
-        refresh(`lifted [${g.index}]`);
+        refresh(`lifted [${g.index}]`, false);
       } else {
         status('nothing here');
       }
@@ -1164,5 +1222,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
   }
 
-  return { onKey };
+  return { onKey, togglePin, clearPins, refresh };
 }

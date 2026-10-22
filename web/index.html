@@ -580,7 +580,7 @@
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
-      <span id="freeze-badge" title="frozen lists — F then p t v c d g toggles"></span>
+      <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
       <button id="load-garden" class="hdr-btn" title="load a .bloom file (cmd-o)">load</button>
@@ -729,10 +729,9 @@
         <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Storage</div>
-            <div class="hf-body"><b>n</b>      new bloom
-<b>N</b>      new bloom (same scale)
+            <div class="hf-body"><b>n</b>      new bloom (same scale)
+<b>N</b>      new bloom (any of 12)
 <b>b</b>      new bloom shape
-<b>B</b>      new bloom, same scale + shape
 <b>cmd-z</b>  undo   <b>cmd-shift-z</b> redo
 <b>opt-p</b>  push   <b>opt-P</b> pop (save points)
 <b>cmd-s</b>  save   <b>cmd-o</b> load (or the buttons up top)</div>
@@ -810,7 +809,9 @@ pitch mode has every pitch key from home</div>
 <b>5</b>    intervals
 <b>d</b>    duration: trim → stretch → off
 <b>g</b>    grid
-menu stays open; F or esc closes</div>
+<b>e</b>    unpin all events
+menu stays open; F or esc closes
+click a node: pin / unpin its event</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Blending</div>
