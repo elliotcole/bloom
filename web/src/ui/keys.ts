@@ -356,7 +356,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
     if (!f) {
-      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'l', 'L', '\\', '?']);
+      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', 'l', 'L', '\\', '?']);
       if (PASS.has(e.key)) return false;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) return false;
       status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
@@ -418,7 +418,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '|', '`', 'l', 'L', '\\', '?', 'F']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', 'l', 'L', '\\', '?', 'F']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
       return false;
@@ -991,22 +991,6 @@ export function createKeyHandler(state: KeyHandlerState) {
       }
     }
 
-    // ─── Fission / Fusion ─────────────────────────────────────────────────────
-    if (ch === '|' && !alt) {
-      status('merge garden >> b');
-      b.fromListOfBlooms(state.garden.slots);
-      refresh('fromListOfBlooms');
-      return;
-    }
-    if (e.code === 'Backslash' && shift && alt) {
-      status('curdle b >> garden');
-      const pieces = b.curdle(0.2);
-      pieces.forEach((piece, i) => {
-        g.slots.splice(g.cursor + 1 + i, 0, piece);
-      });
-      refresh('curdle');
-      return;
-    }
 
     // ─── Playback ─────────────────────────────────────────────────────────────
     if (ch === ' ' && !shift && !alt) {
@@ -1225,5 +1209,19 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
   }
 
-  return { onKey, togglePin, clearPins, refresh };
+  // ─── Fission / fusion (buttons in ⚙ settings, no keys) ──────────────────────
+  function mergeGarden() {
+    status('merge garden >> bloom');
+    state.bloom.fromListOfBlooms(state.garden.slots);
+    refresh('merge garden');
+  }
+
+  function curdle() {
+    status('curdle bloom >> garden');
+    const g = state.garden;
+    state.bloom.curdle(0.2).forEach((piece, i) => g.slots.splice(g.cursor + 1 + i, 0, piece));
+    refresh('curdle');
+  }
+
+  return { onKey, togglePin, clearPins, refresh, mergeGarden, curdle };
 }

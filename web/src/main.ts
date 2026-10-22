@@ -287,7 +287,10 @@ async function main() {
     },
   };
 
-  const { onKey, togglePin, clearPins, refresh: keysRefresh } = createKeyHandler(keyState);
+  const { onKey, togglePin, clearPins, refresh: keysRefresh, mergeGarden, curdle } = createKeyHandler(keyState);
+  // blur after a click so a later space plays rather than pressing the button again
+  document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
+  document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
   keyRefresh = keysRefresh;
   viz.onNodeClick = togglePin;
 

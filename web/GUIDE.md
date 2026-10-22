@@ -108,7 +108,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
-- **Merge and split the garden:** `|` and opt-`|`.
+- **Merge and split the garden:** buttons in ⚙ settings → garden. **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
   change is remembered (the last 300).
