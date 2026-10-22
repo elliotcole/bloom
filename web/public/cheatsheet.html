@@ -79,7 +79,6 @@
       <table class="k wide">
         <tr><td><kbd>n</kbd></td><td>new bloom in the same scale</td></tr>
         <tr><td><kbd>N</kbd></td><td>new bloom, any of the twelve</td></tr>
-        <tr><td><kbd>b</kbd></td><td>new shape</td></tr>
         <tr><td><kbd>cmd</kbd><kbd>z</kbd></td><td>undo (last 300 changes)</td></tr>
         <tr><td><kbd>cmd</kbd><kbd>⇧</kbd><kbd>z</kbd></td><td>redo</td></tr>
         <tr><td><kbd>opt</kbd><kbd>p</kbd></td><td>push a save point</td></tr>
@@ -136,7 +135,8 @@
         <tr><td><kbd>m</kbd> <kbd>M</kbd></td><td>mutate: in the scale / chromatic</td></tr>
         <tr><td><kbd>i</kbd> <kbd>I</kbd></td><td>invert / invert around the mean</td></tr>
         <tr><td><kbd>(</kbd> <kbd>)</kbd></td><td><b>pivot</b>: invert, keeping the highest / loudest note</td></tr>
-        <tr><td><kbd>e</kbd> <kbd>E</kbd></td><td>shear / center the range</td></tr>
+        <tr><td><kbd>e</kbd> <kbd>E</kbd></td><td>shear: some notes an octave out / center</td></tr>
+        <tr><td><kbd>b</kbd> <kbd>B</kbd></td><td>tilt down / up, steeper each press</td></tr>
         <tr><td><kbd>w</kbd></td><td>draw a contour (in the scale)</td></tr>
         <tr><td><kbd>o</kbd> <kbd>O</kbd></td><td>sort pitches up / down</td></tr>
       </table>
@@ -241,14 +241,14 @@
     <tr><td><kbd>- =</kbd></td><td>converge / diverge</td><td>narrower / wider range</td><td>evener / more uneven</td><td>flatter / wider dynamics</td><td>toward / away from the main channel</td><td>narrower / wider</td></tr>
     <tr><td><kbd>y</kbd></td><td>unify</td><td>all the commonest pitch</td><td>all the commonest duration</td><td>all the average level</td><td>all the main channel</td><td>all the commonest step</td></tr>
     <tr><td><kbd>i</kbd> / <kbd>I</kbd></td><td>invert / around the middle</td><td>high ↔ low / around the mean</td><td>long ↔ short</td><td>loud ↔ quiet</td><td>across the range / around the main</td><td>above ↔ below / wide ↔ close</td></tr>
-    <tr><td><kbd>e</kbd></td><td>shear</td><td>tilt up or down</td><td>accel. or rit.</td><td>dynamic ramp</td><td>drift across channels</td><td>closing in or opening out</td></tr>
+    <tr><td><kbd>b B</kbd></td><td>tilt down / up (builds)</td><td>tilt down / up</td><td>accel. / rit.</td><td>decresc. / cresc.</td><td>drift down / up</td><td>closing in / opening out</td></tr>
     <tr><td><kbd>w</kbd></td><td>curve</td><td>contour</td><td>rubato</td><td>hairpins</td><td>smooth path</td><td>swell of widths</td></tr>
     <tr><td><kbd>m M</kbd></td><td>mutate gently / wildly</td><td>scale steps / chromatic</td><td colspan="4">from the palette / anything</td></tr>
     <tr><td><kbd>h H</kbd></td><td>fewer / more distinct values</td><td>one pitch class fewer / more</td><td>durations</td><td>levels</td><td>channels</td><td>kinds of step</td></tr>
     <tr><td><kbd>q</kbd> / <kbd>Q</kbd></td><td>quantize / choose the setting</td><td>snap to the scale</td><td>to the grid / pick grid</td><td colspan="2">to at most N levels / pick N</td><td>at most N kinds of step</td></tr>
     <tr><td><kbd>n</kbd></td><td>new list</td><td>in scale · <kbd>N</kbd> any of 12</td><td>new times (from the palette)</td><td>new dynamics</td><td>new channels</td><td>new intervals</td></tr>
     <tr><td><kbd>x</kbd> / <kbd>f</kbd></td><td>with the garden slot</td><td colspan="5">lace this list with the slot's / copy the slot's</td></tr>
-    <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>E</kbd> center · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
+    <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>e E</kbd> shear / center · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
     <tr><td colspan="2"><b>Also in pitch &amp; intervals mode</b></td><td colspan="5"><kbd>6 ^ 7 &amp; 8 % *</kbd> mean what they mean at home</td></tr>
   </table>
 

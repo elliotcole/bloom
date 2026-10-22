@@ -96,7 +96,7 @@ export type ListVerb =
   | 'mutate' | 'mutateWild'
   | 'nudgeDown' | 'nudgeUp' | 'octaveDown' | 'octaveUp' | 'stepDown' | 'stepUp'
   | 'breezeDown' | 'breezeUp'
-  | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'shear' | 'curve'
+  | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'tiltDown' | 'tiltUp' | 'tilt' | 'curve'
   | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew' | 'renewWild'
   | 'dropLast' | 'addFromPalette' | 'addRandom';
 
@@ -1130,20 +1130,24 @@ export class Bloom {
     return this;
   }
 
-  shear(): this {
+  /**
+   * Shear: widen the range by octaves. About a third of the notes (the
+   * breeze's share) each move an octave away from the middle, keeping their
+   * pitch class; one that would leave the range moves an octave inward instead.
+   */
+  shear(share = GESTURE.breeze): this {
     this.saveNest();
     const flat = flatNotes(this.notes) as number[];
-    const lowestIdx = flat.indexOf(Math.min(...flat));
-    const lowestNote = flat[lowestIdx];
+    const sorted = [...flat].sort((a, b) => a - b);
+    const mid = (sorted[0] + sorted[sorted.length - 1]) / 2;
+    const moving = someIndices(flat.length, share);
     this.notes = flat.map((note, i) => {
-      if (i === lowestIdx) return note;
-      const change = (Math.floor(Math.random() * 5) - 2) * 12;
-      let newNote = note + change;
-      while (newNote < lowestNote) newNote += 12;
-      return newNote;
+      if (!moving.has(i)) return note;
+      const out = note > mid ? 12 : note < mid ? -12 : (coin(0.5) ? 12 : -12);
+      const fits = (m: number) => m >= this.lowestPossibleNote && m <= this.highestPossibleNote;
+      return fits(note + out) ? note + out : fits(note - out) ? note - out : note;
     });
     this.restoreNest();
-    this.compass(this.lowestPossibleNote, this.highestPossibleNote);
     return this;
   }
 
@@ -1672,11 +1676,6 @@ export class Bloom {
   }
 
   /** Progressive drift across the array — an instrumentation glissando */
-  shearChans(step = 0.5): this {
-    this.chans = this.chans.map((c, i) => this.wrapChanVal(c + Math.floor(i * step)));
-    return this;
-  }
-
   /** Redraw chans as a smooth curve through the full channel range */
   curveChans(): this {
     const n = this.chans.length;
@@ -1856,7 +1855,8 @@ export class Bloom {
    * when the verb has no meaning for that list.
    */
   shapeList(k: ListKey, verb: ListVerb, amount = 4): boolean {
-    if (k === 'notes') return this.shapePitch(verb);
+    if (verb === 'tiltDown' || verb === 'tiltUp') return this.tiltList(k, verb === 'tiltUp' ? 1 : -1);
+    if (k === 'notes') return this.shapePitch(verb, amount);
     // only pitch has a key to leave; elsewhere N is n
     if (verb === 'renewWild') verb = 'renew';
     if (k === 'time') return this.shapeTimes(verb, amount);
@@ -1867,7 +1867,25 @@ export class Bloom {
 
   // Pitch verbs count in scale steps, so the scale is pitch's palette. Chords
   // keep their shape: every tone moves, and the nesting is restored after.
-  private shapePitch(verb: ListVerb): boolean {
+  // Tilt builds up: each press makes the slope one step steeper (or shallower),
+  // always measured from the list as it was before the first press, so
+  // b b b gives the same line as one tilt three steps steep. Any other change
+  // to the list starts afresh.
+  private tiltMemo = new Map<ListKey, { base: string; after: string; slope: number }>();
+
+  private tiltList(k: ListKey, dir: 1 | -1): boolean {
+    const now = JSON.stringify(this.getList(k));
+    const memo = this.tiltMemo.get(k);
+    const going = memo && memo.after === now;
+    const base = going ? memo.base : now;
+    const slope = (going ? memo.slope : 0) + dir;
+    this.setList(k, JSON.parse(base) as unknown[]);
+    if (slope !== 0) this.shapeList(k, 'tilt', slope);
+    this.tiltMemo.set(k, { base, after: JSON.stringify(this.getList(k)), slope });
+    return true;
+  }
+
+  private shapePitch(verb: ListVerb, amount = 0): boolean {
     const flat = flatNotes(this.notes) as number[];
     const n = flat.length;
     if (n === 0) return true;
@@ -1904,11 +1922,8 @@ export class Bloom {
       case 'invert': setDegs(d => sorted[0] + sorted[n - 1] - d); break;
       case 'invertMid': this.invertMean(); break;
       // a tilt: up to three scale steps up or down by the end
-      case 'shear': {
-        const dir = coin(0.5) ? 1 : -1;
-        setDegs((d, i) => d + dir * Math.round((i / Math.max(1, n - 1)) * 3));
-        break;
-      }
+      // the last note `amount` scale steps up (or down), the first where it was
+      case 'tilt': setDegs((d, i) => d + Math.round((i / Math.max(1, n - 1)) * amount)); break;
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-3, 3));
         const offs = resamp1(ctrl, n);
@@ -2074,11 +2089,8 @@ export class Bloom {
         break;
       }
       // accelerando or ritardando: up to two palette steps by the end
-      case 'shear': {
-        const dir = coin(0.5) ? 1 : -1;
-        set((t, i) => this.stepTime(t, dir * Math.round((i / Math.max(1, n - 1)) * 2), pal));
-        break;
-      }
+      // up: longer toward the end (ritardando); down: shorter (accelerando)
+      case 'tilt': set((t, i) => this.stepTime(t, Math.round((i / Math.max(1, n - 1)) * amount), pal)); break;
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-2, 2));
         const offs = resamp1(ctrl, n);
@@ -2155,11 +2167,8 @@ export class Bloom {
       case 'invert': set(v => lo + hi - v); break;
       case 'invertMid': set(v => 2 * m - v); break;
       // a dynamic ramp across the bloom, crescendo or decrescendo
-      case 'shear': {
-        const dir = coin(0.5) ? 1 : -1;
-        set((v, i) => v + dir * (i / Math.max(1, n - 1) - 0.5) * 40);
-        break;
-      }
+      // a ramp about the middle: up is a crescendo, down a decrescendo
+      case 'tilt': set((v, i) => v + amount * (i / Math.max(1, n - 1) - 0.5) * 16); break;
       // hairpins: a smooth contour through a few random levels
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(30, 110));
@@ -2209,7 +2218,12 @@ export class Bloom {
       case 'unify': this.unifyChans(); break;
       case 'invert': this.invertChans(); break;
       case 'invertMid': this.invertChansModal(); break;
-      case 'shear': this.shearChans(); break;
+      case 'tilt': {
+        const n = this.chans.length;
+        this.chans = this.chans.map((c, i) =>
+          Math.max(0, Math.min(Bloom.maxChan, c + Math.round((i / Math.max(1, n - 1)) * amount))));
+        break;
+      }
       case 'curve': this.curveChans(); break;
       case 'sortUp': this.sortChans(); break;
       case 'sortDown': this.chans = [...this.chans].sort((a, b) => b - a); break;
@@ -2335,11 +2349,8 @@ export class Bloom {
         break;
       }
       // closing in or opening out across the list
-      case 'shear': {
-        const dir = coin(0.5) ? 1 : -1;
-        each((iv, i) => mag(iv, Math.abs(iv) + Math.round(dir * (i / Math.max(1, n - 1) - 0.5) * 6)));
-        break;
-      }
+      // up: steps widen toward the end; down: they close in
+      case 'tilt': each((iv, i) => mag(iv, Math.abs(iv) + Math.round(amount * (i / Math.max(1, n - 1) - 0.5) * 2))); break;
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-3, 3));
         const offs = resamp1(ctrl, n);

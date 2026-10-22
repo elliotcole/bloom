@@ -97,7 +97,8 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 | `m` | mutate (scale steps) | `M` | mutate (chromatic) |
 | `1` `2` | ∓ semitone | `!` `@` | ∓ octave |
 | `3` `4` | ∓ scale step | `#` `$` | **breeze**: some notes ∓ a scale step |
-| `e` / `E` | shear / centre range | `[` / `]` | step flatward / sharpward |
+| `e` / `E` | shear (a third of the notes an octave outward, same pitch class) / centre range |
+| `b` / `B` | tilt down / up (each press a scale step steeper) | | | `[` / `]` | step flatward / sharpward |
 | `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
 | `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
 | `;` / `:` | clump / flatten chords | `k K j J` | scales: choose, slant, lift, reduce |
@@ -108,7 +109,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
 - **Merge and split the garden:** `|` and opt-`|`.
-- **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches, `b` a new shape (times and dynamics) for the same pitches. Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
+- **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
   change is remembered (the last 300).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
@@ -154,13 +155,13 @@ point: stutter only the velocities and the accent pattern drifts.
 | `-` `=` | converge / diverge | evener / more uneven | flatter / wider dynamics | toward / away from the most-used channel |
 | `y` | unify | all the commonest duration | all the average level | all the most-used channel |
 | `i` / `I` | invert / around the middle | longest ↔ shortest | loud ↔ quiet | across the range / around the most-used |
-| `e` | shear | accelerando or ritardando | dynamic ramp | drift across channels |
+| `b` / `B` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 
 **In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
 semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
-`y` puts every note on the commonest pitch, `i` mirrors high and low, `e`
-tilts the line up or down, `w` draws a contour. `a` adds a note in the scale, `A`
+`y` puts every note on the commonest pitch, `i` mirrors high and low, `b` `B`
+tilt the line down or up (each press a step steeper, the first note staying put), `e` sends some notes an octave outward, `w` draws a contour. `a` adds a note in the scale, `A`
 any note, as at home. `h H` take away or add one
 **pitch class**: `h` removes the least-used class (its notes move to the
 nearest class still in use); `H` brings in an unused note of the scale or,

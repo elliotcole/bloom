@@ -172,7 +172,7 @@ async function main() {
     reg('braid',     'braid pattern',             b => b.braid());
     reg('pyramid',   'pyramid pattern',           b => b.pyramid());
     reg('quantize',  'quantize to grid (4)',      b => b.quantize(4));
-    reg('shear',     'shear pitches',             b => b.shear());
+    reg('shear',     'shear: some notes an octave outward', b => b.shear());
     reg('removedoubles', 'remove double notes',   b => b.removeDoubles());
     reg('drawcurves', 'draw curves diatonic',     b => b.drawCurvesD(10));
 
@@ -227,7 +227,7 @@ async function main() {
       const VERBS: ListVerb[] = [
         'mutate', 'mutateWild', 'nudgeDown', 'nudgeUp', 'octaveDown', 'octaveUp', 'stepDown', 'stepUp',
         'breezeDown', 'breezeUp',
-        'converge', 'diverge', 'unify', 'invert', 'invertMid', 'shear', 'curve', 'sortUp', 'sortDown',
+        'converge', 'diverge', 'unify', 'invert', 'invertMid', 'tiltDown', 'tiltUp', 'curve', 'sortUp', 'sortDown',
         'fewer', 'more', 'renew', 'renewWild',
       ];
       VERBS.forEach(verb => reg(`${verb}${suffix}`, `${verb} ${name}`, b => { b.shapeList(k, verb); }));

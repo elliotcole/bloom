@@ -731,7 +731,6 @@
             <div class="hf-h">Storage</div>
             <div class="hf-body"><b>n</b>      new bloom (same scale)
 <b>N</b>      new bloom (any of 12)
-<b>b</b>      new bloom shape
 <b>cmd-z</b>  undo   <b>cmd-shift-z</b> redo
 <b>opt-p</b>  push   <b>opt-P</b> pop (save points)
 <b>cmd-s</b>  save   <b>cmd-o</b> load (or the buttons up top)</div>
@@ -766,7 +765,8 @@
             <div class="hf-h">Pitch</div>
             <div class="hf-body"><b>m</b>    mutate (diatonic)
 <b>M</b>    mutate (chromatic)
-<b>e</b>    shear        <b>E</b>    center range
+<b>e</b>    shear (some an octave out)  <b>E</b> center range
+<b>b</b>    tilt down    <b>B</b>    tilt up (each press steeper)
 <b>i</b>    invert       <b>I</b>    invert mean
 <b>1/2</b>  −/+ semitone  <b>!/@</b>  −/+ octave
 <b>3/4</b>  −/+ scale step
@@ -851,7 +851,8 @@ click a node: pin / unpin its event</div>
 <b>- =</b>    converge / diverge (pitch: range)
 <b>y</b>      unify
 <b>i I</b>    invert / around the middle
-<b>e w</b>    shear / curve
+<b>b B</b>    tilt down / up, a step steeper per press
+<b>w</b>      curve
 
 <b>m M</b>    mutate (palette / wild)
 <b>h H</b>    fewer / more distinct values (pitch: classes)

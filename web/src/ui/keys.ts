@@ -75,7 +75,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
   i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below' } },
   I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
-  e: { verb: 'shear', label: 'shear', labels: { pitch: 'tilt', time: 'accel / rit', vel: 'dynamic ramp', iv: 'closing in / opening out' } },
+  b: { verb: 'tiltDown', label: 'tilt down', labels: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in' } },
+  B: { verb: 'tiltUp', label: 'tilt up', labels: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out' } },
   w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins', iv: 'swell of widths' } },
   // vocabulary
   m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
@@ -430,7 +431,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     };
 
     // Pitch keys that live at home too: scales, center range, intervals
-    if (m === 'pitch' && 'kKjJE'.includes(ch)) return false;
+    if (m === 'pitch' && 'kKjJeE'.includes(ch)) return false;
     // the home interval keys mean the same in pitch and intervals mode
     if ((m === 'pitch' || m === 'iv') && '6^7&8*%'.includes(ch)) return false;
     if (m === 'pitch' && (ch === '(' || ch === ')')) {
@@ -586,10 +587,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom');
       return;
     }
-    if (ch === 'b' && !alt) {
-      status('new bloom shape');
-      b.newShape();
-      refresh('new bloom shape');
+    // tilt: each press one scale step steeper, down or up (as p b / p B)
+    if ((ch === 'b' || ch === 'B') && !alt) {
+      const label = ch === 'b' ? 'tilt down' : 'tilt up';
+      status(label);
+      b.shapeList('notes', ch === 'b' ? 'tiltDown' : 'tiltUp');
+      refresh(label);
       return;
     }
     // push / pop: deliberate save points (cmd-z undoes any single change)
@@ -813,7 +816,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     // ─── Pitch ────────────────────────────────────────────────────────────────
     if (ch === 'e' && !shift) {
-      status('shear');
+      status('shear: some an octave outward');
       b.shear();
       refresh('shear');
       return;
