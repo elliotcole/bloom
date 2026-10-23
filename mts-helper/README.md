@@ -13,9 +13,17 @@ tuning to every MTS-ESP client plugin, in Ableton Live or any other host.
    `/Library/Application Support/MTS-ESP`. You don't need to load the Mini
    plugin itself, and you mustn't while bloom-mts runs: only one master can be
    connected at a time.
-2. Build: `make` (needs the Xcode command line tools).
-3. Run: `./bloom-mts`. It prints each tuning it receives, as cents from 12-TET
-   for the twelve notes from middle C, and how many clients are connected.
+2. Get it, either way:
+   - Download the ready-built one (Intel and Apple Silicon) in Terminal:
+     `curl -fLo ~/bloom-mts https://bloom.ecc.xyz/bloom-mts && chmod +x ~/bloom-mts`
+     (Bloom's ⚙ settings → tuning → **copy helper command** copies this line).
+     Use curl rather than the browser: macOS won't open an unsigned program a
+     browser downloaded. If you did use the browser, run
+     `xattr -d com.apple.quarantine bloom-mts` on it first.
+   - Or build it: `make` (needs the Xcode command line tools). `make universal`
+     rebuilds the downloadable copy in `web/public/`.
+3. Run: `~/bloom-mts` (or `./bloom-mts` where you built it). It prints each
+   tuning it receives, as cents from 12-TET for the twelve notes from middle C, and how many clients are connected.
 4. In Bloom, load `.scl` files in ⚙ settings → tuning and press `b`. The
    browser asks once to allow SysEx; allow it. The settings menu shows
    `helper: connected`.

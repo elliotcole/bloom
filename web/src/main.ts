@@ -341,6 +341,17 @@ async function main() {
     fillTuningSelect();
     display.setStatus('tuning library cleared (blooms keep their tunings)');
   });
+  // curl, not the browser: a browser download is quarantined and macOS won't run it
+  document.getElementById('tuning-helper')?.addEventListener('click', async (e) => {
+    (e.currentTarget as HTMLElement).blur();
+    const cmd = `curl -fLo ~/bloom-mts ${location.origin}/bloom-mts && chmod +x ~/bloom-mts && ~/bloom-mts`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      display.setStatus('copied: paste it in Terminal (needs MTS-ESP Mini installed; afterwards just run ~/bloom-mts)');
+    } catch {
+      display.setStatus(cmd);
+    }
+  });
   onHelperStatus(s => { if (tuningStatus) tuningStatus.textContent = s; });
   if (tuningStatus) tuningStatus.textContent = helperStatus();
   if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();

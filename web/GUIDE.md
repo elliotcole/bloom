@@ -133,8 +133,9 @@ with the reason. The library stays in this browser.
 - **What you see:** the header shows `◊ ji-5 @ D`, and the console's `tuning:`
   line gives each pitch class's distance from 12-TET in cents.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
-  Ableton (or any host), run the **bloom-mts** helper (in `mts-helper/` in the
-  repository): it is an MTS-ESP master that takes its tuning from Bloom, so
+  Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →
+  tuning → **copy helper command** copies a Terminal line that downloads and
+  starts it; source in `mts-helper/`): it is an MTS-ESP master that takes its tuning from Bloom, so
   every MTS-ESP client plugin follows it. The browser asks once for permission
   to send it SysEx; the settings menu says whether the helper is connected.
 
