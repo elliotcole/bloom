@@ -138,11 +138,15 @@ with the reason. The library stays in this browser.
   session.
 - **The root follows the key.** A bloom has a key only when a scale is
   attached (`k` and the other scale keys attach one); degree 0 of the file
-  then sits on that key, as a key signature names it: C major, A minor and C
-  pentatonic all put it on C, and `]` (one more sharp) moves it to G. A bloom
-  with no scale attached is twelve-note chromatic, and puts the root on C; so
-  does a scale that implies no key (whole tone). The root keeps its 12-TET
-  pitch; the other notes are tuned from it.
+  then sits on that key, as a key signature names it: the major scale holding
+  all the scale's notes, or all but one. C major, A minor and C pentatonic all
+  put it on C, A harmonic minor too, F harmonic minor on A♭, and `]` (one more
+  sharp) moves it to G. A bloom with no scale attached is twelve-note
+  chromatic, and puts the root on C; so does a scale no key signature fits
+  (whole tone, diminished, Bhairav). The root keeps its 12-TET pitch; the
+  other notes are tuned from it.
+- **The scale badge** in the header shows the attached scale and its key,
+  `♮ Aeolian · key E♭`, or `no key`; it's hidden while none is attached.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.

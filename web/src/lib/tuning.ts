@@ -93,24 +93,37 @@ export function parseScala(text: string, fileName: string): Tuning | string {
 }
 
 /**
- * The key a pitch-class set implies, as a key signature names it: two fifths
- * below the middle of the shortest arc of fifths that holds the set. C major and
- * C major pentatonic give C, A minor gives C too, and a move to one more sharp
- * moves it a fifth up. null when the set is too spread to have one (whole tone,
- * chromatic).
+ * The key a pitch-class set implies, as a key signature names it: the major
+ * scale that holds all its notes, or all but one (harmonic minor's raised
+ * seventh); when several do (a pentatonic), the one nearest the middle of the
+ * set on the circle of fifths. C major, C major
+ * pentatonic and A minor give C; A harmonic minor gives C, F harmonic minor
+ * A♭; a move to one more sharp moves it a fifth up. null when no key signature
+ * comes that close (whole tone, Bhairav, chromatic).
  */
 export function keyRootOf(pcs: number[]): number | null {
   const set = [...new Set(pcs.map(p => ((Math.round(p) % 12) + 12) % 12))];
   if (set.length === 0) return null;
-  const pos = (pc: number) => (pc * 7) % 12;   // place on the circle of fifths, C = 0
+  // where the set sits on the circle of fifths: two fifths below the middle of
+  // the shortest arc that holds it (breaks ties, so pentatonics move with ] too)
+  const pos = (pc: number) => (pc * 7) % 12;   // C = 0, G = 1 …
   let start = 0, span = 12;
   for (let st = 0; st < 12; st++) {
     const w = Math.max(...set.map(pc => (pos(pc) - st + 12) % 12));
     if (w < span) { span = w; start = st; }
   }
-  if (span >= 9) return null;
-  const at = Math.round(start + span / 2 - 2);   // a place on the circle of fifths
-  return (((at * 7) % 12) + 12) % 12;            // back to a pitch class
+  const centre = start + span / 2 - 2;
+  const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+  let best: { root: number; held: number; off: number } | null = null;
+  for (let fifths = -6; fifths <= 5; fifths++) {   // G♭ … B
+    const root = ((fifths * 7) % 12 + 12) % 12;
+    const scale = new Set(MAJOR.map(d => (d + root) % 12));
+    const held = set.filter(pc => scale.has(pc)).length;
+    const d = Math.abs(((fifths - centre) % 12 + 18) % 12 - 6);   // fifths from the centre
+    const off = d + Math.abs(fifths) * 0.01;                      // then fewer accidentals
+    if (!best || held > best.held || (held === best.held && off < best.off)) best = { root, held, off };
+  }
+  return best && best.held >= set.length - 1 && best.held >= Math.min(set.length, 2) ? best.root : null;
 }
 
 const etFreq = (m: number) => 440 * 2 ** ((m - 69) / 12);

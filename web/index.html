@@ -240,6 +240,23 @@
       }
       #selection-badge.active { display: inline-block; }
 
+      /* The bloom's attached scale and the key it implies (the root a tuning sits on) */
+      #scale-badge {
+        display: none;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: #9ce;
+        border: 1px solid #357;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+        max-width: 22em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #scale-badge.active { display: inline-block; }
+
       /* The bloom's tuning: ◊ name @ root */
       #tuning-badge {
         display: none;
@@ -659,6 +676,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
+      <span id="scale-badge"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>

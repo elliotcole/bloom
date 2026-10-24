@@ -1,6 +1,7 @@
 // Full keyboard handler — mirrors bloom keystroke controller.scd
 
 import { Bloom } from '../core/Bloom';
+import { keyRootOf } from '../lib/tuning';
 import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
@@ -407,8 +408,22 @@ export function createKeyHandler(state: KeyHandlerState) {
     b.tuning = isHeld() ? heldForBloom() : own;
   }
 
+  /** The scale badge: the attached scale and its key, the root a tuning sits on (none: chromatic) */
+  function updateScaleBadge() {
+    const badge = document.getElementById('scale-badge');
+    if (!badge) return;
+    const s = state.bloom.appliedScale;
+    const notes = s ? [...s.degrees].sort((a, b) => a - b).map(spell).join(' ') : '';
+    const key = s ? keyRootOf(s.degrees) : null;
+    const keyStr = key === null ? 'no key' : `key ${spell(key)}`;
+    badge.textContent = s ? `♮ ${s.name || notes} · ${keyStr}` : '';
+    badge.title = s ? `scale attached: ${notes} — ${keyStr}: a tuning's root sits ${key === null ? 'on C' : 'there'} (k / K / j / J change the scale; with none attached the bloom is chromatic and the root is C)` : '';
+    badge.classList.toggle('active', s !== null);
+  }
+
   /** The tuning follows the key; a change to it is heard (and shown) straight away */
   function syncTuning() {
+    updateScaleBadge();
     state.bloom.followTuningRoot();
     const tk = tuningKey(state.bloom);
     if (tk !== _ownTuning) { _ownTuning = tk; applyTuning(state.bloom); updateTuningBadge(); }
