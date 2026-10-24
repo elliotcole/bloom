@@ -288,6 +288,9 @@ unpins them all (so does `F e`); **shift-`esc`** inverts them, pinning every
 free event and freeing every pinned one. Works in every view except tonal and
 set, which draw pitch classes rather than events.
 
+- **Pinned means exempt from transformations, not fixed in sound.** When the
+  bloom plays, a pinned note is assembled like any other: it takes the next
+  value from each list, and lists of other lengths phase across it as usual.
 - **Every key works around them.** A key that changes the bloom acts on the
   free events only, as if the pinned ones weren't there: sorting, mirroring,
   braiding or stuttering rearranges the free events in the spaces between the
