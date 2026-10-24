@@ -8,6 +8,8 @@ import type { VizMode, ThemeId, Theme } from './theme';
 import { drawNotehead, drawSharp, drawFlat } from './glyphs';
 import { Lanes, LANES_HEIGHT } from './lanes';
 import type { LaneMode } from './lanes';
+import { drawTuningPie, degreeAt } from './tuningPie';
+import type { PieMarks } from './tuningPie';
 
 export type { VizMode, ThemeId, Theme };
 export { THEMES, getTheme };
@@ -2013,6 +2015,14 @@ export class BloomVisualization {
   private _box: { x0: number; y0: number; x1: number; y1: number } | null = null;
   /** Called with the events inside a dragged box (empty when a click lands on no node) */
   onSelect: ((idx: number[]) => void) | null = null;
+  // The tuning view (opt-T): the tuning as a pie in place of the current view
+  private _tuningView = false;
+  private _pieMarks: PieMarks = { a: null, b: null };
+  private _pie = { cx: 0, cy: 0, R: 0 };   // where the pie was last drawn, in canvas coordinates
+  /** Called with the degree (from the root) when a slice is clicked */
+  onTuningClick: ((deg: number, shift: boolean) => void) | null = null;
+  /** Called when choosing a view leaves the tuning view */
+  onTuningViewClosed: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -2053,12 +2063,20 @@ export class BloomVisualization {
   }
 
   setMode(mode: VizMode): void {
+    if (this._tuningView) { this._tuningView = false; this.onTuningViewClosed?.(); }
     if (this._mode !== mode) {
       this._mode = mode;
       this._orbitRotation = 0;
       this._camera = { azimuth: 0, elevation: 0 };
     }
     this.canvas.style.cursor = '';
+  }
+
+  setTuningView(on: boolean): void { this._tuningView = on; this.canvas.style.cursor = ''; }
+  isTuningView(): boolean { return this._tuningView; }
+  setPieMarks(m: PieMarks): void { this._pieMarks = m; }
+  private _degreeAt(x: number, y: number): number {
+    return this._tuningView && this.bloom ? degreeAt(this.bloom, this._pie.cx, this._pie.cy, this._pie.R, x, y) : -1;
   }
 
   resetCamera(): void {
@@ -2184,16 +2202,21 @@ export class BloomVisualization {
       const rect = el.getBoundingClientRect();
       return [e.clientX - rect.left, e.clientY - rect.top] as const;
     };
-    const turns = () => this._mode === 'deep' || this._mode === 'spiral';
+    const turns = () => !this._tuningView && (this._mode === 'deep' || this._mode === 'spiral');
     el.addEventListener('mousedown', (e) => {
       downX = e.clientX; downY = e.clientY;
-      if (!(turns() && e.altKey)) {
+      if (!(turns() && e.altKey) && !this._tuningView) {
         const [x, y] = local(e);
         this._box = { x0: x, y0: y, x1: x, y1: y };
       }
     });
     el.addEventListener('click', (e) => {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
+      if (this._tuningView) {
+        const d = this._degreeAt(...local(e));
+        if (d >= 0) this.onTuningClick?.(d, e.shiftKey);
+        return;
+      }
       const i = this._nodeAt(...local(e));
       if (i >= 0) this.onNodeClick?.(i);
       else if (this._selected.size) this.onSelect?.([]);
@@ -2204,7 +2227,7 @@ export class BloomVisualization {
         return;
       }
       if (this._dragActive) return;
-      const over = this._nodeAt(...local(e)) >= 0;
+      const over = this._tuningView ? this._degreeAt(...local(e)) >= 0 : this._nodeAt(...local(e)) >= 0;
       el.style.cursor = over ? 'pointer' : turns() && e.altKey ? 'grab' : '';
     });
     const endBox = (e: MouseEvent) => {
@@ -2343,7 +2366,13 @@ export class BloomVisualization {
     ctx.translate(-cx, -cy);
 
     _hits = [];
-    switch (this._mode) {
+    if (this._tuningView) {
+      // room for the controls either side, unless they're hidden in clean view
+      const side = this._clean ? minDim * 0.38 : (W - 600) / 2 * 0.8;
+      const R = Math.max(minDim * 0.22, Math.min(H * 0.34, side));
+      drawTuningPie(ctx, cx, cy, R, bloom, this.petalFlash, theme, this._pieMarks);
+      this._pie = { cx: frame.x + cx, cy: frame.y + cy, R: R * zoom };
+    } else switch (this._mode) {
       case 'flower':
         drawRadialAt(ctx, cx, cy, minDim * 0.45, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
@@ -2404,8 +2433,10 @@ export class BloomVisualization {
     }
     this._lastHits = _hits;
     _hits = null;
-    this._drawSelected(ctx, theme);
-    this._drawPins(ctx, theme);
+    if (!this._tuningView) {
+      this._drawSelected(ctx, theme);
+      this._drawPins(ctx, theme);
+    }
     ctx.restore();
     // hits were found in the frame's coordinates; clicks come in the canvas's
     this._lastHits = this._lastHits.map(h => ({

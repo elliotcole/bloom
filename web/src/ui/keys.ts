@@ -151,6 +151,8 @@ export interface KeyHandlerState {
   setVizModeFn: ((mode: VizMode) => void) | null;
   /** Called after every refresh, so the tuning editor follows the bloom */
   afterRefreshFn?: () => void;
+  /** The tuning view (opt-T) */
+  tuningView?: { toggle(): void; close(): void; isOpen(): boolean };
 }
 
 export function createKeyHandler(state: KeyHandlerState) {
@@ -329,12 +331,12 @@ export function createKeyHandler(state: KeyHandlerState) {
   ]);
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
-    if ((e.key === 'b' || e.key === 'B') && !e.altKey) return false;   // tuning: the whole bloom's
+    if ((e.key === 'b' || e.key === 'T') && !e.altKey) return false;   // tuning: the whole bloom's
     if (WHOLE_BLOOM_CODES.has(e.code)) return false;
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
     if (e.altKey && (e.code.startsWith('Digit')
-      || ['KeyC', 'KeyE', 'KeyP'].includes(e.code))) return false;
+      || ['KeyC', 'KeyE', 'KeyP', 'KeyT'].includes(e.code))) return false;
     return true;
   }
 
@@ -354,7 +356,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   // ─── Tuning ──────────────────────────────────────────────────────────────────
-  // b / B step through the loaded tunings (12-TET first). The badge names the
+  // b / T step through the loaded tunings (12-TET first). The badge names the
   // tuning and the root it sits on, which follows the key.
   let _ownTuning = '';
 
@@ -378,6 +380,13 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh(msg);
   }
 
+  /** The tuning follows the key; a change to it is heard (and shown) straight away */
+  function syncTuning() {
+    state.bloom.followTuningRoot();
+    const tk = tuningKey(state.bloom);
+    if (tk !== _ownTuning) { _ownTuning = tk; applyTuning(state.bloom); updateTuningBadge(); }
+  }
+
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
@@ -389,10 +398,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
     if (_pinned.size && hold && !settled) holdPins();   // the palette's changes
-    // the tuning follows the key; a change to it is heard straight away
-    state.bloom.followTuningRoot();
-    const tk = tuningKey(state.bloom);
-    if (tk !== _ownTuning) { _ownTuning = tk; applyTuning(state.bloom); updateTuningBadge(); }
+    syncTuning();
     const what = record();
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
@@ -562,7 +568,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'b', 'B']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'b', 'T']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) {
       return false;   // shift-esc (esc itself left the mode above) inverts at home
@@ -712,6 +718,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       }
     }
 
+    // ─── Tuning view (opt+t): the tuning as a pie, with its controls ──────────
+    if (alt && e.code === 'KeyT') {
+      e.preventDefault();
+      state.tuningView?.toggle();
+      return;
+    }
+
     // ─── Clean view (opt+c): the picture alone, for recording ────────────────
     if (alt && !shift && e.code === 'KeyC') {
       e.preventDefault();
@@ -753,8 +766,8 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom');
       return;
     }
-    // tuning: b the next one loaded, B the one before (12-TET is first)
-    if ((ch === 'b' || ch === 'B') && !alt) {
+    // tuning: b the next one loaded, T the one before (12-TET is first)
+    if ((ch === 'b' || ch === 'T') && !alt) {
       stepTuningBy(ch === 'b' ? 1 : -1);
       return;
     }
@@ -1377,9 +1390,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       setClean(false);
       return;
     }
+    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
+    if (e.code === 'Escape' && !shift && !helpOpen && state.tuningView?.isOpen()) {
+      state.tuningView.close();
+      return;
+    }
     // esc clears what's marked, shift-esc inverts it: the selection if there
     // is one, otherwise the pins (the help, when open, closes first)
-    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
     if (e.code === 'Escape' && !helpOpen && (_selection.length || _pinned.size || shift)) {
       if (_selection.length) {
         if (shift) {
@@ -1417,5 +1434,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean };
+  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning };
 }

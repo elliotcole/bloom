@@ -1,8 +1,10 @@
-// The tuning editor: the bloom's tuning as a wheel. Click a note to hear and
-// select it, move it by commas, set it to a ratio; shift-click a second note to
-// see and set the interval between them; paste a whole scale; choose the root;
-// save to the library or export a .scl. Edits go to the bloom's own copy of its
-// tuning, so they're saved with the bloom (and undo steps back through them).
+// The tuning view (opt-T): the bloom's tuning as a pie in the main area (drawn
+// by the visualization, see tuningPie.ts), with these controls either side.
+// Click a slice to hear and select the note, move it by commas, set it to a
+// ratio; shift-click a second to see and set the interval between them; paste
+// a whole scale; choose the root; save to the library or export a .scl. Edits
+// go to the bloom's own copy of its tuning, so they're saved with the bloom
+// (and undo steps back through them).
 
 import type { Bloom } from '../core/Bloom';
 import {
@@ -11,6 +13,7 @@ import {
 } from '../lib/tuning';
 import type { Tuning } from '../lib/tuning';
 import { spell } from '../lib/numbers';
+import type { PieMarks } from './tuningPie';
 
 export interface TuningEditorHost {
   bloom: () => Bloom;
@@ -22,9 +25,11 @@ export interface TuningEditorHost {
   libraryTuning: (name: string) => Tuning | undefined;
   saveToLibrary: (t: Tuning) => void;
   status: (msg: string) => void;
+  /** Show or hide the pie in the main area, and mark the selected notes on it */
+  show: (on: boolean) => void;
+  mark: (m: PieMarks) => void;
 }
 
-const SVG = 'http://www.w3.org/2000/svg';
 const COMMA_KEY = 'bloom.tuningComma';
 
 export class TuningEditor {
@@ -43,14 +48,24 @@ export class TuningEditor {
       this._comma = i >= 0 ? i : COMMAS.findIndex(c => c.name === 'syntonic comma');
     } catch { this._comma = COMMAS.findIndex(c => c.name === 'syntonic comma'); }
     this._el = document.createElement('div');
-    this._el.id = 'tuning-editor';
-    document.body.appendChild(this._el);
+    this._el.id = 'tuning-view';
+    (document.getElementById('viz-area') ?? document.body).appendChild(this._el);
   }
 
   isOpen(): boolean { return this._open; }
-  open(): void { this._open = true; this._el.classList.add('open'); this.update(); }
-  close(): void { this._open = false; this._el.classList.remove('open'); }
+  open(): void { this._open = true; this._el.classList.add('open'); this.host.show(true); this.update(); }
+  close(): void { this._open = false; this._el.classList.remove('open'); this.host.show(false); }
+  /** The view was left some other way (choosing another view) */
+  closed(): void { this._open = false; this._el.classList.remove('open'); }
   toggle(): void { if (this._open) this.close(); else this.open(); }
+
+  /** A slice clicked: select the note and hear it; with shift, the second note of an interval */
+  pick(d: number, shift: boolean): void {
+    if (shift && this._a !== null && d !== this._a) this._b = d;
+    else { this._a = d; this._b = null; }
+    this.host.audition(60 + this.root + d);
+    this.update();
+  }
 
   private get tuning(): Tuning { return editable(this.host.bloom().tuning); }
   private get root(): number { return this.host.bloom().tuningRoot; }
@@ -67,7 +82,8 @@ export class TuningEditor {
     const cents = (c: number) => `${c.toFixed(1)}¢`;
     const signed = (c: number) => `${c >= 0 ? '+' : '−'}${Math.abs(c).toFixed(1)}`;
 
-    let sel = '<div class="te-dim">click a note to select and hear it · shift-click a second for the interval</div>';
+    this.host.mark({ a, b: bb });
+    let sel = '<div class="te-dim">click a slice to select and hear its note · shift-click a second for the interval</div>';
     if (a !== null) {
       const r = degreeRatio(t, a);
       const marks = t.marks?.[a]?.length ? ` · ${t.marks[a].join(' ')}` : '';
@@ -94,79 +110,27 @@ export class TuningEditor {
       `<option value="${i}"${i === this._comma ? ' selected' : ''}>${c.name} ${c.ratio.n}/${c.ratio.d} (${centsOfRatio(c.ratio).toFixed(1)}¢)</option>`).join('');
 
     this._el.innerHTML = `
-      <div class="te-head"><span>tuning: <b>${escapeHtml(t.name)}${b.tuning?.edited ? ' *' : ''}</b></span>
-        <button data-act="close" title="close">×</button></div>
-      <div class="te-wheel"></div>
-      ${sel}
-      <div class="te-row"><span class="te-lbl">comma</span><select id="te-comma">${commaOpts}</select></div>
-      <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
-      <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, or a .scl</span></span>
-        <textarea id="te-paste" class="te-inp" rows="2" spellcheck="false" placeholder="16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 9/5 15/8"></textarea>
-        <button data-act="paste">use these</button></div>
-      <div class="te-row"><input id="te-name" class="te-inp" value="${escapeHtml(t.name)}" title="the name to save it under">
-        <button data-act="save">save to library</button>
-        <button data-act="export">export .scl</button>
-        ${lib && b.tuning?.edited ? '<button data-act="revert">revert</button>' : ''}</div>
-      <div class="te-row"><button data-act="equal">back to 12-TET</button></div>`;
-    this._el.querySelector('.te-wheel')!.appendChild(this._wheel(t, dev));
+      <div class="tv-side">
+        <div class="tv-title">note</div>
+        ${sel}
+        <div class="te-row"><span class="te-lbl">comma</span><select id="te-comma">${commaOpts}</select></div>
+      </div>
+      <div class="tv-side">
+        <div class="tv-title">tuning: <b>${escapeHtml(t.name)}${b.tuning?.edited ? ' *' : ''}</b>
+          <button data-act="close" title="close the tuning view (opt-T)">×</button></div>
+        <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
+        <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, or a .scl</span></span>
+          <textarea id="te-paste" class="te-inp" rows="3" spellcheck="false" placeholder="16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 9/5 15/8"></textarea>
+          <button data-act="paste">use these</button></div>
+        <div class="te-row"><input id="te-name" class="te-inp" value="${escapeHtml(t.name)}" title="the name to save it under"></div>
+        <div class="te-row">
+          <button data-act="save">save to library</button>
+          <button data-act="export">export .scl</button>
+          ${lib && b.tuning?.edited ? '<button data-act="revert">revert</button>' : ''}
+          <button data-act="equal">back to 12-TET</button></div>
+        <div class="te-dim">b / T step through the loaded tunings · opt-T or esc closes</div>
+      </div>`;
     this._wire();
-  }
-
-  private _wheel(t: Tuning, dev: number[]): SVGSVGElement {
-    const W = 250, c = W / 2, R = 92;
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${W} ${W}`);
-    svg.setAttribute('width', String(W));
-    svg.setAttribute('height', String(W));
-    const at = (cents: number, r: number) => {
-      const ang = (cents / t.period) * 2 * Math.PI - Math.PI / 2;
-      return [c + r * Math.cos(ang), c + r * Math.sin(ang)];
-    };
-    const el = (tag: string, attrs: Record<string, string | number>, text?: string) => {
-      const e = document.createElementNS(SVG, tag);
-      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
-      if (text !== undefined) e.textContent = text;
-      svg.appendChild(e);
-      return e;
-    };
-    el('circle', { cx: c, cy: c, r: R, class: 'te-ring' });
-    // 12-TET, faintly: where each note would be
-    for (let k = 0; k < 12; k++) {
-      const [x1, y1] = at(k * 100 * t.period / 1200, R - 5), [x2, y2] = at(k * 100 * t.period / 1200, R + 5);
-      el('line', { x1, y1, x2, y2, class: 'te-tick' });
-    }
-    if (this._a !== null && this._b !== null) {
-      const [x1, y1] = at(t.cents[this._a], R), [x2, y2] = at(t.cents[this._b], R);
-      el('line', { x1, y1, x2, y2, class: 'te-chord' });
-    }
-    for (let d = 0; d < 12; d++) {
-      const [x, y] = at(t.cents[d], R);
-      const [lx, ly] = at(t.cents[d], R + 26);
-      const selected = d === this._a || d === this._b;
-      const g = document.createElementNS(SVG, 'g');
-      g.setAttribute('class', `te-node${selected ? ' sel' : ''}${d === 0 ? ' root' : ''}`);
-      g.dataset.deg = String(d);
-      const circ = document.createElementNS(SVG, 'circle');
-      circ.setAttribute('cx', String(x)); circ.setAttribute('cy', String(y)); circ.setAttribute('r', '11');
-      g.appendChild(circ);
-      const name = document.createElementNS(SVG, 'text');
-      name.setAttribute('x', String(x)); name.setAttribute('y', String(y + 3.5));
-      name.textContent = this.name(d);
-      g.appendChild(name);
-      svg.appendChild(g);
-      const dv = dev[(this.root + d) % 12];
-      el('text', { x: lx, y: ly + 3, class: 'te-dev' }, Math.abs(dv) < 0.05 ? '0' : `${dv > 0 ? '+' : '−'}${Math.abs(dv).toFixed(0)}`);
-    }
-    svg.addEventListener('click', (e) => {
-      const g = (e.target as Element).closest('.te-node') as SVGGElement | null;
-      if (!g) return;
-      const d = Number(g.dataset.deg);
-      if (e.shiftKey && this._a !== null && d !== this._a) this._b = d;
-      else { this._a = d; this._b = null; }
-      this.host.audition(60 + this.root + d);
-      this.update();
-    });
-    return svg;
   }
 
   private _wire(): void {

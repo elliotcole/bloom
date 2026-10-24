@@ -291,7 +291,7 @@ async function main() {
     },
   };
 
-  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean } = createKeyHandler(keyState);
+  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning } = createKeyHandler(keyState);
   // blur after a click so a later space plays rather than pressing the button again
   document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
@@ -398,13 +398,19 @@ async function main() {
     libraryTuning: (name) => tuningLibrary().find(t => t.name === name && t.name !== '12-TET'),
     saveToLibrary: (t) => { saveToLibrary(t); fillTuningSelect(); },
     status: (msg) => display.setStatus(msg),
+    show: (on) => viz.setTuningView(on),
+    mark: (m) => viz.setPieMarks(m),
   });
+  viz.onTuningClick = (d, shift) => tuningEditor.pick(d, shift);
+  viz.onTuningViewClosed = () => tuningEditor.closed();
+  keyState.tuningView = tuningEditor;
   keyState.afterRefreshFn = () => tuningEditor.update();
   document.getElementById('tuning-edit')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); tuningEditor.toggle(); });
   document.getElementById('tuning-badge')?.addEventListener('click', () => tuningEditor.toggle());
   onHelperStatus(s => { if (tuningStatus) tuningStatus.textContent = s; });
   if (tuningStatus) tuningStatus.textContent = helperStatus();
   if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();
+  syncTuning();   // a restored bloom's tuning
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open

@@ -115,13 +115,13 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
   back to it.
 
-## Tunings: `b` `B`
+## Tunings: `b` `T`, opt-`t`
 
 Load Scala (`.scl`) files in ⚙ settings → **tuning**: pick several at once.
 Scales of twelve notes to the period are taken; others are listed as skipped,
 with the reason. The library stays in this browser.
 
-- **Each bloom has its own tuning.** `b` steps to the next loaded tuning, `B`
+- **Each bloom has its own tuning.** `b` steps to the next loaded tuning, `T`
   to the one before; 12-TET comes first. The settings menu picks one too. A
   bloom keeps its tuning in the garden and in saved files, and the garden loop
   retunes as each bloom comes round. `n` keeps the tuning, as it keeps the scale.
@@ -133,18 +133,23 @@ with the reason. The library stays in this browser.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
-- **Editing: click the ◊ badge** (or ⚙ settings → tuning → **edit tuning**).
-  A panel shows the tuning as a wheel: each note at its true place, the root
-  at the top, 12-TET as faint ticks, each note's cents from 12-TET outside.
-  The bloom keeps playing while it's open.
-  - **Click a note** to select and hear it: its exact ratio when it has one
+- **The tuning view: opt-`t`** (or click the ◊ badge, or ⚙ settings → tuning →
+  **edit tuning**). The main area shows the tuning as a pie, C at the top as
+  in the set view. Each note's slice reaches halfway to its neighbours, so its
+  width shows how much room the tuning gives it; the dot on the rim is the
+  note's true place, 12-TET's places are faint ticks outside, the root is
+  ringed, and each slice shows its ratio inside and its cents from 12-TET
+  outside. Slices light up as their notes play. The controls sit either
+  side: the selected note on the left, the whole tuning on the right.
+  opt-`t` or `esc` closes it, as does choosing another view.
+  - **Click a slice** to select and hear its note: its exact ratio when it has one
     (from the file, or kept exact through every edit), cents, and the commas
     it has been moved by.
   - **− comma / + comma** move it by the comma chosen below (the lattice's
     names: syntonic, Pythagorean, septimal, schisma, diesis, apotome …). A
     move back cancels the last one. **set** puts it at a ratio (`7/4`) or
     cents (`968.8`).
-  - **Shift-click a second note** to see the interval between them, and set
+  - **Shift-click a second slice** to see the interval between them, and set
     it to a ratio or cents (the second note moves). **= one comma** makes it
     exactly the chosen comma: click Eb, shift-click E, and E sits one
     syntonic comma above Eb.
@@ -152,7 +157,7 @@ with the reason. The library stays in this browser.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
     period, or a whole .scl file.
   - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
-    **save to library** keeps it under a name for `b` / `B`; **export .scl**
+    **save to library** keeps it under a name for `b` / `T`; **export .scl**
     downloads it; **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →

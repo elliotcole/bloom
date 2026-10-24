@@ -257,56 +257,51 @@
       }
       #tuning-badge.active { display: inline-block; cursor: pointer; }
 
-      /* ─── Tuning editor: a floating panel, the bloom keeps playing ─────────── */
-      #tuning-editor {
+      /* ─── Tuning view (opt-T): the pie in the main area, controls either side ── */
+      #tuning-view {
         display: none;
-        position: fixed;
-        top: 44px;
-        right: 12px;
-        width: 290px;
-        max-height: calc(100vh - 60px);
-        overflow-y: auto;
-        background: #0e0e1a;
-        border: 1px solid #2a2a44;
-        padding: 10px 12px;
-        z-index: 250;
+        position: absolute;
+        inset: 0;
+        justify-content: space-between;
+        align-items: center;
+        pointer-events: none;
+        z-index: 5;
         font-size: 11px;
         color: #99a;
-        flex-direction: column;
-        gap: 8px;
       }
-      #tuning-editor.open { display: flex; }
-      #tuning-editor b { color: #ccd; font-weight: normal; }
-      .te-head { display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px; }
-      .te-head button { background: none; border: none; color: #778; font-size: 15px; cursor: pointer; }
-      .te-wheel { display: flex; justify-content: center; }
-      .te-wheel svg { overflow: visible; }
-      .te-ring { fill: none; stroke: #2a2a44; }
-      .te-tick { stroke: #3a3a5a; }
-      .te-chord { stroke: #e9c; stroke-width: 1.2; stroke-dasharray: 3 3; }
-      .te-node { cursor: pointer; }
-      .te-node circle { fill: #151528; stroke: #556; }
-      .te-node.root circle { stroke: #e9c; stroke-width: 1.5; }
-      .te-node.sel circle { fill: #3a2a40; stroke: #fbe; }
-      .te-node text { fill: #bbc; font-size: 9px; text-anchor: middle; pointer-events: none; }
-      .te-dev { fill: #778; font-size: 9px; text-anchor: middle; }
+      #tuning-view.open { display: flex; }
+      body.clean #tuning-view { display: none !important; }
+      .tv-side {
+        pointer-events: auto;
+        width: 260px;
+        max-height: 100%;
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .tv-title { display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px; color: #778; }
+      .tv-title button { background: none; border: none; color: #778; font-size: 15px; cursor: pointer; }
+      #tuning-view b { color: #ccd; font-weight: normal; }
       .te-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
       .te-col { flex-direction: column; align-items: stretch; }
       .te-lbl { color: #778; min-width: 44px; }
       .te-dim { color: #667; }
-      #tuning-editor select, .te-inp {
+      #tuning-view select, .te-inp {
         background: #090912; border: 1px solid #1e1e36; color: #aab;
         font-family: inherit; font-size: 11px; padding: 3px 5px; outline: none;
       }
-      #tuning-editor select { max-width: 220px; }
+      #tuning-view select { max-width: 228px; }
       .te-inp { flex: 1; min-width: 70px; }
       textarea.te-inp { resize: vertical; }
       .te-inp:focus { border-color: #44588a; }
-      #tuning-editor button[data-act]:not([data-act="close"]) {
+      #tuning-view button[data-act]:not([data-act="close"]) {
         background: transparent; border: 1px solid #252540; color: #889;
         font-family: inherit; font-size: 11px; padding: 2px 8px; cursor: pointer;
       }
-      #tuning-editor button[data-act]:hover { color: #ccd; border-color: #4455aa; }
+      #tuning-view button[data-act]:hover { color: #ccd; border-color: #4455aa; }
       .s-note { font-size: 10px; opacity: 0.6; }
 
       /* Help views are separated by mode: list-mode help only in a list mode,
@@ -663,7 +658,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
-      <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — b / B step through the loaded tunings"></span>
+      <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — b / T step through the loaded tunings; click for the tuning view (opt-T)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
@@ -811,9 +806,9 @@
 
         <span class="s-section">
           <span class="s-section-label">tuning</span>
-          <select id="tuning-select" title="this bloom's tuning (b / B step through them)"></select>
+          <select id="tuning-select" title="this bloom's tuning (b / T step through them)"></select>
           <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
-          <button class="s-btn" id="tuning-edit" title="the bloom's tuning as a wheel: move notes by commas, set ratios, paste a scale, choose the root (or click the ◊ badge)">edit tuning</button>
+          <button class="s-btn" id="tuning-edit" title="the tuning view (opt-T): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
           <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">clear</button>
           <button class="s-btn" id="tuning-helper" title="copies a Terminal command that downloads the bloom-mts helper (an MTS-ESP master for synths in Ableton, macOS) and starts it">copy helper command</button>
           <span id="tuning-status" class="s-note"></span>
@@ -904,10 +899,10 @@
             <div class="hf-body"><b>k</b>    choose nearest scale
 <b>K</b>    slant scale  <b>j</b>    lift scale
 <b>J</b>    reduce scale
-<b>b B</b>  next / previous tuning
+<b>b T</b>  next / previous tuning
+<b>opt-t</b> tuning view: the pie, to edit
      (load .scl files in ⚙ settings;
-      the tuning's root follows the key;
-      click the ◊ badge to edit it)</div>
+      the tuning's root follows the key)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Chords</div>
