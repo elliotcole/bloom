@@ -694,10 +694,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
     if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
+    // the list mode keys switch straight across, as they do between list modes
+    if (own(MODE_KEYS, ch)) { state.tuningView?.close(); return false; }
     // playback, garden, display and help pass through, as in the list modes
     if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ step through tunings · click a slice to edit · opt-t holds · T or esc leaves');
+    status('tuning mode: ] [ step through tunings · click a slice to edit · opt-t holds · p t v c 5 switch · T or esc leaves');
     return true;
   }
 

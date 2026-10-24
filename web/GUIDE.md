@@ -159,8 +159,10 @@ with the reason. The library stays in this browser.
   outside. Slices light up as their notes play. The controls sit either
   side: the selected note on the left, the whole tuning on the right.
   In tuning mode `]` `[` step through the tunings, and playback, garden,
-  display and view keys work as at home; other keys only show a hint. `T` or
-  `esc` leaves, as does choosing another view.
+  display and view keys work as at home; other keys only show a hint. `p` `t`
+  `v` `c` `5` switch straight to that list mode, as between list modes (and
+  `T` from a list mode switches here). `T` or `esc` leaves, as does choosing
+  another view.
   - **Click a slice** to select and hear its note: its exact ratio when it has one
     (from the file, or kept exact through every edit), cents, and the commas
     it has been moved by.
