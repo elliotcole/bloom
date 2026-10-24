@@ -9,8 +9,8 @@
 import type { Bloom } from '../core/Bloom';
 import {
   ALTERATIONS, alterText, alterationsOf, centsOfRatio, commaAbove, commaOf, degreeRatio, deviations,
-  editable, fromList, intervalBetween, isAltered, readable, setDegree, setInterval, shiftDegree, toScala,
-  withAlterations,
+  clearAlterations, editable, fromList, intervalBetween, isAltered, readable, setDegree, setInterval,
+  shiftDegree, toScala, toggleAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
 import { PALETTE_GLYPH, loadHeji } from './heji';
@@ -134,11 +134,12 @@ export class TuningEditor {
       <div class="tv-side">
         <div class="tv-title">note</div>
         ${sel}
-        <div class="tv-title">alterations</div>
-        <div class="te-alter" title="each note's commas, from the root: 1 / 2 rotate them, 3 / 4 move notes, # / $ breeze, 0 clears (the selected notes, or all)">${alterList}</div>
-        ${isAltered(own) ? '<div class="te-row"><button data-act="unalter" title="0 (the selected notes, or all)">clear alterations</button></div>' : ''}
+        <div class="tv-title">alterations${t.alterOff ? ' — off' : ''}</div>
+        <div class="te-alter${t.alterOff ? ' off' : ''}" title="each note's commas, from the root: 9 / 0 rotate them, 3 / 4 move notes, # / $ breeze, 2 clears (the selected notes, or all); 1 switches them off and on">${alterList}</div>
+        ${isAltered(own) ? `<div class="te-row"><button data-act="alteroff" title="1">${t.alterOff ? 'switch on' : 'switch off'}</button>
+          <button data-act="unalter" title="2 (the selected notes, or all)">clear</button></div>` : ''}
       </div>
-      <div class="tv-palette"><span class="tv-pal-lbl">alterations</span>${palette}</div>
+      <div class="tv-palette${t.alterOff ? ' off' : ''}"><span class="tv-pal-lbl">alterations${t.alterOff ? ' (off)' : ''}</span>${palette}</div>
       <div class="tv-side">
         <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b></span>
           <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
@@ -256,7 +257,12 @@ export class TuningEditor {
         break;
       }
       case 'equal': this.host.commit(null, 'tuning: 12-TET'); break;
-      case 'unalter': result(withAlterations(t, alterationsOf(null)), 'alterations cleared'); break;
+      case 'unalter': {
+        const degs = this.picked().length ? this.picked() : Array.from({ length: 12 }, (_, i) => i);
+        result(clearAlterations(t, degs), 'back to the base (alterations cleared)');
+        break;
+      }
+      case 'alteroff': result(toggleAlterations(t), t.alterOff ? 'alterations on' : 'alterations off: the base sounds'); break;
     }
   }
 }

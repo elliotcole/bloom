@@ -134,7 +134,7 @@ export function drawTuningPie(
     const selected = d === marks.a || d === marks.b;
     const [nx, ny] = at(1.16);
     ctx.fillStyle = selected || f > 0.3 ? theme.accent : theme.text;
-    drawNoteName(ctx, nx, ny, spell(pc), alter[d], font * 1.15, selected);
+    drawNoteName(ctx, nx, ny, spell(pc), t.alterOff ? {} : alter[d], font * 1.15, selected);
     const dv = dev[pc];
     const [dx, dy] = [nx, ny + font * 1.3];
     ctx.font = `${font * 0.85}px monospace`;
@@ -172,7 +172,7 @@ export function drawTuningPie(
   const name = t.name.length > 22 ? `${t.name.slice(0, 21)}…` : t.name;
   ctx.fillText(`${name}${t.edited ? ' *' : ''}`, cx, cy - font * 0.7);
   ctx.globalAlpha = 0.6;
-  ctx.fillText(`${isHeld() ? 'held · ' : ''}root ${spell(root)}`, cx, cy + font * 0.8);
+  ctx.fillText(`${isHeld() ? 'held · ' : ''}root ${spell(root)}${t.alterOff ? ' · alterations off' : ''}`, cx, cy + font * 0.8);
   ctx.globalAlpha = 1;
 }
 

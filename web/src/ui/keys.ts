@@ -2,7 +2,7 @@
 
 import { Bloom } from '../core/Bloom';
 import {
-  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
+  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
@@ -409,7 +409,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     updateTuningBadge();
   }
 
-  /** 0 1 2 3 4 # $ in tuning mode: the alterations, on the selected slices or every note */
+  /** 1 2 9 0 3 4 # $ in tuning mode: the alterations, on the selected slices or every note */
   function alterKey(ch: string): boolean {
     const view = state.tuningView!;
     const t = editable(soundingTuning(state.bloom));
@@ -419,16 +419,21 @@ export function createKeyHandler(state: KeyHandlerState) {
     const which = picked.length ? picked.map(d => spell((soundingRoot(state.bloom) + d) % 12)).join(' ') : 'every note';
     let next: Tuning, msg: string;
     switch (ch) {
-      case '1': case '2': {
-        const dir = ch === '2' ? 1 : -1;
+      case '1':
+        if (!isAltered(t)) { status('no alterations to switch'); return true; }
+        next = toggleAlterations(t);
+        msg = next.alterOff ? 'alterations off: the base sounds (1 brings them back)' : 'alterations on';
+        break;
+      case '2':
+        next = clearAlterations(t, degs);
+        msg = `${which}: back to the base (alterations cleared)`;
+        break;
+      case '9': case '0': {   // rotate, as 9 / 0 rotate every list
+        const dir = ch === '0' ? 1 : -1;
         next = rotateAlterations(t, dir);
         msg = `alterations rotated ${dir > 0 ? 'up' : 'down'} a semitone`;
         break;
       }
-      case '0':
-        next = clearAlterations(t, degs);
-        msg = `${which}: alterations cleared`;
-        break;
       case '3': case '4':
         next = stepAlterations(t, degs, comma, ch === '4' ? 1 : -1);
         msg = `${which} ${ch === '4' ? '+' : '−'} ${name}`;
@@ -754,13 +759,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
     if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
-    if ('01234#$'.includes(ch) && alterKey(ch)) return true;
+    if ('129034#$'.includes(ch) && alterKey(ch)) return true;
     // the list mode keys switch straight across, as they do between list modes
     if (own(MODE_KEYS, ch)) { state.tuningView?.close(); return false; }
     // playback, garden, display and help pass through, as in the list modes
     if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ base · 1 2 rotate · 3 4 comma · # $ breeze · 0 clear · click slices · opt-t holds · T or esc leaves');
+    status('tuning mode: ] [ base · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-t holds · T or esc leaves');
     return true;
   }
 

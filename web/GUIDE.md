@@ -179,10 +179,11 @@ with the reason. The library stays in this browser.
 
     | key | does |
     |---|---|
-    | `1` `2` | rotate the alterations a semitone down / up |
+    | `9` `0` | rotate the alterations a semitone down / up (as `9` `0` rotate every list) |
     | `3` `4` | each note a comma down / up |
     | `#` `$` | breeze: a few notes a comma down / up |
-    | `0` | clear the alterations |
+    | `2` | clear: back to the base |
+    | `1` | switch all the alterations off (the base sounds; they're kept) and on again; any change to them switches them on |
 
     `esc` first lets go of the selected slices, then leaves tuning mode.
   - **Click a slice** to select and hear its note: its exact ratio when it
@@ -195,7 +196,7 @@ with the reason. The library stays in this browser.
     makes the second note the first raised by the palette's comma: click Eb,
     shift-click E, and E becomes Eb's pitch with its alterations, plus one
     syntonic comma.
-  - **clear alterations** (or `0`) puts every note back on its base.
+  - **switch off / clear** in the left panel do what `1` and `2` do.
   - **Root:** follows the key, or one chosen by hand.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
     period, or a whole .scl file. It becomes the base, unaltered.

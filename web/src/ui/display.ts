@@ -85,7 +85,7 @@ export class Display {
         deviations(soundingTuning(bloom), soundingRoot(bloom))
           .map((c, pc) => `${spell(pc)}${c >= 0 ? '+' : ''}${Math.round(c)}`).join(' ')}` : '',
       isAltered(soundingTuning(bloom))
-        ? `alter:  ${alterationsOf(soundingTuning(bloom)).map(x => alterText(x) || '0').join(' ')}   (from the root)` : '',
+        ? `alter:  ${alterationsOf(soundingTuning(bloom)).map(x => alterText(x) || '0').join(' ')}   (from the root${soundingTuning(bloom)!.alterOff ? '; off' : ''})` : '',
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,
       status ? `> ${status}` : '',

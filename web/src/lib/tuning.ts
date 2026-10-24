@@ -17,6 +17,8 @@ export interface Tuning {
   base?: { cents: number[]; ratios: (string | null)[] };
   /** Each degree's alterations: how many of each comma, up or down (HEJI-style) */
   alter?: Alteration[];
+  /** The alterations switched off (kept, not heard): the base sounds */
+  alterOff?: boolean;
   /** a root chosen by hand (0–11); absent or null: the root follows the key */
   root?: number | null;
   /** changed since it came from the library */
@@ -238,7 +240,7 @@ function resolve(t: Tuning): Tuning {
     let c = base.cents[d];
     let r = base.ratios[d] ? parseRatio(base.ratios[d]!) : null;
     for (const { id, ratio } of ALTERATIONS) {
-      const n = alter[d][id] ?? 0;
+      const n = t.alterOff ? 0 : alter[d][id] ?? 0;
       c += n * centsOfRatio(ratio);
       for (let k = 0; k < Math.abs(n) && r; k++) r = n > 0 ? ratioMul(r, ratio) : ratioDiv(r, ratio);
     }
@@ -257,6 +259,14 @@ export function withAlterations(t: Tuning, alter: Alteration[]): Tuning {
     return c;
   });
   out.edited = true;
+  delete out.alterOff;   // a change to them is heard
+  return resolve(out);
+}
+
+/** 1: switch the alterations off (the base sounds) or back on; they're kept either way */
+export function toggleAlterations(t: Tuning): Tuning {
+  const out = editable(t);
+  if (out.alterOff) delete out.alterOff; else out.alterOff = true;
   return resolve(out);
 }
 
