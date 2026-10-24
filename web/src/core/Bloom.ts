@@ -100,7 +100,7 @@ export type ListVerb =
   | 'breezeDown' | 'breezeUp'
   | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'tiltDown' | 'tiltUp' | 'tilt' | 'curve'
   | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew' | 'renewWild'
-  | 'dropLast' | 'addFromPalette' | 'addRandom';
+  | 'dropLast' | 'addFromPalette' | 'addRandom' | 'ratchet';
 
 /** A note with everything that sounds with it */
 export interface NoteEvent {
@@ -122,6 +122,7 @@ export const GESTURE = {
   breeze: 0.3,       // share of notes a breeze moves per press (on average; at least one)
   breezePull: 2,     // extra likelihood for a just-moved note: 2 → three times as likely
   breezeMemory: 0.5, // how much of that pull is left after each further press
+  ratchet: 0.2,      // share of the durations a time-mode ratchet splits (at least one)
   varyVel: 6,        // largest velocity change from vary
 };
 
@@ -2073,6 +2074,26 @@ export class Bloom {
         return others.length ? pick(others) : t * pick([0.5, 2]);
       }); break;
       case 'mutateWild': this.mutateTime(); break;
+      case 'ratchet': {
+        // a few of the long durations (at least half the longest, likelier the
+        // longer they are) each split into two or three equal parts, so a run
+        // of presses works down from the long end and never starts on the short
+        const longest = Math.max(...ts);
+        const weights = ts.map(t => (t >= longest / 2 && t / 2 >= MIN_TIME ? t * t : 0));
+        const picked = new Set<number>();
+        const want = Math.max(1, Math.round(n * GESTURE.ratchet));
+        while (picked.size < want && weights.some(w => w > 0)) {
+          const i = weightedIndex(weights);
+          picked.add(i);
+          weights[i] = 0;
+        }
+        this.timeIntervals = ts.flatMap((t, i) => {
+          if (!picked.has(i)) return [t];
+          const parts = t / 3 >= MIN_TIME && coin(0.5) ? 3 : 2;
+          return Array<number>(parts).fill(roundTime(t / parts));
+        });
+        break;
+      }
       case 'nudgeDown': this.faster(); break;
       case 'nudgeUp': this.slower(); break;
       case 'octaveDown': this.scaleTimes(0.5); break;

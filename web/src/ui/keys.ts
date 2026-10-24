@@ -52,6 +52,7 @@ const LIST_KEYS: Record<string, ListAction> = {
   s: { pattern: 'scramble', label: 'scramble' },
   S: { pattern: 'shuffle', label: 'shuffle' },
   R: { pattern: 'mirror', label: 'mirror' },
+  r: { verb: 'ratchet', label: 'ratchet', labels: { time: 'ratchet: a few long durations split in 2 or 3' } },
   '9': { pattern: 'rotate<', label: 'rotate <<' },
   '0': { pattern: 'rotate>', label: 'rotate >>' },
   u: { pattern: 'stutter', label: 'stutter' },
