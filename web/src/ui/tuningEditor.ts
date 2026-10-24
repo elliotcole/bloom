@@ -1,4 +1,4 @@
-// The tuning view (opt-T): the bloom's tuning as a pie in the main area (drawn
+// The tuning view (opt-t): the bloom's tuning as a pie in the main area (drawn
 // by the visualization, see tuningPie.ts), with these controls either side.
 // Click a slice to hear and select the note, move it by commas, set it to a
 // ratio; shift-click a second to see and set the interval between them; paste
@@ -117,7 +117,7 @@ export class TuningEditor {
       </div>
       <div class="tv-side">
         <div class="tv-title">tuning: <b>${escapeHtml(t.name)}${b.tuning?.edited ? ' *' : ''}</b>
-          <button data-act="close" title="close the tuning view (opt-T)">×</button></div>
+          <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
         <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
         <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, or a .scl</span></span>
           <textarea id="te-paste" class="te-inp" rows="3" spellcheck="false" placeholder="16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 9/5 15/8"></textarea>
@@ -128,7 +128,7 @@ export class TuningEditor {
           <button data-act="export">export .scl</button>
           ${lib && b.tuning?.edited ? '<button data-act="revert">revert</button>' : ''}
           <button data-act="equal">back to 12-TET</button></div>
-        <div class="te-dim">b / T step through the loaded tunings · opt-T or esc closes</div>
+        <div class="te-dim">T / opt-T step through the loaded tunings · opt-t or esc closes</div>
       </div>`;
     this._wire();
   }

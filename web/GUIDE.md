@@ -115,13 +115,13 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
   back to it.
 
-## Tunings: `b` `T`, opt-`t`
+## Tunings: `T` opt-`T`, opt-`t`
 
 Load Scala (`.scl`) files in ⚙ settings → **tuning**: pick several at once.
 Scales of twelve notes to the period are taken; others are listed as skipped,
 with the reason. The library stays in this browser.
 
-- **Each bloom has its own tuning.** `b` steps to the next loaded tuning, `T`
+- **Each bloom has its own tuning.** `T` steps to the next loaded tuning, opt-`T`
   to the one before; 12-TET comes first. The settings menu picks one too. A
   bloom keeps its tuning in the garden and in saved files, and the garden loop
   retunes as each bloom comes round. `n` keeps the tuning, as it keeps the scale.
@@ -157,7 +157,7 @@ with the reason. The library stays in this browser.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
     period, or a whole .scl file.
   - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
-    **save to library** keeps it under a name for `b` / `T`; **export .scl**
+    **save to library** keeps it under a name for `T` / opt-`T`; **export .scl**
     downloads it; **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →

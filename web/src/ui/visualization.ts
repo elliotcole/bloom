@@ -2015,7 +2015,7 @@ export class BloomVisualization {
   private _box: { x0: number; y0: number; x1: number; y1: number } | null = null;
   /** Called with the events inside a dragged box (empty when a click lands on no node) */
   onSelect: ((idx: number[]) => void) | null = null;
-  // The tuning view (opt-T): the tuning as a pie in place of the current view
+  // The tuning view (opt-t): the tuning as a pie in place of the current view
   private _tuningView = false;
   private _pieMarks: PieMarks = { a: null, b: null };
   private _pie = { cx: 0, cy: 0, R: 0 };   // where the pie was last drawn, in canvas coordinates

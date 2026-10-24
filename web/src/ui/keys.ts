@@ -151,7 +151,7 @@ export interface KeyHandlerState {
   setVizModeFn: ((mode: VizMode) => void) | null;
   /** Called after every refresh, so the tuning editor follows the bloom */
   afterRefreshFn?: () => void;
-  /** The tuning view (opt-T) */
+  /** The tuning view (opt-t) */
   tuningView?: { toggle(): void; close(): void; isOpen(): boolean };
 }
 
@@ -331,7 +331,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   ]);
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
-    if ((e.key === 'b' || e.key === 'T') && !e.altKey) return false;   // tuning: the whole bloom's
+    if (e.code === 'KeyT' && e.shiftKey) return false;   // tuning: the whole bloom's
     if (WHOLE_BLOOM_CODES.has(e.code)) return false;
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
@@ -356,7 +356,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   // ─── Tuning ──────────────────────────────────────────────────────────────────
-  // b / T step through the loaded tunings (12-TET first). The badge names the
+  // T / opt-T step through the loaded tunings (12-TET first). The badge names the
   // tuning and the root it sits on, which follows the key.
   let _ownTuning = '';
 
@@ -568,7 +568,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'b', 'T']);
+    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'T']);
     if (PASS.has(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) {
       return false;   // shift-esc (esc itself left the mode above) inverts at home
@@ -719,7 +719,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // ─── Tuning view (opt+t): the tuning as a pie, with its controls ──────────
-    if (alt && e.code === 'KeyT') {
+    if (alt && !shift && e.code === 'KeyT') {
       e.preventDefault();
       state.tuningView?.toggle();
       return;
@@ -766,9 +766,10 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('new bloom');
       return;
     }
-    // tuning: b the next one loaded, T the one before (12-TET is first)
-    if ((ch === 'b' || ch === 'T') && !alt) {
-      stepTuningBy(ch === 'b' ? 1 : -1);
+    // tuning: T the next one loaded, opt-T the one before (12-TET is first)
+    if (e.code === 'KeyT' && shift) {
+      e.preventDefault();
+      stepTuningBy(alt ? -1 : 1);
       return;
     }
     // tilt: l down, L up, each press one scale step steeper

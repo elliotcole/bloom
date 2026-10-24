@@ -257,7 +257,7 @@
       }
       #tuning-badge.active { display: inline-block; cursor: pointer; }
 
-      /* ─── Tuning view (opt-T): the pie in the main area, controls either side ── */
+      /* ─── Tuning view (opt-t): the pie in the main area, controls either side ── */
       #tuning-view {
         display: none;
         position: absolute;
@@ -658,7 +658,7 @@
       <button id="settings-toggle" title="toggle settings">⚙ settings</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
-      <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — b / T step through the loaded tunings; click for the tuning view (opt-T)"></span>
+      <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — T / opt-T step through the loaded tunings; click for the tuning view (opt-t)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
@@ -806,9 +806,9 @@
 
         <span class="s-section">
           <span class="s-section-label">tuning</span>
-          <select id="tuning-select" title="this bloom's tuning (b / T step through them)"></select>
+          <select id="tuning-select" title="this bloom's tuning (T / opt-T step through them)"></select>
           <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
-          <button class="s-btn" id="tuning-edit" title="the tuning view (opt-T): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
+          <button class="s-btn" id="tuning-edit" title="the tuning view (opt-t): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
           <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">clear</button>
           <button class="s-btn" id="tuning-helper" title="copies a Terminal command that downloads the bloom-mts helper (an MTS-ESP master for synths in Ableton, macOS) and starts it">copy helper command</button>
           <span id="tuning-status" class="s-note"></span>
@@ -899,7 +899,7 @@
             <div class="hf-body"><b>k</b>    choose nearest scale
 <b>K</b>    slant scale  <b>j</b>    lift scale
 <b>J</b>    reduce scale
-<b>b T</b>  next / previous tuning
+<b>T opt-T</b> next / previous tuning
 <b>opt-t</b> tuning view: the pie, to edit
      (load .scl files in ⚙ settings;
       the tuning's root follows the key)</div>
