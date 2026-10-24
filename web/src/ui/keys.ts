@@ -156,20 +156,6 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** Temporary bloom used for loop-cycle display; reused across cycles to avoid allocation */
   let _loopDisplayBloom: Bloom | null = null;
 
-  /** Keep the settings bar's performance controls in step with the keys */
-  function syncPerformanceControls() {
-    const viz = state.viz;
-    if (!viz) return;
-    const frame = document.getElementById('perf-frame') as HTMLSelectElement | null;
-    const size = document.getElementById('perf-size') as HTMLInputElement | null;
-    const sizeVal = document.getElementById('perf-size-val');
-    const drift = document.getElementById('perf-drift') as HTMLInputElement | null;
-    if (frame) frame.value = viz.getFrame();
-    if (size) size.value = String(viz.getSize());
-    if (sizeVal) sizeVal.textContent = `×${viz.getSize().toFixed(2)}`;
-    if (drift) drift.checked = viz.getDrift();
-  }
-
   function setClean(on: boolean) {
     document.body.classList.toggle('clean', on);
     state.viz?.setClean(on);
@@ -243,6 +229,15 @@ export function createKeyHandler(state: KeyHandlerState) {
   function clearPins() {
     _pinned.clear();
     pinsChanged();
+  }
+
+  /** Pin every free event and free every pinned one */
+  function invertPins() {
+    if (_previewResetId !== null) return;
+    const n = state.bloom.notes.length;
+    for (let i = 0; i < n; i++) if (_pinned.has(i)) _pinned.delete(i); else _pinned.add(i);
+    pinsChanged();
+    status(`pins inverted: ${_pinned.size} of ${n} pinned`);
   }
 
   /** Put the pinned slots of one list back as they were. A reordering (same
@@ -319,7 +314,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
     if (e.altKey && (e.code.startsWith('Digit')
-      || ['KeyC', 'KeyE', 'KeyP', 'KeyF', 'KeyA', 'Minus', 'Equal'].includes(e.code))) return false;
+      || ['KeyC', 'KeyE', 'KeyP', 'KeyX'].includes(e.code))) return false;
     return true;
   }
 
@@ -690,27 +685,14 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
-    // ─── Performance: frame, size, drift (for recording video) ───────────────
-    // opt-f frame (16:9 1:1 4:5 9:16), opt-- / opt-= size, opt-0 size back,
-    // opt-a drift. Frame and size show in clean view (opt-c).
-    if (alt && !shift && ['KeyF', 'Minus', 'Equal', 'Digit0', 'KeyA'].includes(e.code)) {
+    // ─── Pins: opt-x unpins every event, opt-shift-x swaps pinned and free ───
+    if (alt && e.code === 'KeyX') {
       e.preventDefault();
-      const viz = state.viz;
-      if (!viz) return;
-      const inClean = document.body.classList.contains('clean');
-      const later = inClean ? '' : ' (shows in clean view, opt-c)';
-      if (e.code === 'KeyF') {
-        const f = viz.cycleFrame();
-        status(f === 'off' ? 'frame off' : `frame ${f}: ${viz.frameSize()} px${later}`);
-      } else if (e.code === 'KeyA') {
-        viz.setDrift(!viz.getDrift());
-        status(viz.getDrift() ? 'drift on: deep and spiral sweep slowly while playing' : 'drift off');
-      } else {
-        const size = e.code === 'Digit0' ? viz.setSize(1)
-          : viz.setSize(viz.getSize() * (e.code === 'Equal' ? 1.06 : 1 / 1.06));
-        status(`size ×${size.toFixed(2)}${later}`);
+      if (shift) invertPins(); else {
+        const n = _pinned.size;
+        clearPins();
+        status(n ? `${n} event${n === 1 ? '' : 's'} unpinned` : 'no pins');
       }
-      syncPerformanceControls();
       return;
     }
 

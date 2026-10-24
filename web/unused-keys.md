@@ -20,15 +20,15 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Option (alt) keys
 
 **Letters**
-- `opt-b`  `opt-g`  `opt-h`  `opt-i`
+- `opt-a`  `opt-b`  `opt-f`  `opt-g`  `opt-h`  `opt-i`
 - `opt-j`  `opt-k`  `opt-l`  `opt-m`  `opt-n`  `opt-o`
-- `opt-q`  `opt-t`  `opt-v`  `opt-x`  `opt-y`  `opt-z`
+- `opt-q`  `opt-t`  `opt-v`  `opt-y`  `opt-z`
 
 **Numbers**
-- *(none: opt-1 … opt-9 choose the view, opt-0 resets the size)*
+- `opt-0` (opt-1 … opt-9 choose the view)
 
 **Symbol keys**
-- `` opt-` ``  `opt-[`  `opt-]`
+- `` opt-` ``  `opt--`  `opt-=`  `opt-[`  `opt-]`
 - `opt-|`  *(curdle moved to a settings button)*
 - `opt-;`  `opt-'`  `opt-.`
 
@@ -37,7 +37,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Taken option keys
 
 - `opt-s` `opt-r` `opt-u` `opt-d` and their shifts: pitch-only patterns
-- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-f` frame · `opt--` `opt-=` `opt-0` size · `opt-a` drift · `opt-p` / `opt-P` push / pop
+- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-x` / `opt-X` unpin all / invert pins · `opt-p` / `opt-P` push / pop
 - `opt-,` loop garden · `opt-/` pulse garden
 - `opt-\` lanes (`\` console, `|` labels: the display toggles share the key)
 

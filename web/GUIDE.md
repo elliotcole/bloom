@@ -283,8 +283,9 @@ what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …
 
 Click a node to **pin** its event; click again to unpin. A pinned event keeps
 its pitch, time, velocity, channel and interval whatever you press next, and a
-dashed ring marks it. The header shows how many, e.g. `❄ e2`; `F e` unpins them
-all. Works in every view except tonal and set, which draw pitch classes rather
+dashed ring marks it. The header shows how many, e.g. `❄ e2`. **opt-`x`**
+unpins them all (so does `F e`); **opt-shift-`x`** inverts them, pinning
+every free event and freeing every pinned one. Works in every view except tonal and set, which draw pitch classes rather
 than events.
 
 - **Reorderings flow around pins.** Sorting, inverting or rotating rearranges
@@ -298,8 +299,9 @@ than events.
 
 ### Selecting events: drag a box
 
-Drag a box round some nodes to **select** their events (in deep and spiral,
-where a drag turns the view, shift-drag). Until you clear it, every key that
+Drag a box round some nodes to **select** their events, in any view. (Deep
+and spiral turn with a two-finger scroll or a mouse wheel, or an opt-drag, so
+a plain drag is always a box.) Until you clear it, every key that
 changes the bloom works on the selection alone, as if it were the whole bloom:
 sort sorts just those events, tilt ramps across them, `a` adds a note among
 them, `n` regenerates only that stretch. The rest stay as they were. Selected
@@ -327,17 +329,18 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   or cursor. Made for recording video. Keys still work. `esc` or opt-`c`
   leaves. For a whole-screen picture, also make the browser full screen
   (ctrl-cmd-F).
-- **Performance (for video):**
-  - **Frame: opt-`f`** steps through 16:9, 1:1, 4:5 and 9:16. In clean view
-    the picture fits that frame, centred, with the outside shaded; the status
-    says its size in pixels, for setting up a screen recording's crop.
-  - **Size: opt-`-` / opt-`=`**, opt-`0` back to ×1: the picture's overall
-    size in clean view.
-  - **Drift: opt-`a`.** While notes play, deep and spiral sweep slowly through
-    broad arcs (about ±60° round, ±20° up and down, never quite repeating),
-    easing to a stop when the music stops. Dragging still turns the view on
-    top; reset view also resets the drift.
-  - The same controls are in ⚙ settings → performance, and are remembered.
+- **Performance (for video): ⚙ settings → performance.** Set once; they're
+  remembered.
+  - **Frame:** 16:9, 1:1, 4:5 or 9:16. In clean view the picture fits that
+    frame, centred, with the outside shaded; the status says its size in
+    pixels, for setting up a screen recording's crop.
+  - **Size:** the picture's overall size in clean view.
+  - **Drift:** while notes play, deep and spiral sweep slowly through broad
+    arcs (about ±60° round, ±20° up and down, never quite repeating), easing
+    to a stop when the music stops. Scrolling still turns the view on top;
+    reset view also resets the drift.
+- **Turning deep and spiral:** two-finger scroll (sideways turns, up and down
+  tilts) or opt-drag. A plain drag selects.
 - **Views:** opt-`1`…`9`. The `\` key holds the display toggles: `\`
   console, `|` note labels, opt-`\` lanes.
 

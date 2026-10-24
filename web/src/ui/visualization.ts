@@ -2058,7 +2058,7 @@ export class BloomVisualization {
       this._orbitRotation = 0;
       this._camera = { azimuth: 0, elevation: 0 };
     }
-    this.canvas.style.cursor = (mode === 'deep' || mode === 'spiral') ? 'grab' : '';
+    this.canvas.style.cursor = '';
   }
 
   resetCamera(): void {
@@ -2169,12 +2169,11 @@ export class BloomVisualization {
 
   private _setupDrag(): void {
     const el = this.canvas;
-    // Initial cursor for default mode (deep)
-    if (this._mode === 'deep' || this._mode === 'spiral') el.style.cursor = 'grab';
 
     // A click that didn't drag pins or unpins the node under it; a click on
     // empty space clears the selection. A drag draws a box that selects the
-    // nodes inside it (in deep and spiral, where a drag turns the view, shift-drag).
+    // nodes inside it, in every view. Deep and spiral turn with a two-finger
+    // scroll (or a mouse wheel), or an opt-drag.
     let downX = 0, downY = 0;
     const local = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
@@ -2183,7 +2182,7 @@ export class BloomVisualization {
     const turns = () => this._mode === 'deep' || this._mode === 'spiral';
     el.addEventListener('mousedown', (e) => {
       downX = e.clientX; downY = e.clientY;
-      if (!turns() || e.shiftKey) {
+      if (!(turns() && e.altKey)) {
         const [x, y] = local(e);
         this._box = { x0: x, y0: y, x1: x, y1: y };
       }
@@ -2201,8 +2200,7 @@ export class BloomVisualization {
       }
       if (this._dragActive) return;
       const over = this._nodeAt(...local(e)) >= 0;
-      const rest = turns() ? 'grab' : '';
-      el.style.cursor = over ? 'pointer' : rest;
+      el.style.cursor = over ? 'pointer' : turns() && e.altKey ? 'grab' : '';
     });
     const endBox = (e: MouseEvent) => {
       const box = this._box;
@@ -2219,7 +2217,7 @@ export class BloomVisualization {
     el.addEventListener('mouseleave', endBox);
 
     el.addEventListener('mousedown', (e) => {
-      if (!turns() || e.shiftKey) return;
+      if (!turns() || !e.altKey) return;
       this._dragActive = true;
       this._dragLastX = e.clientX;
       this._dragLastY = e.clientY;
@@ -2242,10 +2240,22 @@ export class BloomVisualization {
     const endDrag = () => {
       if (!this._dragActive) return;
       this._dragActive = false;
-      el.style.cursor = (this._mode === 'deep' || this._mode === 'spiral') ? 'grab' : '';
+      el.style.cursor = '';
     };
     el.addEventListener('mouseup', endDrag);
     el.addEventListener('mouseleave', endDrag);
+
+    // two-finger scroll turns deep and spiral: sideways round, up and down to tilt
+    el.addEventListener('wheel', (e) => {
+      if (!turns()) return;
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : 1;   // lines (some mice) → pixels
+      this._camera.azimuth -= e.deltaX * unit * 0.004;
+      this._camera.elevation = Math.max(
+        -Math.PI / 2 + 0.05,
+        Math.min(Math.PI / 2 - 0.05, this._camera.elevation - e.deltaY * unit * 0.003),
+      );
+    }, { passive: false });
   }
 
   // ─── Animation loop ──────────────────────────────────────────────────────────
