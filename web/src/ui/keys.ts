@@ -149,6 +149,8 @@ export interface KeyHandlerState {
   paletteOpenFn: (() => void) | null;
   /** Called when opt+1–9 changes the visualization mode. */
   setVizModeFn: ((mode: VizMode) => void) | null;
+  /** Called after every refresh, so the tuning editor follows the bloom */
+  afterRefreshFn?: () => void;
 }
 
 export function createKeyHandler(state: KeyHandlerState) {
@@ -360,7 +362,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const badge = document.getElementById('tuning-badge');
     if (!badge) return;
     const t = state.bloom.tuning;
-    badge.textContent = t ? `◊ ${t.name} @ ${spell(state.bloom.tuningRoot)}` : '';
+    badge.textContent = t ? `◊ ${t.name}${t.edited ? '*' : ''} @ ${spell(state.bloom.tuningRoot)}` : '';
     badge.classList.toggle('active', t !== null);
     const sel = document.getElementById('tuning-select') as HTMLSelectElement | null;
     if (sel) sel.value = t?.name ?? '12-TET';
@@ -400,6 +402,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     updateLooper(state.bloom);
     updatePulsar(state.bloom);
     autosaveGarden(state.bloom, state.garden);
+    state.afterRefreshFn?.();
   }
 
   function play(bloom: Bloom, msg?: string) {

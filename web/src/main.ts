@@ -9,7 +9,9 @@ import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
 import { askRestore } from './ui/restorePrompt';
-import { tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus } from './audio/tuningOut';
+import { tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus, saveToLibrary } from './audio/tuningOut';
+import { TuningEditor } from './ui/tuningEditor';
+import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
 import type { VizMode, ThemeId } from './ui/theme';
@@ -374,6 +376,27 @@ async function main() {
       display.setStatus(cmd);
     }
   });
+  const tuningEditor = new TuningEditor({
+    bloom: () => bloom,
+    commit: (t, msg) => {
+      bloom.tuning = t;
+      display.setStatus(msg);
+      keysRefresh(msg);
+    },
+    audition: (midi) => {
+      const out = midiState.selectedOutput;
+      if (!out || midi < 0 || midi > 127) return;
+      const chan = bloom.chans[0] ?? 0;
+      noteOn(out, chan, midi, 90);
+      setTimeout(() => noteOff(out, chan, midi), 700);
+    },
+    libraryTuning: (name) => tuningLibrary().find(t => t.name === name && t.name !== '12-TET'),
+    saveToLibrary: (t) => { saveToLibrary(t); fillTuningSelect(); },
+    status: (msg) => display.setStatus(msg),
+  });
+  keyState.afterRefreshFn = () => tuningEditor.update();
+  document.getElementById('tuning-edit')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); tuningEditor.toggle(); });
+  document.getElementById('tuning-badge')?.addEventListener('click', () => tuningEditor.toggle());
   onHelperStatus(s => { if (tuningStatus) tuningStatus.textContent = s; });
   if (tuningStatus) tuningStatus.textContent = helperStatus();
   if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();
@@ -381,6 +404,13 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open
     if (bloomEditor.isOpen() || commandPalette.isOpen()) return;
+    // ...or while typing in a text field (the tuning editor, settings numbers)
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'TEXTAREA'
+      || (target.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button'].includes((target as HTMLInputElement).type)))) {
+      if (e.key === 'Escape') target.blur();
+      return;
+    }
     keyState.out = midiState.selectedOutput;
     // demo mode: the notice also shows the key, large, for recordings
     setNoticeKey(_demoMode ? formatDemoKey(e) : '');

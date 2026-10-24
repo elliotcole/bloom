@@ -130,8 +130,28 @@ with the reason. The library stays in this browser.
   put it on C, and `]` (one more sharp) moves it to G. A set too spread to
   imply a key (whole tone, chromatic) keeps the last root. The root keeps its
   12-TET pitch; the other notes are tuned from it.
-- **What you see:** the header shows `◊ ji-5 @ D`, and the console's `tuning:`
-  line gives each pitch class's distance from 12-TET in cents.
+- **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
+  console's `tuning:` line gives each pitch class's distance from 12-TET in
+  cents.
+- **Editing: click the ◊ badge** (or ⚙ settings → tuning → **edit tuning**).
+  A panel shows the tuning as a wheel: each note at its true place, the root
+  at the top, 12-TET as faint ticks, each note's cents from 12-TET outside.
+  The bloom keeps playing while it's open.
+  - **Click a note** to select and hear it: its exact ratio when it has one
+    (from the file, or kept exact through every edit), cents, and the commas
+    it has been moved by.
+  - **− comma / + comma** move it by the comma chosen below (the lattice's
+    names: syntonic, Pythagorean, septimal, schisma, diesis, apotome …). A
+    move back cancels the last one. **set** puts it at a ratio (`7/4`) or
+    cents (`968.8`).
+  - **Shift-click a second note** to see the interval between them, and set
+    it to a ratio or cents (the second note moves).
+  - **Root:** follows the key, or one chosen by hand.
+  - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
+    period, or a whole .scl file.
+  - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
+    **save to library** keeps it under a name for `b` / `B`; **export .scl**
+    downloads it; **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →
   tuning → **copy helper command** copies a Terminal line that downloads and

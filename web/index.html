@@ -255,7 +255,58 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      #tuning-badge.active { display: inline-block; }
+      #tuning-badge.active { display: inline-block; cursor: pointer; }
+
+      /* ─── Tuning editor: a floating panel, the bloom keeps playing ─────────── */
+      #tuning-editor {
+        display: none;
+        position: fixed;
+        top: 44px;
+        right: 12px;
+        width: 290px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        background: #0e0e1a;
+        border: 1px solid #2a2a44;
+        padding: 10px 12px;
+        z-index: 250;
+        font-size: 11px;
+        color: #99a;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #tuning-editor.open { display: flex; }
+      #tuning-editor b { color: #ccd; font-weight: normal; }
+      .te-head { display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.5px; }
+      .te-head button { background: none; border: none; color: #778; font-size: 15px; cursor: pointer; }
+      .te-wheel { display: flex; justify-content: center; }
+      .te-wheel svg { overflow: visible; }
+      .te-ring { fill: none; stroke: #2a2a44; }
+      .te-tick { stroke: #3a3a5a; }
+      .te-chord { stroke: #e9c; stroke-width: 1.2; stroke-dasharray: 3 3; }
+      .te-node { cursor: pointer; }
+      .te-node circle { fill: #151528; stroke: #556; }
+      .te-node.root circle { stroke: #e9c; stroke-width: 1.5; }
+      .te-node.sel circle { fill: #3a2a40; stroke: #fbe; }
+      .te-node text { fill: #bbc; font-size: 9px; text-anchor: middle; pointer-events: none; }
+      .te-dev { fill: #778; font-size: 9px; text-anchor: middle; }
+      .te-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      .te-col { flex-direction: column; align-items: stretch; }
+      .te-lbl { color: #778; min-width: 44px; }
+      .te-dim { color: #667; }
+      #tuning-editor select, .te-inp {
+        background: #090912; border: 1px solid #1e1e36; color: #aab;
+        font-family: inherit; font-size: 11px; padding: 3px 5px; outline: none;
+      }
+      #tuning-editor select { max-width: 220px; }
+      .te-inp { flex: 1; min-width: 70px; }
+      textarea.te-inp { resize: vertical; }
+      .te-inp:focus { border-color: #44588a; }
+      #tuning-editor button[data-act]:not([data-act="close"]) {
+        background: transparent; border: 1px solid #252540; color: #889;
+        font-family: inherit; font-size: 11px; padding: 2px 8px; cursor: pointer;
+      }
+      #tuning-editor button[data-act]:hover { color: #ccd; border-color: #4455aa; }
       .s-note { font-size: 10px; opacity: 0.6; }
 
       /* Help views are separated by mode: list-mode help only in a list mode,
@@ -761,6 +812,7 @@
           <span class="s-section-label">tuning</span>
           <select id="tuning-select" title="this bloom's tuning (b / B step through them)"></select>
           <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
+          <button class="s-btn" id="tuning-edit" title="the bloom's tuning as a wheel: move notes by commas, set ratios, paste a scale, choose the root (or click the ◊ badge)">edit tuning</button>
           <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">clear</button>
           <button class="s-btn" id="tuning-helper" title="copies a Terminal command that downloads the bloom-mts helper (an MTS-ESP master for synths in Ableton, macOS) and starts it">copy helper command</button>
           <span id="tuning-status" class="s-note"></span>
@@ -853,7 +905,8 @@
 <b>J</b>    reduce scale
 <b>b B</b>  next / previous tuning
      (load .scl files in ⚙ settings;
-      the tuning's root follows the key)</div>
+      the tuning's root follows the key;
+      click the ◊ badge to edit it)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Chords</div>

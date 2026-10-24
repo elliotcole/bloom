@@ -78,7 +78,7 @@ export function snap(b: Bloom): Snap {
     ivMode: b.intervalsDiatonic,
     pcs: new Set((flatNotes(b.notes) as number[]).map(m => ((Math.round(m) % 12) + 12) % 12)).size,
     scaleName: sc.name, scaleDegs: [...sc.degrees].sort((x, y) => x - y).join(','),
-    tuning: b.tuning ? `${b.tuning.name} ${b.tuning.cents.map(c => c.toFixed(3)).join(',')} ${b.tuning.period}` : '',
+    tuning: b.tuning ? `${b.tuning.name} ${b.tuning.cents.map(c => c.toFixed(3)).join(',')} ${b.tuning.period} ${b.tuning.root ?? ''}` : '',
     tuningName: b.tuning?.name ?? '12-TET',
   };
 }

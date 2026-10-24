@@ -311,7 +311,7 @@ export class Bloom {
       : null;
     b.keyRoot = this.keyRoot;
     b.name = this.name;
-    b.tuning = this.tuning ? { ...this.tuning, cents: [...this.tuning.cents] } : null;
+    b.tuning = this.tuning ? JSON.parse(JSON.stringify(this.tuning)) as Tuning : null;
     b.tuningRoot = this.tuningRoot;
     b.stack = this.stack.map(s => s.clone());
     b.saved = this.saved ? this.saved.clone() : null;
@@ -1275,8 +1275,9 @@ export class Bloom {
 
   // ─── Scale / Diatonicism ───────────────────────────────────────────────────
 
-  /** Move the tuning's root to the key the scale implies (kept when it implies none) */
+  /** Move the tuning's root to the key the scale implies (kept when it implies none), unless it was chosen by hand */
   followTuningRoot(): this {
+    if (this.tuning?.root !== undefined && this.tuning.root !== null) { this.tuningRoot = this.tuning.root; return this; }
     const r = keyRootOf(this.scale.degrees);
     if (r !== null) this.tuningRoot = r;
     return this;

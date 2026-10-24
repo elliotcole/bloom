@@ -62,7 +62,7 @@ function bloomToJSON(b: Bloom): BloomJSON {
       : null,
     keyRoot: b.keyRoot,
     name: b.name,
-    tuning: b.tuning ? { ...b.tuning, cents: [...b.tuning.cents] } : null,
+    tuning: b.tuning ? JSON.parse(JSON.stringify(b.tuning)) as Tuning : null,
     tuningRoot: b.tuningRoot,
   };
 }

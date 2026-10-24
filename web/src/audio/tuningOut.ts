@@ -43,6 +43,17 @@ export async function loadScalaFiles(files: FileList | File[]): Promise<{ added:
   return { added, skipped };
 }
 
+/** Add a tuning to the library, replacing one of the same name */
+export function saveToLibrary(t: Tuning): void {
+  const copy = JSON.parse(JSON.stringify(t)) as Tuning;
+  delete copy.root;
+  copy.edited = false;
+  const at = _library.findIndex(x => x.name === copy.name);
+  if (at >= 0) _library[at] = copy; else _library.push(copy);
+  _library.sort((a, b) => a.name.localeCompare(b.name));
+  saveLibrary();
+}
+
 export function clearLibrary() {
   _library = [];
   saveLibrary();
@@ -53,7 +64,7 @@ export function stepTuning(current: Tuning | null, dir: 1 | -1): Tuning | null {
   const lib = tuningLibrary();
   const at = Math.max(0, lib.findIndex(t => t.name === (current?.name ?? EQUAL.name)));
   const next = lib[(at + dir + lib.length) % lib.length];
-  return next === EQUAL ? null : { ...next, cents: [...next.cents] };
+  return next === EQUAL ? null : JSON.parse(JSON.stringify(next)) as Tuning;
 }
 
 // ─── The helper ───────────────────────────────────────────────────────────────
