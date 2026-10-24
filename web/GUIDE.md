@@ -115,16 +115,27 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Save points:** opt-`p` pushes the bloom onto a stack, opt-shift-`p` pops
   back to it.
 
-## Tunings: `T` opt-`T`, opt-`t`
+## Tunings: `T` (tuning mode), opt-`t` (hold)
 
 Load Scala (`.scl`) files in ⚙ settings → **tuning**: pick several at once.
 Scales of twelve notes to the period are taken; others are listed as skipped,
 with the reason. The library stays in this browser.
 
-- **Each bloom has its own tuning.** `T` steps to the next loaded tuning, opt-`T`
-  to the one before; 12-TET comes first. The settings menu picks one too. A
-  bloom keeps its tuning in the garden and in saved files, and the garden loop
-  retunes as each bloom comes round. `n` keeps the tuning, as it keeps the scale.
+- **Each bloom has its own tuning.** In tuning mode (`T`), `]` steps to the
+  next loaded tuning and `[` to the one before; 12-TET comes first. The
+  settings menu picks one too. A bloom keeps its tuning in the garden and in
+  saved files, and the garden loop retunes as each bloom comes round. `n` keeps
+  the tuning, as it keeps the scale; `N` starts from 12-TET.
+- **Hold: opt-`t`** (anywhere). The tuning that's sounding then plays over
+  every bloom: moving through the garden, the loop, loading and undo all keep
+  it, so you can try tunings against one bloom after another without each
+  resetting it. While held, `]` / `[`, the settings menu and the tuning view
+  change the held tuning, not the blooms; new blooms (`n`, `N`) take it as
+  their own. The blooms keep their own tunings, and opt-`t` again gives them
+  back. The header shows `◊ held: ji-5 @ D`. In the tuning view, **held root**
+  chooses whether its root follows each bloom's key or stays where it is, and
+  **keep in this bloom** makes it this bloom's own. A hold never outlasts the
+  session.
 - **The root follows the key.** Degree 0 of the file sits on the key the scale
   implies, as a key signature names it: C major, A minor and C pentatonic all
   put it on C, and `]` (one more sharp) moves it to G. A set too spread to
@@ -133,15 +144,17 @@ with the reason. The library stays in this browser.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
-- **The tuning view: opt-`t`** (or click the ◊ badge, or ⚙ settings → tuning →
-  **edit tuning**). The main area shows the tuning as a pie, C at the top as
+- **Tuning mode: `T`** opens the tuning view (or click the ◊ badge, or ⚙
+  settings → tuning → **edit tuning**); the header shows TUNING. The main area shows the tuning as a pie, C at the top as
   in the set view. Each note's slice reaches halfway to its neighbours, so its
   width shows how much room the tuning gives it; the dot on the rim is the
   note's true place, 12-TET's places are faint ticks outside, the root is
   ringed, and each slice shows its ratio inside and its cents from 12-TET
   outside. Slices light up as their notes play. The controls sit either
   side: the selected note on the left, the whole tuning on the right.
-  opt-`t` or `esc` closes it, as does choosing another view.
+  In tuning mode `]` `[` step through the tunings, and playback, garden,
+  display and view keys work as at home; other keys only show a hint. `T` or
+  `esc` leaves, as does choosing another view.
   - **Click a slice** to select and hear its note: its exact ratio when it has one
     (from the file, or kept exact through every edit), cents, and the commas
     it has been moved by.

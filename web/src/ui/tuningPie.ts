@@ -9,14 +9,15 @@ import { flatNotes, wrapAt } from '../lib/arrays';
 import { spell } from '../lib/numbers';
 import { degreeRatio, deviations, editable, readable } from '../lib/tuning';
 import type { Theme } from './theme';
+import { isHeld, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
 /** Selected degrees (from the root), drawn outlined, the interval as a chord */
 export interface PieMarks { a: number | null; b: number | null }
 
 /** Where each degree sits, in radians (C at the top, clockwise), from the bloom's tuning and root */
 function angles(bloom: Bloom): number[] {
-  const t = editable(bloom.tuning);
-  const off = bloom.tuningRoot * 100 * t.period / 1200;
+  const t = editable(soundingTuning(bloom));
+  const off = soundingRoot(bloom) * 100 * t.period / 1200;
   return t.cents.map(c => ((off + c) / t.period) * Math.PI * 2 - Math.PI / 2);
 }
 
@@ -49,9 +50,9 @@ export function drawTuningPie(
   ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number,
   bloom: Bloom, flashValues: number[], theme: Theme, marks: PieMarks,
 ): void {
-  const t = editable(bloom.tuning);
-  const root = bloom.tuningRoot;
-  const dev = deviations(bloom.tuning, root);
+  const t = editable(soundingTuning(bloom));
+  const root = soundingRoot(bloom);
+  const dev = deviations(soundingTuning(bloom), root);
   const degOf = (p: number) => ((p - root) % 12 + 12) % 12;
 
   // each degree's flash, loudness and use in the bloom
@@ -167,8 +168,8 @@ export function drawTuningPie(
   ctx.fillStyle = theme.text;
   ctx.font = `${font}px monospace`;
   const name = t.name.length > 22 ? `${t.name.slice(0, 21)}…` : t.name;
-  ctx.fillText(`${name}${bloom.tuning?.edited ? ' *' : ''}`, cx, cy - font * 0.7);
+  ctx.fillText(`${name}${t.edited ? ' *' : ''}`, cx, cy - font * 0.7);
   ctx.globalAlpha = 0.6;
-  ctx.fillText(`root ${spell(root)}`, cx, cy + font * 0.8);
+  ctx.fillText(`${isHeld() ? 'held · ' : ''}root ${spell(root)}`, cx, cy + font * 0.8);
   ctx.globalAlpha = 1;
 }

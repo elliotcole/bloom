@@ -4,6 +4,7 @@ import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import { spell, spellOctave } from '../lib/numbers';
 import { deviations } from '../lib/tuning';
+import { isHeld, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
 const MAX_HISTORY = 50;
 
@@ -80,8 +81,8 @@ export class Display {
         ? `${intvLabel.padEnd(8)}${intvStrs.join('  ')}   ${bloom.intervalsDiatonic ? 'scale steps' : 'semitones'}`
         : '',
       `scale:  ${scaleStr}   dur: ${dur}b`,
-      bloom.tuning ? `tuning: ${bloom.tuning.name} @ ${spell(bloom.tuningRoot)}   ${
-        deviations(bloom.tuning, bloom.tuningRoot)
+      soundingTuning(bloom) ? `tuning: ${isHeld() ? 'held ' : ''}${soundingTuning(bloom)!.name} @ ${spell(soundingRoot(bloom))}   ${
+        deviations(soundingTuning(bloom), soundingRoot(bloom))
           .map((c, pc) => `${spell(pc)}${c >= 0 ? '+' : ''}${Math.round(c)}`).join(' ')}` : '',
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,

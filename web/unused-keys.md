@@ -14,7 +14,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Shift keys
 
-- `B`  `P`  `Q`  `V`  `Z`  *(`T` / opt-`T` step through tunings; `L` is tilt up)*
+- `B`  `P`  `Q`  `V`  `Z`  *(`T` is tuning mode; `L` is tilt up)*
 - `"`  `_`  *(`#` `$` are breeze)*
 
 ## Option (alt) keys
@@ -37,7 +37,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Taken option keys
 
 - `opt-s` `opt-r` `opt-u` `opt-d` and their shifts: pitch-only patterns
-- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-t` tuning view · `opt-p` / `opt-P` push / pop
+- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-t` tuning hold · `opt-p` / `opt-P` push / pop
 - `opt-,` loop garden · `opt-/` pulse garden
 - `opt-\` lanes (`\` console, `|` labels: the display toggles share the key)
 

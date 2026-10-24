@@ -14,10 +14,11 @@ import {
 import type { Tuning } from '../lib/tuning';
 import { spell } from '../lib/numbers';
 import type { PieMarks } from './tuningPie';
+import { holdRoot, isHeld, setHoldRoot, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
 export interface TuningEditorHost {
   bloom: () => Bloom;
-  /** Replace the bloom's tuning (null: 12-TET) and refresh */
+  /** Replace the sounding tuning (the held one while held, else the bloom's; null: 12-TET) and refresh */
   commit: (t: Tuning | null, msg: string) => void;
   /** Sound one MIDI note briefly, so a selected degree can be heard */
   audition: (midi: number) => void;
@@ -28,6 +29,12 @@ export interface TuningEditorHost {
   /** Show or hide the pie in the main area, and mark the selected notes on it */
   show: (on: boolean) => void;
   mark: (m: PieMarks) => void;
+  /** opt-t: hold the sounding tuning over every bloom, or release it */
+  toggleHold: () => void;
+  /** Give the bloom the held tuning as its own */
+  keepHeld: () => void;
+  /** The hold's root setting changed: retune */
+  retune: () => void;
 }
 
 const COMMA_KEY = 'bloom.tuningComma';
@@ -56,7 +63,7 @@ export class TuningEditor {
   open(): void { this._open = true; this._el.classList.add('open'); this.host.show(true); this.update(); }
   close(): void { this._open = false; this._el.classList.remove('open'); this.host.show(false); }
   /** The view was left some other way (choosing another view) */
-  closed(): void { this._open = false; this._el.classList.remove('open'); }
+  closed(): void { this._open = false; this._el.classList.remove('open'); this.host.show(false); }
   toggle(): void { if (this._open) this.close(); else this.open(); }
 
   /** A slice clicked: select the note and hear it; with shift, the second note of an interval */
@@ -67,8 +74,8 @@ export class TuningEditor {
     this.update();
   }
 
-  private get tuning(): Tuning { return editable(this.host.bloom().tuning); }
-  private get root(): number { return this.host.bloom().tuningRoot; }
+  private get tuning(): Tuning { return editable(soundingTuning(this.host.bloom())); }
+  private get root(): number { return soundingRoot(this.host.bloom()); }
   private name(d: number): string { return spell((this.root + d) % 12); }
 
   /** Redraw from the bloom (after any change, from here or from keys) */
@@ -76,9 +83,11 @@ export class TuningEditor {
     if (!this._open) return;
     const b = this.host.bloom();
     const t = this.tuning;
-    const lib = b.tuning ? this.host.libraryTuning(b.tuning.name) : undefined;
+    const own = soundingTuning(b);
+    const held = isHeld();
+    const lib = own ? this.host.libraryTuning(own.name) : undefined;
     const a = this._a, bb = this._b;
-    const dev = deviations(b.tuning, this.root);
+    const dev = deviations(own, this.root);
     const cents = (c: number) => `${c.toFixed(1)}¢`;
     const signed = (c: number) => `${c >= 0 ? '+' : '−'}${Math.abs(c).toFixed(1)}`;
 
@@ -116,7 +125,7 @@ export class TuningEditor {
         <div class="te-row"><span class="te-lbl">comma</span><select id="te-comma">${commaOpts}</select></div>
       </div>
       <div class="tv-side">
-        <div class="tv-title">tuning: <b>${escapeHtml(t.name)}${b.tuning?.edited ? ' *' : ''}</b>
+        <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b></span>
           <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
         <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
         <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, or a .scl</span></span>
@@ -126,9 +135,17 @@ export class TuningEditor {
         <div class="te-row">
           <button data-act="save">save to library</button>
           <button data-act="export">export .scl</button>
-          ${lib && b.tuning?.edited ? '<button data-act="revert">revert</button>' : ''}
+          ${lib && own?.edited ? '<button data-act="revert">revert</button>' : ''}
           <button data-act="equal">back to 12-TET</button></div>
-        <div class="te-dim">T / opt-T step through the loaded tunings · opt-t or esc closes</div>
+        <div class="tv-title">hold</div>
+        ${held ? `<div class="te-dim">this tuning plays over every bloom; each keeps its own for when it's released</div>
+        <div class="te-row"><span class="te-lbl">held root</span><select id="te-holdroot" title="where the held tuning's root sits (a root chosen above wins)">
+          <option value="key"${holdRoot() === 'key' ? ' selected' : ''}>follows each bloom's key</option>
+          <option value="fixed"${holdRoot() === 'fixed' ? ' selected' : ''}>stays on ${spell(this.root)}</option></select></div>
+        <div class="te-row"><button data-act="hold" title="opt-t">release</button>
+          <button data-act="keep" title="this bloom keeps the held tuning as its own">keep in this bloom</button></div>`
+        : `<div class="te-row"><button data-act="hold" title="opt-t">hold over every bloom</button></div>`}
+        <div class="te-dim">[ ] step through the loaded tunings · opt-t holds · T or esc leaves</div>
       </div>`;
     this._wire();
   }
@@ -140,6 +157,13 @@ export class TuningEditor {
       try { localStorage.setItem(COMMA_KEY, COMMAS[this._comma].name); } catch { /* fine */ }
       (e.target as HTMLElement).blur();
       this.update();   // the "= one comma" button names it
+    });
+    this._el.querySelector('#te-holdroot')?.addEventListener('change', (e) => {
+      const v = (e.target as HTMLSelectElement).value as 'key' | 'fixed';
+      (e.target as HTMLElement).blur();
+      setHoldRoot(v);
+      this.host.retune();
+      this.host.status(v === 'key' ? "held tuning's root follows each bloom's key" : `held tuning's root stays on ${spell(this.root)}`);
     });
     this._el.querySelector('#te-root')?.addEventListener('change', (e) => {
       const v = (e.target as HTMLSelectElement).value;
@@ -167,6 +191,8 @@ export class TuningEditor {
     };
     switch (act) {
       case 'close': this.close(); break;
+      case 'hold': this.host.toggleHold(); break;
+      case 'keep': this.host.keepHeld(); break;
       case 'up': case 'down': {
         if (a === null) return;
         const c = COMMAS[this._comma];

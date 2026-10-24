@@ -20,7 +20,10 @@ import { Display } from './display';
 import type { VizMode } from './theme';
 import { Notice, snap, sameSnap, describeChange } from './notice';
 import { extractSelection, mergeSelection } from './selection';
-import { applyTuning, tuningKey, tuningLibrary, stepTuning } from '../audio/tuningOut';
+import {
+  applyTuning, tuningKey, tuningLibrary, stepTuning,
+  hold, heldForBloom, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
+} from '../audio/tuningOut';
 import { spell } from '../lib/numbers';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
@@ -331,7 +334,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   ]);
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
-    if (e.code === 'KeyT' && e.shiftKey) return false;   // tuning: the whole bloom's
+    if (e.key === 'T' || state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
     if (WHOLE_BLOOM_CODES.has(e.code)) return false;
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
@@ -356,28 +359,52 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   // ─── Tuning ──────────────────────────────────────────────────────────────────
-  // T / opt-T step through the loaded tunings (12-TET first). The badge names the
-  // tuning and the root it sits on, which follows the key.
+  // T enters tuning mode (the tuning view), where ] / [ step through the loaded
+  // tunings (12-TET first). opt-t holds the sounding tuning over every bloom.
+  // The badge names the tuning and the root it sits on, which follows the key.
   let _ownTuning = '';
 
   function updateTuningBadge() {
     const badge = document.getElementById('tuning-badge');
     if (!badge) return;
-    const t = state.bloom.tuning;
-    badge.textContent = t ? `◊ ${t.name}${t.edited ? '*' : ''} @ ${spell(state.bloom.tuningRoot)}` : '';
-    badge.classList.toggle('active', t !== null);
+    const t = soundingTuning(state.bloom), held = isHeld();
+    badge.textContent = t || held
+      ? `◊ ${held ? 'held: ' : ''}${t?.name ?? '12-TET'}${t?.edited ? '*' : ''} @ ${spell(soundingRoot(state.bloom))}` : '';
+    badge.classList.toggle('active', t !== null || held);
+    badge.classList.toggle('held', held);
     const sel = document.getElementById('tuning-select') as HTMLSelectElement | null;
     if (sel) sel.value = t?.name ?? '12-TET';
   }
 
+  /** The next (1) or previous (−1) loaded tuning: the held one's while held, else the bloom's */
   function stepTuningBy(dir: 1 | -1) {
     const lib = tuningLibrary();
     if (lib.length < 2) { status('no tunings loaded — ⚙ settings → tuning → load .scl files'); return; }
-    state.bloom.tuning = stepTuning(state.bloom.tuning, dir);
-    const t = state.bloom.tuning;
-    const msg = `tuning: ${t ? `${t.name} @ ${spell(state.bloom.followTuningRoot().tuningRoot)}` : '12-TET'}`;
+    if (isHeld()) setHeldTuning(stepTuning(soundingTuning(state.bloom), dir));
+    else state.bloom.tuning = stepTuning(state.bloom.tuning, dir);
+    state.bloom.followTuningRoot();
+    const t = soundingTuning(state.bloom);
+    const msg = `${isHeld() ? 'held ' : ''}tuning: ${t ? `${t.name} @ ${spell(soundingRoot(state.bloom))}` : '12-TET'}`;
     status(msg);
     refresh(msg);
+    updateTuningBadge();
+  }
+
+  /** opt-t: hold the sounding tuning over every bloom, or give each bloom its own back */
+  function toggleHold() {
+    if (isHeld()) release(); else hold(state.bloom);
+    const t = soundingTuning(state.bloom);
+    const msg = isHeld()
+      ? `tuning held: ${t?.name ?? '12-TET'} plays over every bloom (opt-t releases)`
+      : `tuning released: each bloom's own (${t?.name ?? '12-TET'})`;
+    status(msg);
+    refresh(msg);
+    updateTuningBadge();
+  }
+
+  /** A new bloom keeps the tuning, or takes the held one */
+  function newBloomTuning(b: Bloom, own: Bloom['tuning']) {
+    b.tuning = isHeld() ? heldForBloom() : own;
   }
 
   /** The tuning follows the key; a change to it is heard (and shown) straight away */
@@ -640,6 +667,25 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
+  /** Handle a key in tuning mode (the tuning view). Returns true if the key was consumed. */
+  function onTuningKey(e: KeyboardEvent): boolean {
+    const ch = e.key;
+    if (e.altKey) return false;   // opt-t holds; views, push / pop as at home
+    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
+    if ((ch === 'T') || (e.code === 'Escape' && !e.shiftKey
+      && !helpOpen && !document.body.classList.contains('clean'))) {
+      state.tuningView?.close();
+      status('tuning mode off');
+      return true;
+    }
+    if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
+    // playback, garden, display and help pass through, as in the list modes
+    if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
+    status('tuning mode: ] [ step through tunings · click a slice to edit · opt-t holds · T or esc leaves');
+    return true;
+  }
+
   function onKey(e: KeyboardEvent): void {
     if ((!_selection.length && !_pinned.size) || !worksOnSelection(e) || _previewResetId !== null
       || ['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) { handleKey(e); return; }
@@ -689,6 +735,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
+    // ─── Tuning mode: the tuning view is open ──────────────────────────────────
+    if (state.tuningView?.isOpen() && onTuningKey(e)) return;
+
     // ─── List mode toggle + dispatch ──────────────────────────────────────────
     if (!alt && own(MODE_KEYS, ch)) {
       const m = MODE_KEYS[ch];
@@ -718,10 +767,10 @@ export function createKeyHandler(state: KeyHandlerState) {
       }
     }
 
-    // ─── Tuning view (opt+t): the tuning as a pie, with its controls ──────────
+    // ─── Tuning hold (opt+t): one tuning over every bloom ─────────────────────
     if (alt && !shift && e.code === 'KeyT') {
       e.preventDefault();
-      state.tuningView?.toggle();
+      toggleHold();
       return;
     }
 
@@ -755,21 +804,23 @@ export function createKeyHandler(state: KeyHandlerState) {
     // lowercase stays in the key, shift opens up to all twelve
     if (ch === 'n' && !shift && !alt) {
       status('new bloom (same scale)');
-      const scale = b.scale;
+      const scale = b.scale, tuning = b.tuning;
       b.import(new Bloom().seed().applyScale(scale));
+      newBloomTuning(b, tuning);
       refresh('new bloom (same scale)');
       return;
     }
     if (ch === 'N' && shift) {
       status('new bloom');
       b.import(new Bloom().seed());
+      newBloomTuning(b, null);
       refresh('new bloom');
       return;
     }
-    // tuning: T the next one loaded, opt-T the one before (12-TET is first)
-    if (e.code === 'KeyT' && shift) {
-      e.preventDefault();
-      stepTuningBy(alt ? -1 : 1);
+    // tuning mode: T opens the tuning view
+    if (ch === 'T' && !alt) {
+      if (_mode) setListMode(null);
+      state.tuningView?.toggle();
       return;
     }
     // tilt: l down, L up, each press one scale step steeper
@@ -1392,10 +1443,6 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     const helpOpen = document.getElementById('help-full')?.style.display === 'block';
-    if (e.code === 'Escape' && !shift && !helpOpen && state.tuningView?.isOpen()) {
-      state.tuningView.close();
-      return;
-    }
     // esc clears what's marked, shift-esc inverts it: the selection if there
     // is one, otherwise the pins (the help, when open, closes first)
     if (e.code === 'Escape' && !helpOpen && (_selection.length || _pinned.size || shift)) {
@@ -1435,5 +1482,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning };
+  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
 }

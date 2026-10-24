@@ -3,7 +3,7 @@
 // library of tunings loaded from .scl files.
 
 import type { Bloom } from '../core/Bloom';
-import { EQUAL, freqTable, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
+import { EQUAL, freqTable, keyRootOf, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
 import type { Tuning } from '../lib/tuning';
 import { setPianoTuning } from './synth';
 
@@ -67,6 +67,56 @@ export function stepTuning(current: Tuning | null, dir: 1 | -1): Tuning | null {
   return next === EQUAL ? null : JSON.parse(JSON.stringify(next)) as Tuning;
 }
 
+// ─── Hold: one tuning over every bloom ────────────────────────────────────────
+// opt-t holds the tuning that's sounding. While held it plays over every bloom
+// (the garden, the loop, loads), and the tuning keys and the tuning view change
+// it instead of the bloom; the blooms keep their own, which come back on
+// release. Its root follows each bloom's key, or stays where it was held (a
+// setting). Never persisted: every session starts with each bloom's own.
+
+const HOLD_ROOT_KEY = 'bloom.holdRoot';
+export type HoldRoot = 'key' | 'fixed';
+let _held: { tuning: Tuning | null; root: number } | null = null;
+let _holdRoot: HoldRoot = (() => {
+  try { return localStorage.getItem(HOLD_ROOT_KEY) === 'fixed' ? 'fixed' : 'key'; } catch { return 'key'; }
+})();
+
+const copy = (t: Tuning | null): Tuning | null => t ? JSON.parse(JSON.stringify(t)) as Tuning : null;
+
+export function isHeld(): boolean { return _held !== null; }
+/** Hold what this bloom sounds in */
+export function hold(bloom: Bloom): void { _held = { tuning: copy(bloom.tuning), root: bloom.tuningRoot }; }
+export function release(): void { _held = null; }
+/** Replace the held tuning (null: 12-TET), keeping its root */
+export function setHeldTuning(t: Tuning | null): void { if (_held) _held.tuning = copy(t); }
+export function holdRoot(): HoldRoot { return _holdRoot; }
+export function setHoldRoot(m: HoldRoot): void {
+  _holdRoot = m;
+  try { localStorage.setItem(HOLD_ROOT_KEY, m); } catch { /* best effort */ }
+}
+
+/** The tuning a bloom sounds in: the held one, else its own */
+export function soundingTuning(bloom: Bloom): Tuning | null {
+  return _held ? _held.tuning : bloom.tuning;
+}
+/** Where that tuning's root sits for this bloom */
+export function soundingRoot(bloom: Bloom): number {
+  if (!_held) return bloom.tuningRoot;
+  const t = _held.tuning;
+  if (t?.root !== undefined && t.root !== null) return t.root;   // chosen by hand
+  if (_holdRoot === 'key') {
+    const r = keyRootOf(bloom.scale.degrees);
+    if (r !== null) _held.root = r;   // a set that implies no key keeps the last root
+  }
+  return _held.root;
+}
+/** The held tuning as a bloom's own (for a new bloom, or to keep it): a root that stays goes with it */
+export function heldForBloom(): Tuning | null {
+  const t = copy(_held?.tuning ?? null);
+  if (t && _holdRoot === 'fixed' && (t.root === undefined || t.root === null)) t.root = _held!.root;
+  return t;
+}
+
 // ─── The helper ───────────────────────────────────────────────────────────────
 
 const HELPER_PORT = /bloom tuning/i;
@@ -111,17 +161,17 @@ let _last: Bloom | null = null;
 
 /** What a bloom sounds in: its tuning and where the tuning's root sits */
 export function tuningKey(bloom: Bloom): string {
-  const t = bloom.tuning;
-  return t ? `${t.name}|${t.cents.join(',')}|${t.period}|${bloom.tuningRoot}` : '12-TET';
+  const t = soundingTuning(bloom);
+  return t ? `${t.name}|${t.cents.join(',')}|${t.period}|${soundingRoot(bloom)}` : '12-TET';
 }
 
 /** Retune the helper and the piano to this bloom's tuning, if it differs from the last one sent */
 export function applyTuning(bloom: Bloom): void {
   _last = bloom;
-  const t = bloom.tuning;
+  const t = soundingTuning(bloom);
   const key = tuningKey(bloom);
   if (key === _sentKey) return;
-  const freqs = freqTable(t, bloom.tuningRoot);
+  const freqs = freqTable(t, soundingRoot(bloom));
   setPianoTuning(t ? freqs : null);
   const port = helperPort();
   if (t && !_access) void connectHelper();

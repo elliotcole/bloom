@@ -9,7 +9,10 @@ import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
 import { askRestore } from './ui/restorePrompt';
-import { tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus, saveToLibrary } from './audio/tuningOut';
+import {
+  tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus, saveToLibrary,
+  heldForBloom, isHeld, setHeldTuning, soundingTuning,
+} from './audio/tuningOut';
 import { TuningEditor } from './ui/tuningEditor';
 import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
@@ -291,7 +294,7 @@ async function main() {
     },
   };
 
-  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning } = createKeyHandler(keyState);
+  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
   // blur after a click so a later space plays rather than pressing the button again
   document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
@@ -338,12 +341,13 @@ async function main() {
       if (t.description) o.title = t.description;
       tuningSelect.appendChild(o);
     }
-    tuningSelect.value = bloom.tuning?.name ?? '12-TET';
+    tuningSelect.value = soundingTuning(bloom)?.name ?? '12-TET';
   };
   fillTuningSelect();
   tuningSelect?.addEventListener('change', () => {
     const t = tuningLibrary().find(x => x.name === tuningSelect.value);
-    bloom.tuning = !t || t.name === '12-TET' ? null : { ...t, cents: [...t.cents] };
+    const chosen = !t || t.name === '12-TET' ? null : { ...t, cents: [...t.cents] };
+    if (isHeld()) setHeldTuning(chosen); else bloom.tuning = chosen;
     tuningSelect.blur();
     keysRefresh(`tuning: ${tuningSelect.value}`);
   });
@@ -384,7 +388,7 @@ async function main() {
   const tuningEditor = new TuningEditor({
     bloom: () => bloom,
     commit: (t, msg) => {
-      bloom.tuning = t;
+      if (isHeld()) setHeldTuning(t); else bloom.tuning = t;
       display.setStatus(msg);
       keysRefresh(msg);
     },
@@ -398,7 +402,19 @@ async function main() {
     libraryTuning: (name) => tuningLibrary().find(t => t.name === name && t.name !== '12-TET'),
     saveToLibrary: (t) => { saveToLibrary(t); fillTuningSelect(); },
     status: (msg) => display.setStatus(msg),
-    show: (on) => viz.setTuningView(on),
+    show: (on) => {
+      if (on) leaveListMode();
+      viz.setTuningView(on);
+      const badge = document.getElementById('list-mode-badge');
+      if (badge) { badge.textContent = on ? 'TUNING' : ''; badge.classList.toggle('active', on); }
+    },
+    toggleHold,
+    keepHeld: () => {
+      bloom.tuning = heldForBloom();
+      display.setStatus('this bloom keeps the held tuning');
+      keysRefresh('this bloom keeps the held tuning');
+    },
+    retune: () => keysRefresh(''),
     mark: (m) => viz.setPieMarks(m),
   });
   viz.onTuningClick = (d, shift) => tuningEditor.pick(d, shift);
