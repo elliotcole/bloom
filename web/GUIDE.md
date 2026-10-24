@@ -288,14 +288,17 @@ unpins them all (so does `F e`); **shift-`esc`** inverts them, pinning every
 free event and freeing every pinned one. Works in every view except tonal and
 set, which draw pitch classes rather than events.
 
-- **Reorderings flow around pins.** Sorting, inverting or rotating rearranges
-  the other events in the spaces between the pinned ones.
-- **Pins are by position.** Event 3 stays event 3. If a list is shorter than
-  the notes, a pin holds the slot that event wraps to, and every event sharing
-  that slot with it.
+- **Every key works around them.** A key that changes the bloom acts on the
+  free events only, as if the pinned ones weren't there: sorting, mirroring,
+  braiding or stuttering rearranges the free events in the spaces between the
+  pins, and never copies a pinned one. Pinned events keep their values and
+  their order; when a key adds events before one, it moves along with them.
+- **With a box selection,** keys act on the free events inside the box.
 - **A new bloom keeps the pinned events** (`n`, `N`): regenerate everything
   around a note you like. Lifting a garden slot or loading a file clears pins.
-- **Undo and hand edits aren't blocked** by pins.
+- **Undo puts pins back** with the bloom. Hand edits (opt-`e`) and the command
+  palette change values, and pins put their values back, but don't steer
+  reorderings the way keys do.
 
 ### Selecting events: drag a box
 

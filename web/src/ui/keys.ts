@@ -167,11 +167,14 @@ export function createKeyHandler(state: KeyHandlerState) {
   // change at a time and cmd-shift-z forward again. The notice shows what the
   // key did and, from the same before/after comparison, what it changed.
   const HISTORY_MAX = 300;
-  const _undo: Bloom[] = [];
-  const _redo: Bloom[] = [];
+  // each step remembers the pins with the bloom: a key can move them (events
+  // added before a pin), and undo must put them back on the same events
+  const _undo: { bloom: Bloom; pins: number[] }[] = [];
+  const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
   let _prevBloom = snapshotOf(state.bloom);
   let _prevSnap = snap(state.bloom);
+  let _prevPins: number[] = [];   // the pins that go with _prevBloom
   const vizArea = document.getElementById('viz-area');
   const _notice = vizArea ? new Notice(vizArea) : null;
 
@@ -180,10 +183,11 @@ export function createKeyHandler(state: KeyHandlerState) {
     const now = snap(state.bloom);
     if (sameSnap(now, _prevSnap)) return '';
     const what = describeChange(_prevSnap, now);
-    _undo.push(_prevBloom);
+    _undo.push({ bloom: _prevBloom, pins: _prevPins });
     if (_undo.length > HISTORY_MAX) _undo.shift();
     _redo.length = 0;
     _prevBloom = snapshotOf(state.bloom);
+    _prevPins = [..._pinned];
     _prevSnap = now;
     return what;
   }
@@ -192,10 +196,13 @@ export function createKeyHandler(state: KeyHandlerState) {
     const from = redo ? _redo : _undo, to = redo ? _undo : _redo;
     const target = from.pop();
     if (!target) { status(redo ? 'nothing to redo' : 'nothing to undo'); return; }
-    to.push(snapshotOf(state.bloom));
+    to.push({ bloom: snapshotOf(state.bloom), pins: [..._pinned] });
     const before = _prevSnap;
     const stack = state.bloom.stack;
-    state.bloom.import(target);
+    state.bloom.import(target.bloom);
+    _pinned.clear();
+    target.pins.forEach(i => _pinned.add(i));
+    _prevPins = [...target.pins];
     state.bloom.stack = stack;   // push/pop save points aren't part of the history
     _prevBloom = snapshotOf(state.bloom);
     _prevSnap = snap(state.bloom);
@@ -222,12 +229,15 @@ export function createKeyHandler(state: KeyHandlerState) {
   function togglePin(i: number) {
     if (_previewResetId !== null) return;   // the picture is a garden slot, not the bloom
     if (_pinned.has(i)) _pinned.delete(i); else _pinned.add(i);
+    _prevPins = [..._pinned];
     pinsChanged();
     status(`event ${i + 1} ${_pinned.has(i) ? 'pinned' : 'unpinned'}${_pinned.size ? ` (${_pinned.size} pinned)` : ''}`);
   }
 
-  function clearPins() {
+  /** forget: the user cleared them (an undo afterwards keeps them cleared); a lift or load passes false */
+  function clearPins(forget = true) {
     _pinned.clear();
+    if (forget) _prevPins = [];
     pinsChanged();
   }
 
@@ -236,6 +246,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (_previewResetId !== null) return;
     const n = state.bloom.notes.length;
     for (let i = 0; i < n; i++) if (_pinned.has(i)) _pinned.delete(i); else _pinned.add(i);
+    _prevPins = [..._pinned];
     pinsChanged();
     status(`pins inverted: ${_pinned.size} of ${n} pinned`);
   }
@@ -278,8 +289,14 @@ export function createKeyHandler(state: KeyHandlerState) {
   // (a click on empty space, or esc), every key that changes the bloom works on
   // those events alone, as if they were the whole bloom: the selection is lifted
   // out, the key acts on it, and the result goes back into its places.
+  // Pins are the other side of the same thing: a key works on the free events
+  // (of the selection, if there is one) and the pinned ones are never touched,
+  // whatever the key does to order or length.
   let _selection: number[] = [];
-  let _working: { full: Bloom; sel: number[]; extracted: Bloom } | null = null;
+  let _working: {
+    full: Bloom; sel: number[]; extracted: Bloom;
+    selection: number[]; pinned: number[];   // as they were before the key
+  } | null = null;
 
   function selectionChanged() {
     _selection = _selection.filter(i => i < state.bloom.notes.length);
@@ -310,6 +327,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   ]);
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
+    if ((e.key === 'b' || e.key === 'B') && !e.altKey) return false;   // tuning: the whole bloom's
     if (WHOLE_BLOOM_CODES.has(e.code)) return false;
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
@@ -318,14 +336,19 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
-  /** The key has acted on the lifted-out selection: put it back in the bloom */
+  /** The key has acted on the lifted-out events: put them back, and follow where the pins and selection went */
   function settleSelection() {
     const w = _working!;
     _working = null;
-    const { bloom, sel } = mergeSelection(w.full, w.sel, w.extracted, state.bloom);
+    const { bloom, sel, moved } = mergeSelection(w.full, w.sel, w.extracted, state.bloom);
     state.bloom.import(bloom);
-    _selection = sel;
+    _pinned.clear();
+    for (const i of w.pinned) { const to = moved.get(i); if (to !== undefined) _pinned.add(to); }
+    _selection = w.selection.length
+      ? [...sel, ...w.selection.filter(i => w.pinned.includes(i)).map(i => moved.get(i)!)].sort((a, b) => a - b)
+      : [];
     selectionChanged();
+    pinsChanged();
   }
 
   // ─── Tuning ──────────────────────────────────────────────────────────────────
@@ -357,12 +380,13 @@ export function createKeyHandler(state: KeyHandlerState) {
   function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
+    const settled = _working !== null;   // pins were kept out of the key's way
     if (_working) settleSelection();
     else if (_selection.length) selectionChanged();
     // While a loop or the pulsar runs, every change passes through the freezes,
     // just as space-play does — the loop never hears an unfrozen bloom
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
-    if (_pinned.size && hold) holdPins();
+    if (_pinned.size && hold && !settled) holdPins();   // the palette's changes
     // the tuning follows the key; a change to it is heard straight away
     state.bloom.followTuningRoot();
     const tk = tuningKey(state.bloom);
@@ -608,11 +632,18 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   function onKey(e: KeyboardEvent): void {
-    if (!_selection.length || !worksOnSelection(e)
+    if ((!_selection.length && !_pinned.size) || !worksOnSelection(e) || _previewResetId !== null
       || ['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) { handleKey(e); return; }
+    const n = state.bloom.notes.length;
+    const scope = _selection.length ? _selection : Array.from({ length: n }, (_, i) => i);
+    const work = scope.filter(i => !_pinned.has(i));
+    if (!work.length) {
+      status(_selection.length ? 'every selected event is pinned' : 'every event is pinned — esc unpins');
+      return;
+    }
     const full = snapshotOf(state.bloom);
-    const extracted = extractSelection(full, _selection);
-    _working = { full, sel: _selection, extracted };
+    const extracted = extractSelection(full, work);
+    _working = { full, sel: work, extracted, selection: [..._selection], pinned: [..._pinned] };
     state.bloom.import(extracted);
     try {
       handleKey(e);
@@ -1273,7 +1304,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         b.import(lifted);
         if (isLooping()) updateLooper(b);
         if (isPulsing()) updatePulsar(b);
-        clearPins();   // the pins and selection belonged to the bloom that was replaced
+        clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
         clearSelection();
         status(`lifted [${g.index}]`);
         refresh(`lifted [${g.index}]`, false);
@@ -1383,5 +1414,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins, select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy };
+  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy };
 }

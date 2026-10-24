@@ -28,11 +28,11 @@ export function extractSelection(full: Bloom, sel: number[]): Bloom {
  * Put a worked-on selection back. Lists the key didn't touch keep their own
  * shape (while the number of events holds); a changed list is spelled out per event, the selected slots take the
  * new values in order, and if the selection grew or shrank, events are added
- * after its last slot or its last slots are dropped. Returns the new bloom and
- * where the selected events now are.
+ * after its last slot or its last slots are dropped. Returns the new bloom,
+ * where the selected events now are, and where each of the others moved to.
  */
 export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, worked: Bloom)
-  : { bloom: Bloom; sel: number[] } {
+  : { bloom: Bloom; sel: number[]; moved: Map<number, number> } {
   const out = full.clone();
   out.stack = full.stack;
   // settings a key may change (scale, ranges, legato …) come from the worked bloom
@@ -70,6 +70,7 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   }
 
   const newSel: number[] = [];
-  plan.forEach(([src], i) => { if (src === 'sel') newSel.push(i); });
-  return { bloom: out, sel: newSel };
+  const moved = new Map<number, number>();   // where each untouched event now sits
+  plan.forEach(([src, j], i) => { if (src === 'sel') newSel.push(i); else moved.set(j, i); });
+  return { bloom: out, sel: newSel, moved };
 }
