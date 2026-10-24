@@ -158,27 +158,49 @@ with the reason. The library stays in this browser.
   ringed, and each slice shows its ratio inside and its cents from 12-TET
   outside. Slices light up as their notes play. The controls sit either
   side: the selected note on the left, the whole tuning on the right.
-  In tuning mode `]` `[` step through the tunings, and playback, garden,
+  In tuning mode `]` `[` step through the tunings (a new base: the
+  alterations stay), the alteration keys below work, and playback, garden,
   display and view keys work as at home; other keys only show a hint. `p` `t`
   `v` `c` `5` switch straight to that list mode, as between list modes (and
   `T` from a list mode switches here). `T` or `esc` leaves, as does choosing
   another view.
-  - **Click a slice** to select and hear its note: its exact ratio when it has one
-    (from the file, or kept exact through every edit), cents, and the commas
-    it has been moved by.
-  - **− comma / + comma** move it by the comma chosen below (the lattice's
-    names: syntonic, Pythagorean, septimal, schisma, diesis, apotome …). A
-    move back cancels the last one. **set** puts it at a ratio (`7/4`) or
-    cents (`968.8`).
+  - **Alterations.** A tuning is a base (12-TET, a .scl, a pasted scale)
+    and twelve alterations, one list item per note from the root: how many
+    of each comma the note is raised or lowered by. The commas are HEJI's
+    up to the 11-limit, and the Pythagorean comma: `s` syntonic (81/80), `z`
+    septimal (64/63), `u` undecimal quartertone (33/32), `p` Pythagorean
+    (531441/524288). Moves by the same comma cancel; different ones stay side
+    by side (`+p−s`), so you can watch the drift. The pie writes each note's
+    name with its HEJI accidental (arrows for syntonic commas, the septimal
+    and undecimal signs; HEJI has no sign for the Pythagorean comma, so it's
+    `+p`); the left panel and the console's `alter:` line list them.
+  - **The alterations palette** at the top chooses the comma. Then, on the
+    selected slices or (none selected) every note:
+
+    | key | does |
+    |---|---|
+    | `1` `2` | rotate the alterations a semitone down / up |
+    | `3` `4` | each note a comma down / up |
+    | `#` `$` | breeze: a few notes a comma down / up |
+    | `0` | clear the alterations |
+
+    `esc` first lets go of the selected slices, then leaves tuning mode.
+  - **Click a slice** to select and hear its note: its exact ratio when it
+    has one (from the file, kept exact through every alteration), cents, and
+    its alterations. **− / +** move it by the palette's comma. **set** puts
+    it at a ratio (`7/4`) or cents (`968.8`): a new base for that note,
+    unaltered.
   - **Shift-click a second slice** to see the interval between them, and set
-    it to a ratio or cents (the second note moves). **= one comma** makes it
-    exactly the chosen comma: click Eb, shift-click E, and E sits one
-    syntonic comma above Eb.
+    it to a ratio or cents (the second note moves, unaltered). **= Eb +s**
+    makes the second note the first raised by the palette's comma: click Eb,
+    shift-click E, and E becomes Eb's pitch with its alterations, plus one
+    syntonic comma.
+  - **clear alterations** (or `0`) puts every note back on its base.
   - **Root:** follows the key, or one chosen by hand.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
-    period, or a whole .scl file.
+    period, or a whole .scl file. It becomes the base, unaltered.
   - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
-    **save to library** keeps it under a name for `T` / opt-`T`; **export .scl**
+    **save to library** keeps it, alterations and all, under a name for `]` / `[`; **export .scl**
     downloads it; **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →

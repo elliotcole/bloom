@@ -3,7 +3,7 @@
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import { spell, spellOctave } from '../lib/numbers';
-import { deviations } from '../lib/tuning';
+import { alterText, alterationsOf, deviations, isAltered } from '../lib/tuning';
 import { isHeld, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
 const MAX_HISTORY = 50;
@@ -84,6 +84,8 @@ export class Display {
       soundingTuning(bloom) ? `tuning: ${isHeld() ? 'held ' : ''}${soundingTuning(bloom)!.name} @ ${spell(soundingRoot(bloom))}   ${
         deviations(soundingTuning(bloom), soundingRoot(bloom))
           .map((c, pc) => `${spell(pc)}${c >= 0 ? '+' : ''}${Math.round(c)}`).join(' ')}` : '',
+      isAltered(soundingTuning(bloom))
+        ? `alter:  ${alterationsOf(soundingTuning(bloom)).map(x => alterText(x) || '0').join(' ')}   (from the root)` : '',
       bloom.name ? `name:   ${bloom.name}` : '',
       `garden: ${garden}`,
       status ? `> ${status}` : '',

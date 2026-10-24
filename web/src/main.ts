@@ -14,6 +14,7 @@ import {
   heldForBloom, isHeld, setHeldTuning, soundingTuning,
 } from './audio/tuningOut';
 import { TuningEditor } from './ui/tuningEditor';
+import { rebase } from './lib/tuning';
 import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
@@ -347,7 +348,8 @@ async function main() {
   tuningSelect?.addEventListener('change', () => {
     const t = tuningLibrary().find(x => x.name === tuningSelect.value);
     const chosen = !t || t.name === '12-TET' ? null : { ...t, cents: [...t.cents] };
-    if (isHeld()) setHeldTuning(chosen); else bloom.tuning = chosen;
+    const next = rebase(soundingTuning(bloom), chosen);   // a new base, the same alterations
+    if (isHeld()) setHeldTuning(next); else bloom.tuning = next;
     tuningSelect.blur();
     keysRefresh(`tuning: ${tuningSelect.value}`);
   });

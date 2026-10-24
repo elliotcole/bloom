@@ -7,7 +7,9 @@
 import type { Bloom } from '../core/Bloom';
 import { flatNotes, wrapAt } from '../lib/arrays';
 import { spell } from '../lib/numbers';
-import { degreeRatio, deviations, editable, readable } from '../lib/tuning';
+import { alterationsOf, degreeRatio, deviations, editable, readable } from '../lib/tuning';
+import type { Alteration } from '../lib/tuning';
+import { HEJI_FONT, hejiAccidental } from './heji';
 import type { Theme } from './theme';
 import { isHeld, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
@@ -112,6 +114,7 @@ export function drawTuningPie(
 
   // the note's exact place on the rim, its name and deviation outside, its ratio inside
   const ang = angles(bloom);
+  const alter = alterationsOf(t);
   for (let d = 0; d < 12; d++) {
     const a = ang[d], f = flash[d], pc = (root + d) % 12;
     const [h, sat, l] = theme.noteHsla(pc, 100, f);
@@ -130,9 +133,8 @@ export function drawTuningPie(
     }
     const selected = d === marks.a || d === marks.b;
     const [nx, ny] = at(1.16);
-    ctx.font = `${selected ? 'bold ' : ''}${font * 1.15}px monospace`;
     ctx.fillStyle = selected || f > 0.3 ? theme.accent : theme.text;
-    ctx.fillText(spell(pc), nx, ny);
+    drawNoteName(ctx, nx, ny, spell(pc), alter[d], font * 1.15, selected);
     const dv = dev[pc];
     const [dx, dy] = [nx, ny + font * 1.3];
     ctx.font = `${font * 0.85}px monospace`;
@@ -172,4 +174,28 @@ export function drawTuningPie(
   ctx.globalAlpha = 0.6;
   ctx.fillText(`${isHeld() ? 'held · ' : ''}root ${spell(root)}`, cx, cy + font * 0.8);
   ctx.globalAlpha = 1;
+}
+
+/** A note's name with its HEJI accidental, centred on (x, y) */
+function drawNoteName(ctx: CanvasRenderingContext2D, x: number, y: number, name: string,
+  a: Alteration, size: number, bold: boolean): void {
+  const { glyphs, text } = hejiAccidental(name, a);
+  const letter = glyphs || text ? name[0] : name;   // the glyphs carry the accidental
+  const mono = `${bold ? 'bold ' : ''}${size}px monospace`;
+  const music = `${size * 1.9}px ${HEJI_FONT}`;
+  const small = `${size * 0.75}px monospace`;
+  ctx.font = mono; const lw = ctx.measureText(letter).width;
+  ctx.font = music; const gw = glyphs ? ctx.measureText(glyphs).width + size * 0.1 : 0;
+  ctx.font = small; const tw = text ? ctx.measureText(text).width + size * 0.15 : 0;
+  let left = x - (lw + gw + tw) / 2;
+  ctx.textAlign = 'left';
+  ctx.font = mono; ctx.fillText(letter, left, y); left += lw;
+  if (glyphs) {
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = music; ctx.fillText(glyphs, left + size * 0.1, y + size * 0.05);
+    ctx.textBaseline = 'middle';
+    left += gw;
+  }
+  if (text) { ctx.font = small; ctx.fillText(text, left + size * 0.15, y - size * 0.3); }
+  ctx.textAlign = 'center';
 }

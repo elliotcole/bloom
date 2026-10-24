@@ -10,8 +10,13 @@ export interface Tuning {
   description?: string;
   /** each degree's exact ratio ("5/4"), or null when it's only known in cents */
   ratios?: (string | null)[];
-  /** the commas each degree has been moved by since it was last set ("+81/80") */
-  marks?: string[][];
+  /**
+   * The tuning before its alterations (cents and ratios above are worked out
+   * from the two). Absent: the cents and ratios are the base, unaltered.
+   */
+  base?: { cents: number[]; ratios: (string | null)[] };
+  /** Each degree's alterations: how many of each comma, up or down (HEJI-style) */
+  alter?: Alteration[];
   /** a root chosen by hand (0–11); absent or null: the root follows the key */
   root?: number | null;
   /** changed since it came from the library */
@@ -184,49 +189,157 @@ export function nameMessage(name: string): number[] {
 
 // ─── Editing ──────────────────────────────────────────────────────────────────
 
-/** A working copy to edit (12-TET when the bloom has none) */
+// ─── Alterations ──────────────────────────────────────────────────────────────
+// A tuning is a base (12-TET, a .scl, a pasted scale) and twelve alterations:
+// for each degree, counts of the commas it has been raised or lowered by, as
+// HEJI writes them. Moves by the same comma cancel; different commas stay side
+// by side (+p −s), so the drift stays readable. ] / [ swap the base and keep
+// the alterations; setting a note or pasting a scale makes a new base.
+
+export type CommaId = 'p' | 's' | 'z' | 'u';
+export type Alteration = Partial<Record<CommaId, number>>;
+
+/** The commas a note can be altered by: HEJI's through the 11-limit, and the Pythagorean comma */
+export const ALTERATIONS: { id: CommaId; name: string; ratio: Ratio }[] = ([
+  ['p', 'pythagorean comma', 531441, 524288],
+  ['s', 'syntonic comma', 81, 80],
+  ['z', 'septimal comma', 64, 63],
+  ['u', 'undecimal quartertone', 33, 32],
+] as [CommaId, string, number, number][]).map(([id, name, n, d]) => ({ id, name, ratio: { n: BigInt(n), d: BigInt(d) } }));
+export const commaOf = (id: CommaId) => ALTERATIONS.find(c => c.id === id)!;
+
+/** "+p−s", "+2s", or "" when unaltered */
+export function alterText(a: Alteration | undefined): string {
+  if (!a) return '';
+  return ALTERATIONS.map(({ id }) => {
+    const n = a[id] ?? 0;
+    return n === 0 ? '' : `${n > 0 ? '+' : '−'}${Math.abs(n) > 1 ? Math.abs(n) : ''}${id}`;
+  }).join('');
+}
+const noAlter = (): Alteration[] => Array.from({ length: 12 }, () => ({}));
+const isUnaltered = (a: Alteration) => ALTERATIONS.every(({ id }) => !a[id]);
+
+/** A working copy to edit (12-TET when the bloom has none), its base and alterations filled in */
 export function editable(t: Tuning | null): Tuning {
   const src = t ?? EQUAL;
-  return {
-    ...src,
-    cents: [...src.cents],
-    ratios: src.ratios ? [...src.ratios] : src === EQUAL || !t ? ['1/1', ...Array(11).fill(null)] : Array(12).fill(null),
-    marks: src.marks ? src.marks.map(m => [...m]) : Array.from({ length: 12 }, () => []),
-  };
+  const ratios = src.ratios ? [...src.ratios] : src === EQUAL || !t ? ['1/1', ...Array(11).fill(null)] : Array(12).fill(null);
+  const base = src.base && src.alter
+    ? { cents: [...src.base.cents], ratios: [...src.base.ratios] }
+    : { cents: [...src.cents], ratios: [...ratios] };   // older tunings (and their comma marks): what they sound is the base
+  const out: Tuning = { ...src, cents: [...src.cents], ratios, base, alter: src.base && src.alter ? src.alter.map(a => ({ ...a })) : noAlter() };
+  delete (out as { marks?: unknown }).marks;
+  return out;
+}
+
+/** Work out the cents and exact ratios from the base and the alterations */
+function resolve(t: Tuning): Tuning {
+  const base = t.base!, alter = t.alter!;
+  for (let d = 0; d < 12; d++) {
+    let c = base.cents[d];
+    let r = base.ratios[d] ? parseRatio(base.ratios[d]!) : null;
+    for (const { id, ratio } of ALTERATIONS) {
+      const n = alter[d][id] ?? 0;
+      c += n * centsOfRatio(ratio);
+      for (let k = 0; k < Math.abs(n) && r; k++) r = n > 0 ? ratioMul(r, ratio) : ratioDiv(r, ratio);
+    }
+    t.cents[d] = c;
+    t.ratios![d] = r ? ratioStr(r) : null;
+  }
+  return t;
+}
+
+/** Replace the alterations (the base stays) */
+export function withAlterations(t: Tuning, alter: Alteration[]): Tuning {
+  const out = editable(t);
+  out.alter = alter.map(a => {
+    const c: Alteration = {};
+    for (const { id } of ALTERATIONS) if (a[id]) c[id] = a[id];
+    return c;
+  });
+  out.edited = true;
+  return resolve(out);
+}
+
+/** A tuning's alterations, twelve of them */
+export const alterationsOf = (t: Tuning | null): Alteration[] => editable(t).alter!;
+export const isAltered = (t: Tuning | null): boolean => !!t?.alter && !t.alter.every(isUnaltered);
+
+/** A new base (a tuning from the library) under the same alterations */
+export function rebase(t: Tuning | null, base: Tuning | null): Tuning | null {
+  if (!isAltered(t)) return base;
+  const b = editable(base);
+  const flat: Tuning = { ...b, base: { cents: [...b.cents], ratios: [...b.ratios!] }, alter: noAlter() };
+  return withAlterations(flat, alterationsOf(t));
+}
+
+/** Move one degree by a comma, up (dir 1) or down (−1) */
+export function shiftDegree(t: Tuning, deg: number, comma: CommaId, dir: 1 | -1): Tuning {
+  return stepAlterations(t, [deg], comma, dir);
+}
+
+/** 3 / 4: these degrees each a comma down or up */
+export function stepAlterations(t: Tuning, degs: number[], comma: CommaId, dir: 1 | -1): Tuning {
+  const alter = alterationsOf(t);
+  for (const d of degs) alter[d][comma] = (alter[d][comma] ?? 0) + dir;
+  return withAlterations(t, alter);
+}
+
+/** 0: these degrees back to their base, unaltered */
+export function clearAlterations(t: Tuning, degs: number[]): Tuning {
+  const alter = alterationsOf(t);
+  for (const d of degs) alter[d] = {};
+  return withAlterations(t, alter);
+}
+
+/** 1 / 2: every alteration moves to the degree a semitone down (−1) or up (1) */
+export function rotateAlterations(t: Tuning, dir: 1 | -1): Tuning {
+  const alter = alterationsOf(t);
+  return withAlterations(t, alter.map((_, i) => alter[(i - dir + 12) % 12]));
+}
+
+/** # / $: a few of these degrees (about a quarter, at least one) a comma down or up */
+export function breezeAlterations(t: Tuning, degs: number[], comma: CommaId, dir: 1 | -1, rand = Math.random): Tuning {
+  const pool = [...degs];
+  const k = Math.max(1, Math.round(pool.length / 4));
+  const chosen: number[] = [];
+  while (chosen.length < k && pool.length) chosen.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  return stepAlterations(t, chosen, comma, dir);
+}
+
+/** "= one comma": degree b becomes degree a raised by a comma (a's base and alterations, and one more) */
+export function commaAbove(t: Tuning, a: number, b: number, comma: CommaId): Tuning {
+  const out = editable(t);
+  const base = out.base!;
+  // b keeps its octave: a's base, moved by whole periods to sit nearest b
+  const shift = Math.round((base.cents[b] - base.cents[a]) / out.period);
+  base.cents[b] = base.cents[a] + shift * out.period;
+  const ra = base.ratios[a] ? parseRatio(base.ratios[a]!) : null;
+  let rb = ra && isOctave(out) ? ra : null;
+  for (let i = 0; i < Math.abs(shift) && rb; i++) rb = shift > 0 ? ratioMul(rb, { n: 2n, d: 1n }) : ratioDiv(rb, { n: 2n, d: 1n });
+  base.ratios[b] = rb ? ratioStr(rb) : null;
+  const alter = out.alter!;
+  alter[b] = { ...alter[a] };
+  alter[b][comma] = (alter[b][comma] ?? 0) + 1;
+  return withAlterations(out, alter);
 }
 
 const isOctave = (t: Tuning) => Math.abs(t.period - 1200) < 1e-6;
 
-/** Move one degree by a comma, up (dir 1) or down (−1); its exact ratio follows when it has one */
-export function shiftDegree(t: Tuning, deg: number, comma: Ratio, dir: 1 | -1): Tuning {
-  const out = editable(t);
-  out.cents[deg] += dir * centsOfRatio(comma);
-  const r = out.ratios![deg] ? parseRatio(out.ratios![deg]!) : null;
-  out.ratios![deg] = r ? ratioStr(dir === 1 ? ratioMul(r, comma) : ratioDiv(r, comma)) : null;
-  const mark = `${dir === 1 ? '+' : '−'}${ratioStr(comma)}`;
-  const undoMark = `${dir === 1 ? '−' : '+'}${ratioStr(comma)}`;
-  const m = out.marks![deg];
-  const k = m.lastIndexOf(undoMark);
-  if (k >= 0) m.splice(k, 1); else m.push(mark);   // a move back cancels the last one
-  out.edited = true;
-  return out;
-}
-
-/** Set one degree to a ratio ("7/4") or cents ("968.8"), above the root */
+/** Set one degree to a ratio ("7/4") or cents ("968.8"), above the root: a new base for it, unaltered */
 export function setDegree(t: Tuning, deg: number, value: string): Tuning | string {
   const v = parseValue(value);
   if (!v) return `can't read "${value}"`;
   const out = editable(t);
-  out.cents[deg] = v.cents;
-  out.ratios![deg] = v.ratio;
-  out.marks![deg] = [];
+  out.base!.cents[deg] = v.cents;
+  out.base!.ratios[deg] = v.ratio;
+  out.alter![deg] = {};
   out.edited = true;
-  return out;
+  return resolve(out);
 }
 
 /**
  * Make the interval from degree a up to degree b a given ratio or cents, by
- * moving b (kept in the octave nearest where it was).
+ * moving b (kept in the octave nearest where it was): a new base for b, unaltered.
  */
 export function setInterval(t: Tuning, a: number, b: number, value: string): Tuning | string {
   const v = parseValue(value);
@@ -235,17 +348,17 @@ export function setInterval(t: Tuning, a: number, b: number, value: string): Tun
   let target = out.cents[a] + v.cents;
   const shift = Math.round((target - out.cents[b]) / out.period);
   target -= shift * out.period;
-  out.cents[b] = target;
+  out.base!.cents[b] = target;
   const ra = out.ratios![a] ? parseRatio(out.ratios![a]!) : null;
   const rv = v.ratio ? parseRatio(v.ratio) : null;
   if (ra && rv && isOctave(out)) {
     let r = ratioMul(ra, rv);
     for (let i = 0; i < Math.abs(shift); i++) r = shift > 0 ? ratioDiv(r, { n: 2n, d: 1n }) : ratioMul(r, { n: 2n, d: 1n });
-    out.ratios![b] = ratioStr(reduce(r));
-  } else out.ratios![b] = null;
-  out.marks![b] = [];
+    out.base!.ratios[b] = ratioStr(reduce(r));
+  } else out.base!.ratios[b] = null;
+  out.alter![b] = {};
   out.edited = true;
-  return out;
+  return resolve(out);
 }
 
 /**
@@ -269,8 +382,7 @@ export function fromList(text: string, name: string): Tuning | string {
   else if (v.length === 11) v = [{ cents: 0, ratio: '1/1' }, ...v];
   if (v.length !== 12) return `${toks.length} values: give 11 (1/1 implied), 12, or 12 and the period`;
   return {
-    name, cents: v.map(x => x.cents), ratios: v.map(x => x.ratio), period: period.cents,
-    marks: Array.from({ length: 12 }, () => []), edited: true,
+    name, cents: v.map(x => x.cents), ratios: v.map(x => x.ratio), period: period.cents, edited: true,
   };
 }
 
@@ -296,13 +408,3 @@ export function intervalBetween(t: Tuning, a: number, b: number): { cents: numbe
   const rb = t.ratios?.[b] ? parseRatio(t.ratios[b]!) : null;
   return { cents: c, ratio: ra && rb && isOctave(t) ? ratioStr(octaveReduce(ratioDiv(rb, ra))) : null };
 }
-
-/** Named commas (as in the tuning lattice), smallest first */
-export const COMMAS: { name: string; ratio: Ratio }[] = ([
-  ['schisma', 32805, 32768], ['septimal kleisma', 225, 224], ['19-limit schisma', 513, 512],
-  ['diaschisma', 2048, 2025], ['syntonic comma', 81, 80], ['pythagorean comma', 531441, 524288],
-  ['septimal comma', 64, 63], ['septimal quartertone', 36, 35], ['lesser diesis', 128, 125],
-  ['undecimal quartertone', 33, 32], ['greater diesis', 648, 625], ['tridecimal thirdtone', 27, 26],
-  ['minor 5-limit half step', 25, 24], ['septimal semitone', 21, 20], ['limma', 256, 243],
-  ['apotome', 2187, 2048],
-] as [string, number, number][]).map(([name, n, d]) => ({ name, ratio: { n: BigInt(n), d: BigInt(d) } }));

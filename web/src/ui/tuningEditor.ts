@@ -8,10 +8,12 @@
 
 import type { Bloom } from '../core/Bloom';
 import {
-  COMMAS, centsOfRatio, degreeRatio, deviations, editable, fromList, intervalBetween,
-  readable, setDegree, setInterval, shiftDegree, toScala,
+  ALTERATIONS, alterText, alterationsOf, centsOfRatio, commaAbove, commaOf, degreeRatio, deviations,
+  editable, fromList, intervalBetween, isAltered, readable, setDegree, setInterval, shiftDegree, toScala,
+  withAlterations,
 } from '../lib/tuning';
-import type { Tuning } from '../lib/tuning';
+import type { CommaId, Tuning } from '../lib/tuning';
+import { PALETTE_GLYPH, loadHeji } from './heji';
 import { spell } from '../lib/numbers';
 import type { PieMarks } from './tuningPie';
 import { holdRoot, isHeld, setHoldRoot, soundingRoot, soundingTuning } from '../audio/tuningOut';
@@ -37,23 +39,24 @@ export interface TuningEditorHost {
   retune: () => void;
 }
 
-const COMMA_KEY = 'bloom.tuningComma';
+const COMMA_KEY = 'bloom.alterComma';
 
 export class TuningEditor {
   private _el: HTMLElement;
   private _open = false;
   private _a: number | null = null;   // selected degree
   private _b: number | null = null;   // second degree, for an interval
-  private _comma = 0;
+  private _comma: CommaId = 's';   // the alterations palette's choice
 
   private host: TuningEditorHost;
 
   constructor(host: TuningEditorHost) {
     this.host = host;
     try {
-      const i = COMMAS.findIndex(c => c.name === localStorage.getItem(COMMA_KEY));
-      this._comma = i >= 0 ? i : COMMAS.findIndex(c => c.name === 'syntonic comma');
-    } catch { this._comma = COMMAS.findIndex(c => c.name === 'syntonic comma'); }
+      const id = localStorage.getItem(COMMA_KEY);
+      if (ALTERATIONS.some(c => c.id === id)) this._comma = id as CommaId;
+    } catch { /* syntonic */ }
+    void loadHeji().then(() => this.update());
     this._el = document.createElement('div');
     this._el.id = 'tuning-view';
     (document.getElementById('viz-area') ?? document.body).appendChild(this._el);
@@ -65,6 +68,12 @@ export class TuningEditor {
   /** The view was left some other way (choosing another view) */
   closed(): void { this._open = false; this._el.classList.remove('open'); this.host.show(false); }
   toggle(): void { if (this._open) this.close(); else this.open(); }
+
+  /** The comma the alterations palette has chosen (for 3 / 4 / # / $ too) */
+  comma(): CommaId { return this._comma; }
+  /** The selected degrees, or none */
+  picked(): number[] { return [this._a, this._b].filter((d): d is number => d !== null); }
+  clearPick(): void { this._a = null; this._b = null; this.update(); }
 
   /** A slice clicked: select the note and hear it; with shift, the second note of an interval */
   pick(d: number, shift: boolean): void {
@@ -95,12 +104,13 @@ export class TuningEditor {
     let sel = '<div class="te-dim">click a slice to select and hear its note · shift-click a second for the interval</div>';
     if (a !== null) {
       const r = degreeRatio(t, a);
-      const marks = t.marks?.[a]?.length ? ` · ${t.marks[a].join(' ')}` : '';
+      const alt = alterText(t.alter?.[a]);
+      const marks = alt ? ` · <b>${alt}</b>` : '';
       sel = `<div><b>${this.name(a)}</b> <span class="te-dim">degree ${a}</span> · ${readable(r) ? `<b>${r}</b> · ` : ''}${cents(t.cents[a])}
           · <span class="te-dim">${signed(dev[(this.root + a) % 12])} vs 12-TET${marks}</span></div>
         <div class="te-row">
-          <button data-act="down" title="lower ${this.name(a)} by the comma">− comma</button>
-          <button data-act="up" title="raise ${this.name(a)} by the comma">+ comma</button>
+          <button data-act="down" title="lower ${this.name(a)} by a ${commaOf(this._comma).name}">− ${this._comma}</button>
+          <button data-act="up" title="raise ${this.name(a)} by a ${commaOf(this._comma).name}">+ ${this._comma}</button>
           <input id="te-set" class="te-inp" placeholder="7/4 or 968.8" title="a ratio or cents above the root">
           <button data-act="set">set ${this.name(a)}</button>
         </div>`;
@@ -109,21 +119,26 @@ export class TuningEditor {
         sel += `<div class="te-row"><span>${this.name(a)} → ${this.name(bb)}: ${readable(iv.ratio) ? `<b>${iv.ratio}</b> · ` : ''}${cents(iv.cents)}</span>
           <input id="te-iv" class="te-inp" placeholder="3/2" title="the interval, as a ratio or cents; moves ${this.name(bb)}">
           <button data-act="interval">set interval</button>
-          <button data-act="ivcomma" title="${this.name(bb)} exactly one ${COMMAS[this._comma].name} above ${this.name(a)}">= one comma</button></div>`;
+          <button data-act="ivcomma" title="${this.name(bb)} becomes ${this.name(a)} raised by one ${commaOf(this._comma).name}">= ${this.name(a)} +${this._comma}</button></div>`;
       }
     }
 
     const rootOpts = [`<option value="key"${t.root == null ? ' selected' : ''}>follows the key (${spell(this.root)})</option>`,
       ...Array.from({ length: 12 }, (_, pc) => `<option value="${pc}"${t.root === pc ? ' selected' : ''}>${spell(pc)}</option>`)].join('');
-    const commaOpts = COMMAS.map((c, i) =>
-      `<option value="${i}"${i === this._comma ? ' selected' : ''}>${c.name} ${c.ratio.n}/${c.ratio.d} (${centsOfRatio(c.ratio).toFixed(1)}¢)</option>`).join('');
+    const palette = ALTERATIONS.map(c => `<button class="tv-comma${c.id === this._comma ? ' on' : ''}" data-comma="${c.id}"
+        title="${c.name} ${c.ratio.n}/${c.ratio.d} (${centsOfRatio(c.ratio).toFixed(1)}¢): 3 / 4 move notes down / up by it, # / $ breeze">
+        <span class="tv-glyph${c.id === 'p' ? ' tv-letter' : ''}">${PALETTE_GLYPH[c.id]}</span><span class="tv-id">${c.id}</span></button>`).join('');
+    const alterList = alterationsOf(t).map(x => alterText(x) || '0').join(' ');
 
     this._el.innerHTML = `
       <div class="tv-side">
         <div class="tv-title">note</div>
         ${sel}
-        <div class="te-row"><span class="te-lbl">comma</span><select id="te-comma">${commaOpts}</select></div>
+        <div class="tv-title">alterations</div>
+        <div class="te-alter" title="each note's commas, from the root: 1 / 2 rotate them, 3 / 4 move notes, # / $ breeze, 0 clears (the selected notes, or all)">${alterList}</div>
+        ${isAltered(own) ? '<div class="te-row"><button data-act="unalter" title="0 (the selected notes, or all)">clear alterations</button></div>' : ''}
       </div>
+      <div class="tv-palette"><span class="tv-pal-lbl">alterations</span>${palette}</div>
       <div class="tv-side">
         <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b></span>
           <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
@@ -152,12 +167,13 @@ export class TuningEditor {
 
   private _wire(): void {
     const q = <T extends HTMLElement>(id: string) => this._el.querySelector<T>(`#${id}`);
-    this._el.querySelector('#te-comma')?.addEventListener('change', (e) => {
-      this._comma = Number((e.target as HTMLSelectElement).value);
-      try { localStorage.setItem(COMMA_KEY, COMMAS[this._comma].name); } catch { /* fine */ }
-      (e.target as HTMLElement).blur();
-      this.update();   // the "= one comma" button names it
-    });
+    this._el.querySelectorAll<HTMLButtonElement>('.tv-comma').forEach(btn => btn.addEventListener('click', () => {
+      btn.blur();
+      this._comma = btn.dataset.comma as CommaId;
+      try { localStorage.setItem(COMMA_KEY, this._comma); } catch { /* fine */ }
+      this.host.status(`alterations: ${commaOf(this._comma).name}`);
+      this.update();
+    }));
     this._el.querySelector('#te-holdroot')?.addEventListener('change', (e) => {
       const v = (e.target as HTMLSelectElement).value as 'key' | 'fixed';
       (e.target as HTMLElement).blur();
@@ -195,9 +211,8 @@ export class TuningEditor {
       case 'keep': this.host.keepHeld(); break;
       case 'up': case 'down': {
         if (a === null) return;
-        const c = COMMAS[this._comma];
-        result(shiftDegree(t, a, c.ratio, act === 'up' ? 1 : -1),
-          `${this.name(a)} ${act === 'up' ? '+' : '−'} ${c.name}`);
+        result(shiftDegree(t, a, this._comma, act === 'up' ? 1 : -1),
+          `${this.name(a)} ${act === 'up' ? '+' : '−'} ${commaOf(this._comma).name}`);
         this.host.audition(60 + this.root + a);
         break;
       }
@@ -207,8 +222,7 @@ export class TuningEditor {
         break;
       case 'ivcomma': {
         if (a === null || b === null) return;
-        const c = COMMAS[this._comma];
-        result(setInterval(t, a, b, `${c.ratio.n}/${c.ratio.d}`), `${this.name(b)} one ${c.name} above ${this.name(a)}`);
+        result(commaAbove(t, a, b, this._comma), `${this.name(b)} one ${commaOf(this._comma).name} above ${this.name(a)}`);
         this.host.audition(60 + this.root + b);
         break;
       }
@@ -242,6 +256,7 @@ export class TuningEditor {
         break;
       }
       case 'equal': this.host.commit(null, 'tuning: 12-TET'); break;
+      case 'unalter': result(withAlterations(t, alterationsOf(null)), 'alterations cleared'); break;
     }
   }
 }

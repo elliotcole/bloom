@@ -1,7 +1,10 @@
 // Full keyboard handler — mirrors bloom keystroke controller.scd
 
 import { Bloom } from '../core/Bloom';
-import { keyRootOf } from '../lib/tuning';
+import {
+  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
+} from '../lib/tuning';
+import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
@@ -156,7 +159,11 @@ export interface KeyHandlerState {
   /** Called after every refresh, so the tuning editor follows the bloom */
   afterRefreshFn?: () => void;
   /** The tuning view (opt-t) */
-  tuningView?: { toggle(): void; close(): void; isOpen(): boolean };
+  tuningView?: {
+    toggle(): void; close(): void; isOpen(): boolean;
+    /** the alterations palette's comma, and the slices selected on the pie */
+    comma(): CommaId; picked(): number[]; clearPick(): void;
+  };
 }
 
 export function createKeyHandler(state: KeyHandlerState) {
@@ -381,14 +388,62 @@ export function createKeyHandler(state: KeyHandlerState) {
   function stepTuningBy(dir: 1 | -1) {
     const lib = tuningLibrary();
     if (lib.length < 2) { status('no tunings loaded — ⚙ settings → tuning → load .scl files'); return; }
-    if (isHeld()) setHeldTuning(stepTuning(soundingTuning(state.bloom), dir));
-    else state.bloom.tuning = stepTuning(state.bloom.tuning, dir);
+    // a new base under the same alterations
+    const cur = soundingTuning(state.bloom);
+    const next = rebase(cur, stepTuning(cur, dir));
+    if (isHeld()) setHeldTuning(next);
+    else state.bloom.tuning = next;
     state.bloom.followTuningRoot();
     const t = soundingTuning(state.bloom);
     const msg = `${isHeld() ? 'held ' : ''}tuning: ${t ? `${t.name} @ ${spell(soundingRoot(state.bloom))}` : '12-TET'}`;
     status(msg);
     refresh(msg);
     updateTuningBadge();
+  }
+
+  /** A change to the sounding tuning: the held one while held, else the bloom's */
+  function commitTuning(t: Tuning | null, msg: string) {
+    if (isHeld()) setHeldTuning(t); else state.bloom.tuning = t;
+    status(msg);
+    refresh(msg);
+    updateTuningBadge();
+  }
+
+  /** 0 1 2 3 4 # $ in tuning mode: the alterations, on the selected slices or every note */
+  function alterKey(ch: string): boolean {
+    const view = state.tuningView!;
+    const t = editable(soundingTuning(state.bloom));
+    const comma = view.comma(), name = commaOf(comma).name;
+    const picked = view.picked();
+    const degs = picked.length ? picked : Array.from({ length: 12 }, (_, i) => i);
+    const which = picked.length ? picked.map(d => spell((soundingRoot(state.bloom) + d) % 12)).join(' ') : 'every note';
+    let next: Tuning, msg: string;
+    switch (ch) {
+      case '1': case '2': {
+        const dir = ch === '2' ? 1 : -1;
+        next = rotateAlterations(t, dir);
+        msg = `alterations rotated ${dir > 0 ? 'up' : 'down'} a semitone`;
+        break;
+      }
+      case '0':
+        next = clearAlterations(t, degs);
+        msg = `${which}: alterations cleared`;
+        break;
+      case '3': case '4':
+        next = stepAlterations(t, degs, comma, ch === '4' ? 1 : -1);
+        msg = `${which} ${ch === '4' ? '+' : '−'} ${name}`;
+        break;
+      case '#': case '$': {
+        next = breezeAlterations(t, degs, comma, ch === '$' ? 1 : -1);
+        const before = alterationsOf(t), after = alterationsOf(next);
+        const moved = after.map((a, d) => alterText(a) !== alterText(before[d]) ? d : -1).filter(d => d >= 0);
+        msg = `breeze: ${moved.map(d => spell((soundingRoot(state.bloom) + d) % 12)).join(' ')} ${ch === '$' ? '+' : '−'} ${name}`;
+        break;
+      }
+      default: return false;
+    }
+    commitTuning(next, msg);
+    return true;
   }
 
   /** opt-t: hold the sounding tuning over every bloom, or give each bloom its own back */
@@ -687,19 +742,25 @@ export function createKeyHandler(state: KeyHandlerState) {
     const ch = e.key;
     if (e.altKey) return false;   // opt-t holds; views, push / pop as at home
     const helpOpen = document.getElementById('help-full')?.style.display === 'block';
-    if ((ch === 'T') || (e.code === 'Escape' && !e.shiftKey
-      && !helpOpen && !document.body.classList.contains('clean'))) {
+    const leaving = e.code === 'Escape' && !e.shiftKey && !helpOpen && !document.body.classList.contains('clean');
+    if (leaving && state.tuningView?.picked().length) {   // esc first lets go of the selected slices
+      state.tuningView.clearPick();
+      status('slices unselected');
+      return true;
+    }
+    if (ch === 'T' || leaving) {
       state.tuningView?.close();
       status('tuning mode off');
       return true;
     }
     if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
+    if ('01234#$'.includes(ch) && alterKey(ch)) return true;
     // the list mode keys switch straight across, as they do between list modes
     if (own(MODE_KEYS, ch)) { state.tuningView?.close(); return false; }
     // playback, garden, display and help pass through, as in the list modes
     if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ step through tunings · click a slice to edit · opt-t holds · p t v c 5 switch · T or esc leaves');
+    status('tuning mode: ] [ base · 1 2 rotate · 3 4 comma · # $ breeze · 0 clear · click slices · opt-t holds · T or esc leaves');
     return true;
   }
 
