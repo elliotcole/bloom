@@ -83,7 +83,8 @@ export class TuningEditor {
         const iv = intervalBetween(t, a, bb);
         sel += `<div class="te-row"><span>${this.name(a)} → ${this.name(bb)}: ${readable(iv.ratio) ? `<b>${iv.ratio}</b> · ` : ''}${cents(iv.cents)}</span>
           <input id="te-iv" class="te-inp" placeholder="3/2" title="the interval, as a ratio or cents; moves ${this.name(bb)}">
-          <button data-act="interval">set interval</button></div>`;
+          <button data-act="interval">set interval</button>
+          <button data-act="ivcomma" title="${this.name(bb)} exactly one ${COMMAS[this._comma].name} above ${this.name(a)}">= one comma</button></div>`;
       }
     }
 
@@ -174,6 +175,7 @@ export class TuningEditor {
       this._comma = Number((e.target as HTMLSelectElement).value);
       try { localStorage.setItem(COMMA_KEY, COMMAS[this._comma].name); } catch { /* fine */ }
       (e.target as HTMLElement).blur();
+      this.update();   // the "= one comma" button names it
     });
     this._el.querySelector('#te-root')?.addEventListener('change', (e) => {
       const v = (e.target as HTMLSelectElement).value;
@@ -213,6 +215,13 @@ export class TuningEditor {
       case 'interval':
         if (a !== null && b !== null && val('te-iv')) result(setInterval(t, a, b, val('te-iv')), `${this.name(a)} → ${this.name(b)} = ${val('te-iv')}`);
         break;
+      case 'ivcomma': {
+        if (a === null || b === null) return;
+        const c = COMMAS[this._comma];
+        result(setInterval(t, a, b, `${c.ratio.n}/${c.ratio.d}`), `${this.name(b)} one ${c.name} above ${this.name(a)}`);
+        this.host.audition(60 + this.root + b);
+        break;
+      }
       case 'paste': {
         const r = fromList(val('te-paste'), t.edited ? t.name : `${t.name} (pasted)`);
         if (typeof r !== 'string') { r.root = t.root; r.edited = true; }

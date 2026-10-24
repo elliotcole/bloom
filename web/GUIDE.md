@@ -145,7 +145,9 @@ with the reason. The library stays in this browser.
     move back cancels the last one. **set** puts it at a ratio (`7/4`) or
     cents (`968.8`).
   - **Shift-click a second note** to see the interval between them, and set
-    it to a ratio or cents (the second note moves).
+    it to a ratio or cents (the second note moves). **= one comma** makes it
+    exactly the chosen comma: click Eb, shift-click E, and E sits one
+    syntonic comma above Eb.
   - **Root:** follows the key, or one chosen by hand.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
     period, or a whole .scl file.
