@@ -136,11 +136,13 @@ with the reason. The library stays in this browser.
   chooses whether its root follows each bloom's key or stays where it is, and
   **keep in this bloom** makes it this bloom's own. A hold never outlasts the
   session.
-- **The root follows the key.** Degree 0 of the file sits on the key the scale
-  implies, as a key signature names it: C major, A minor and C pentatonic all
-  put it on C, and `]` (one more sharp) moves it to G. A set too spread to
-  imply a key (whole tone, chromatic) keeps the last root. The root keeps its
-  12-TET pitch; the other notes are tuned from it.
+- **The root follows the key.** A bloom has a key only when a scale is
+  attached (`k` and the other scale keys attach one); degree 0 of the file
+  then sits on that key, as a key signature names it: C major, A minor and C
+  pentatonic all put it on C, and `]` (one more sharp) moves it to G. A bloom
+  with no scale attached is twelve-note chromatic, and puts the root on C; so
+  does a scale that implies no key (whole tone). The root keeps its 12-TET
+  pitch; the other notes are tuned from it.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.

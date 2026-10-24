@@ -3,7 +3,7 @@
 // library of tunings loaded from .scl files.
 
 import type { Bloom } from '../core/Bloom';
-import { EQUAL, freqTable, keyRootOf, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
+import { EQUAL, freqTable, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
 import type { Tuning } from '../lib/tuning';
 import { setPianoTuning } from './synth';
 
@@ -104,10 +104,7 @@ export function soundingRoot(bloom: Bloom): number {
   if (!_held) return bloom.tuningRoot;
   const t = _held.tuning;
   if (t?.root !== undefined && t.root !== null) return t.root;   // chosen by hand
-  if (_holdRoot === 'key') {
-    const r = keyRootOf(bloom.scale.degrees);
-    if (r !== null) _held.root = r;   // a set that implies no key keeps the last root
-  }
+  if (_holdRoot === 'key') _held.root = bloom.keyTuningRoot();
   return _held.root;
 }
 /** The held tuning as a bloom's own (for a new bloom, or to keep it): a root that stays goes with it */

@@ -1275,11 +1275,20 @@ export class Bloom {
 
   // ─── Scale / Diatonicism ───────────────────────────────────────────────────
 
-  /** Move the tuning's root to the key the scale implies (kept when it implies none), unless it was chosen by hand */
+  /**
+   * Where a tuning's root sits in this bloom: the key of its attached scale (k
+   * and the scale keys attach one), as a key signature names it. A bloom with
+   * no scale attached is twelve-note chromatic, and so is a scale that implies
+   * no key (whole tone): both put the root on C.
+   */
+  keyTuningRoot(): number {
+    return this.appliedScale ? keyRootOf(this.appliedScale.degrees) ?? 0 : 0;
+  }
+
+  /** Move the tuning's root to the bloom's key, unless it was chosen by hand */
   followTuningRoot(): this {
     if (this.tuning?.root !== undefined && this.tuning.root !== null) { this.tuningRoot = this.tuning.root; return this; }
-    const r = keyRootOf(this.scale.degrees);
-    if (r !== null) this.tuningRoot = r;
+    this.tuningRoot = this.keyTuningRoot();
     return this;
   }
 
