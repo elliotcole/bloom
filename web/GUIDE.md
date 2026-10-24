@@ -360,7 +360,9 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   leaves. For a whole-screen picture, also make the browser full screen
   (ctrl-cmd-F).
 - **Performance (for video): ⚙ settings → performance.** Set once; they're
-  remembered.
+  remembered. While the settings panel is open, the frame and size show on
+  the picture as you set them (unless lanes are on); **clean view** there
+  enters clean view with them.
   - **Frame:** 16:9, 1:1, 4:5 or 9:16. In clean view the picture fits that
     frame, centred, with the outside shaded; the status says its size in
     pixels, for setting up a screen recording's crop.

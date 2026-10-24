@@ -2083,6 +2083,11 @@ export class BloomVisualization {
   get showLanes(): boolean { return this._showLanes; }
   /** Clean: the picture alone, no strips or overlays (for recording) */
   setClean(on: boolean): void { this._clean = on; }
+  /** Show the performance frame and size outside clean view too (while the settings panel is open) */
+  setFramePreview(on: boolean): void { this._framePreview = on; }
+  private _framePreview = false;
+  /** Frame and size apply in clean view, and as a preview while they're being set */
+  private get _framed(): boolean { return this._clean || (this._framePreview && !this._showLanes); }
 
   /** Step through the performance frames: off, 16:9, 1:1, 4:5, 9:16 */
   cycleFrame(): FrameAspect {
@@ -2110,7 +2115,7 @@ export class BloomVisualization {
   getDrift(): boolean { return this._drift; }
 
   /** The rectangle the picture is drawn in: the frame in clean view, else the whole canvas */
-  private _frameRect(W: number, H: number, framed = this._clean): { x: number; y: number; w: number; h: number } {
+  private _frameRect(W: number, H: number, framed = this._framed): { x: number; y: number; w: number; h: number } {
     const ratio = FRAME_RATIO[this._frame];
     if (!framed || !ratio) return { x: 0, y: 0, w: W, h: H };
     const w = Math.min(W, H * ratio), h = w / ratio;
@@ -2291,11 +2296,11 @@ export class BloomVisualization {
     this._driftT += dt * this._driftSpeed;
     const camera = this._drift || this._driftT ? driftCamera(this._camera, this._driftT) : this._camera;
 
-    // In clean view: the frame, and the picture's overall size within it
+    // In clean view (or previewing it): the frame, and the picture's overall size within it
     const frame = this._frameRect(canvasW, fullH);
     const W = frame.w;
     const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : frame.h;
-    const zoom = this._clean ? this._size : 1;
+    const zoom = this._framed ? this._size : 1;
 
     const bloom = this.bloom;
 

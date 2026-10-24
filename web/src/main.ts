@@ -291,7 +291,7 @@ async function main() {
     },
   };
 
-  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle } = createKeyHandler(keyState);
+  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean } = createKeyHandler(keyState);
   // blur after a click so a later space plays rather than pressing the button again
   document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
@@ -299,7 +299,7 @@ async function main() {
   viz.onNodeClick = togglePin;
   viz.onSelect = select;
 
-  // ─── Performance: frame, size and drift (keys: opt-f, opt-- / opt-=, opt-a) ──
+  // ─── Performance: frame, size and drift; previewed while the settings panel is open ──
   const perfFrame = document.getElementById('perf-frame') as HTMLSelectElement | null;
   const perfSize = document.getElementById('perf-size') as HTMLInputElement | null;
   const perfSizeVal = document.getElementById('perf-size-val');
@@ -311,7 +311,7 @@ async function main() {
   perfFrame?.addEventListener('change', () => {
     viz.setFrame(perfFrame.value as FrameAspect);
     perfFrame.blur();
-    display.setStatus(perfFrame.value === 'off' ? 'frame off' : `frame ${perfFrame.value}: ${viz.frameSize()} px in clean view (opt-c)`);
+    display.setStatus(perfFrame.value === 'off' ? 'frame off' : `frame ${perfFrame.value}: ${viz.frameSize()} px in clean view`);
   });
   perfSize?.addEventListener('input', () => {
     const size = viz.setSize(Number(perfSize.value));
@@ -319,6 +319,11 @@ async function main() {
   });
   perfSize?.addEventListener('change', () => perfSize.blur());
   perfDrift?.addEventListener('change', () => { viz.setDrift(perfDrift.checked); perfDrift.blur(); });
+  document.getElementById('perf-clean')?.addEventListener('click', (e) => {
+    (e.currentTarget as HTMLElement).blur();
+    setClean(true);
+    display.setStatus('clean view — esc leaves');
+  });
 
   // ─── Tuning: a library of .scl files; each bloom picks one ──────────────────
   const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;
@@ -457,6 +462,7 @@ async function main() {
   const settingsBar = document.getElementById('settings-bar') as HTMLElement;
   settingsToggleBtn?.addEventListener('click', () => {
     const visible = settingsBar.classList.toggle('visible');
+    viz.setFramePreview(visible);
     settingsToggleBtn.classList.toggle('active', visible);
   });
 

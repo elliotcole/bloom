@@ -790,7 +790,8 @@
 
         <span class="s-section">
           <span class="s-section-label">performance</span>
-          <label title="the frame a recording is cropped to; shown in clean view (opt-c), outside shaded">frame
+          <button class="s-btn" id="perf-clean" title="the picture alone, framed and sized as set here, for recording (opt-c; esc leaves)">clean view</button>
+          <label title="the frame a recording is cropped to, outside shaded; previewed while this panel is open, used in clean view">frame
             <select id="perf-frame">
               <option value="off">off</option>
               <option value="16:9">16:9</option>
@@ -799,7 +800,7 @@
               <option value="9:16">9:16</option>
             </select>
           </label>
-          <label title="the picture's overall size in clean view">size
+          <label title="the picture's overall size; previewed while this panel is open, used in clean view">size
             <input type="range" id="perf-size" min="0.3" max="2.5" step="0.01" value="1">
             <span id="perf-size-val" class="s-note">×1.00</span>
           </label>

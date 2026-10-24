@@ -1417,5 +1417,5 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy };
+  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean };
 }
