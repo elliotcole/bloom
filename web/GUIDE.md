@@ -65,7 +65,7 @@ These move each note together with its time, velocity, channel and interval.
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
 | `d` | braid | `D` | pyramid |
-| `r` | ratchet | `Y` | spray |
+| `r` | ratchet: a long note repeats 2 or 3 times in its own time | `Y` | spray |
 | `h` | thin | `H` | thicken |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |

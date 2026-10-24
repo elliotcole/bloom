@@ -852,27 +852,26 @@ export class Bloom {
   }
 
   ratchet(repetitions?: number, index?: number): this {
-    const sorted = [...this.timeIntervals].sort((a, b) => b - a);
-    const idx = index ?? this.timeIntervals.indexOf(sorted[0]);
-    const reps = repetitions ?? (Math.random() < 0.5 ? 2 : 3);
-
-    const note = wrapAt(this.notes, idx) as NoteVal;
-    const vel = wrapAt(this.velocities, idx);
-    const time = wrapAt(this.timeIntervals, idx);
-    const chan = wrapAt(this.chans, idx);
-
-    this.remove(idx);
-
-    for (let r = 0; r < reps; r++) {
-      if (time > 0) {
-        this.notes.splice(idx + r, 0, note);
-        this.velocities.splice(idx + r, 0, vel);
-        this.timeIntervals.splice(idx + r, 0, time / reps);
-        this.chans.splice(idx + r, 0, chan);
-      }
+    // one of the long notes (at least half the longest, likelier the longer)
+    // repeats two or three times in its own time
+    const evs = this.events();
+    if (evs.length === 0) return this;
+    const longest = Math.max(...evs.map(e => e.time));
+    let i = index;
+    if (i === undefined) {
+      const weights = evs.map(e => (e.time >= longest / 2 && e.time / 2 >= MIN_TIME ? e.time * e.time : 0));
+      if (weights.every(w => w === 0)) return this;
+      i = weightedIndex(weights);
     }
+    const ev = evs[i];
+    if (!ev || ev.time <= 0) return this;
+    const reps = repetitions ?? (ev.time / 3 >= MIN_TIME && coin(0.5) ? 3 : 2);
+    const part = roundTime(ev.time / reps);
+    evs.splice(i, 1, ...Array.from({ length: reps }, () => ({ ...ev, time: part })));
+    this.setEvents(evs);
     return this;
   }
+
 
   /** Snap times to a 1/grid grid. A duration never rounds down to 0 (that would stack notes on one instant): it gets one grid step. */
   quantize(grid = 4, margin = 0, strength = 1): this {
