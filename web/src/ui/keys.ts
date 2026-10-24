@@ -314,7 +314,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.code === 'Backslash') return false;
     if (!e.altKey && own(MODE_KEYS, e.key)) return false;
     if (e.altKey && (e.code.startsWith('Digit')
-      || ['KeyC', 'KeyE', 'KeyP', 'KeyX'].includes(e.code))) return false;
+      || ['KeyC', 'KeyE', 'KeyP'].includes(e.code))) return false;
     return true;
   }
 
@@ -529,7 +529,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (e.altKey) return false;   // all other opt combos keep their home meaning
 
-    if (e.code === 'Escape') {
+    if (e.code === 'Escape' && !e.shiftKey) {
       setListMode(null);
       status(`${MODE_NAME[m]} mode off`);
       return true;
@@ -537,8 +537,8 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'b', 'B']);
     if (PASS.has(ch)) return false;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) {
-      return false;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) {
+      return false;   // shift-esc (esc itself left the mode above) inverts at home
     }
 
     const apply = (msg: string, fn: () => void) => {
@@ -682,17 +682,6 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (alt && !shift && e.code === 'KeyC') {
       e.preventDefault();
       setClean(!document.body.classList.contains('clean'));
-      return;
-    }
-
-    // ─── Pins: opt-x unpins every event, opt-shift-x swaps pinned and free ───
-    if (alt && e.code === 'KeyX') {
-      e.preventDefault();
-      if (shift) invertPins(); else {
-        const n = _pinned.size;
-        clearPins();
-        status(n ? `${n} event${n === 1 ? '' : 's'} unpinned` : 'no pins');
-      }
       return;
     }
 
@@ -1354,8 +1343,22 @@ export function createKeyHandler(state: KeyHandlerState) {
       setClean(false);
       return;
     }
-    if (e.code === 'Escape' && _selection.length) {
-      clearSelection();
+    // esc clears what's marked, shift-esc inverts it: the selection if there
+    // is one, otherwise the pins (the help, when open, closes first)
+    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
+    if (e.code === 'Escape' && !helpOpen && (_selection.length || _pinned.size || shift)) {
+      if (_selection.length) {
+        if (shift) {
+          const n = state.bloom.notes.length;
+          const sel = new Set(_selection);
+          select(Array.from({ length: n }, (_, i) => i).filter(i => !sel.has(i)));
+        } else clearSelection();
+      } else if (shift) invertPins();
+      else {
+        const n = _pinned.size;
+        clearPins();
+        status(`${n} event${n === 1 ? '' : 's'} unpinned`);
+      }
       return;
     }
     if (e.code === 'Escape') {

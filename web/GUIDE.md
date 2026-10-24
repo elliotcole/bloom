@@ -283,10 +283,10 @@ what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …
 
 Click a node to **pin** its event; click again to unpin. A pinned event keeps
 its pitch, time, velocity, channel and interval whatever you press next, and a
-dashed ring marks it. The header shows how many, e.g. `❄ e2`. **opt-`x`**
-unpins them all (so does `F e`); **opt-shift-`x`** inverts them, pinning
-every free event and freeing every pinned one. Works in every view except tonal and set, which draw pitch classes rather
-than events.
+dashed ring marks it. The header shows how many, e.g. `❄ e2`. **`esc`**
+unpins them all (so does `F e`); **shift-`esc`** inverts them, pinning every
+free event and freeing every pinned one. Works in every view except tonal and
+set, which draw pitch classes rather than events.
 
 - **Reorderings flow around pins.** Sorting, inverting or rotating rearranges
   the other events in the spaces between the pinned ones.
@@ -307,7 +307,9 @@ sort sorts just those events, tilt ramps across them, `a` adds a note among
 them, `n` regenerates only that stretch. The rest stay as they were. Selected
 nodes sit on a soft disc and the header shows `▣ 4`.
 
-- **`esc` or a click on empty space clears** the selection.
+- **`esc` or a click on empty space clears** the selection; **shift-`esc`
+  inverts** it. With a selection, esc and shift-esc act on it; without one,
+  on the pins. (Esc first leaves a list mode, clean view or the help.)
 - **Playing, the garden, views and modes** still see the whole bloom.
 - **Pins still hold** inside a selection.
 - The command palette and the editor work on the whole bloom.

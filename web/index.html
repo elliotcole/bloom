@@ -613,7 +613,7 @@
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key — b / B step through the loaded tunings"></span>
-      <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears"></span>
+      <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
       <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
       <button id="load-garden" class="hdr-btn" title="load a .bloom file (cmd-o)">load</button>
@@ -883,9 +883,10 @@ pitch mode has every pitch key from home</div>
 <b>e</b>    unpin all events
 menu stays open; F or esc closes
 click a node: pin / unpin its event
-<b>opt-x</b> unpin all  <b>opt-X</b> invert pins
+<b>esc</b>  unpin all  <b>shift-esc</b> invert
 drag a box: select events — keys
-  change only those; esc clears
+  change only those; esc clears,
+  shift-esc inverts (selection first)
   (deep turns: scroll or opt-drag)</div>
           </div>
           <div class="hf-sec">
