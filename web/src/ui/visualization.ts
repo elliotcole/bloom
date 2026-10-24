@@ -19,6 +19,27 @@ export interface CameraParams {
 }
 export const DEFAULT_CAMERA: CameraParams = { azimuth: 0, elevation: 0 };
 
+/** Performance frames: aspect ratios a recording is cropped to */
+export type FrameAspect = 'off' | '16:9' | '1:1' | '4:5' | '9:16';
+const FRAMES: FrameAspect[] = ['off', '16:9', '1:1', '4:5', '9:16'];
+const FRAME_RATIO: Record<FrameAspect, number> = { off: 0, '16:9': 16 / 9, '1:1': 1, '4:5': 4 / 5, '9:16': 9 / 16 };
+
+/** The camera after t seconds of drift: two slow sweeps whose periods don't line
+ *  up, so the path keeps changing (about ±60° round, ±20° up and down) */
+function driftCamera(c: CameraParams, t: number): CameraParams {
+  const az = 1.05 * Math.sin((2 * Math.PI * t) / 53) + 0.35 * Math.sin((2 * Math.PI * t) / 23 + 0.7);
+  const el = 0.34 * Math.sin((2 * Math.PI * t) / 37 + 1.3);
+  const lim = Math.PI / 2 - 0.05;
+  return { azimuth: c.azimuth + az, elevation: Math.max(-lim, Math.min(lim, c.elevation + el)) };
+}
+
+function loadPref(key: string, fallback: string): string {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function savePref(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* private window */ }
+}
+
 // ─── Node hits ─────────────────────────────────────────────────────────────────
 // While the main view draws, each node notes where it went, so a click can
 // find its event. Garden thumbnails use the same draw functions with this off.
@@ -1965,6 +1986,19 @@ export class BloomVisualization {
 
   // 3D camera state (deep and spiral modes)
   private _camera: CameraParams = { azimuth: 0, elevation: 0 };
+  // Drift: while notes play, deep and spiral sweep slowly through broad arcs.
+  // Its own clock runs only while playing (easing in and out), so the view
+  // never jumps; a drag still turns it on top.
+  private _drift = loadPref('bloom.drift', '1') === '1';
+  private _driftT = 0;
+  private _driftSpeed = 0;
+  private _lastNoteAt = 0;
+  private _lastFrameAt = 0;
+
+  // Performance framing (clean view only): an aspect to fit the picture in,
+  // with the outside shaded, and an overall size
+  private _frame: FrameAspect = (loadPref('bloom.frame', 'off') as FrameAspect);
+  private _size = Number(loadPref('bloom.size', '1')) || 1;
   private _dragActive = false;
   private _dragLastX = 0;
   private _dragLastY = 0;
@@ -2029,6 +2063,7 @@ export class BloomVisualization {
 
   resetCamera(): void {
     this._camera = { azimuth: 0, elevation: 0 };
+    this._driftT = 0;
   }
 
   setTheme(id: ThemeId): void {
@@ -2049,6 +2084,39 @@ export class BloomVisualization {
   /** Clean: the picture alone, no strips or overlays (for recording) */
   setClean(on: boolean): void { this._clean = on; }
 
+  /** Step through the performance frames: off, 16:9, 1:1, 4:5, 9:16 */
+  cycleFrame(): FrameAspect {
+    const i = FRAMES.indexOf(this._frame);
+    this._frame = FRAMES[(i + 1) % FRAMES.length];
+    savePref('bloom.frame', this._frame);
+    return this._frame;
+  }
+  setFrame(f: FrameAspect): void { this._frame = f; savePref('bloom.frame', f); }
+  getFrame(): FrameAspect { return this._frame; }
+  /** The frame's size on screen in CSS pixels, for setting up a recording */
+  frameSize(): string {
+    const dpr = window.devicePixelRatio || 1;
+    const r = this._frameRect(this.canvas.width / dpr, this.canvas.height / dpr, true);
+    return `${Math.round(r.w)}×${Math.round(r.h)}`;
+  }
+  /** Overall size of the picture in clean view, ×0.3 to ×2.5 */
+  setSize(size: number): number {
+    this._size = Math.max(0.3, Math.min(2.5, Math.round(size * 100) / 100));
+    savePref('bloom.size', String(this._size));
+    return this._size;
+  }
+  getSize(): number { return this._size; }
+  setDrift(on: boolean): void { this._drift = on; savePref('bloom.drift', on ? '1' : '0'); }
+  getDrift(): boolean { return this._drift; }
+
+  /** The rectangle the picture is drawn in: the frame in clean view, else the whole canvas */
+  private _frameRect(W: number, H: number, framed = this._clean): { x: number; y: number; w: number; h: number } {
+    const ratio = FRAME_RATIO[this._frame];
+    if (!framed || !ratio) return { x: 0, y: 0, w: W, h: H };
+    const w = Math.min(W, H * ratio), h = w / ratio;
+    return { x: (W - w) / 2, y: (H - h) / 2, w, h };
+  }
+
   getMode(): VizMode { return this._mode; }
   getTheme(): ThemeId { return this._theme.id; }
 
@@ -2060,6 +2128,7 @@ export class BloomVisualization {
     this.petalFlash[index] = 1.0;
     this.playheadIndex = index;
     this._beadActivatedAt = performance.now();
+    this._lastNoteAt = this._beadActivatedAt;
 
     // orbit: flash driven by petalFlash; rotation is autonomous (no playhead jump)
   }
@@ -2195,14 +2264,28 @@ export class BloomVisualization {
     const canvas = this.canvas;
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
-    const W = canvas.width / dpr;
+    const canvasW = canvas.width / dpr;
     const fullH = canvas.height / dpr;
     const lanesOn = this._showLanes && !this._clean;
-    const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : fullH;
     const theme = this._theme;
 
     ctx.save();
     ctx.scale(dpr, dpr);
+
+    // Drift's clock: runs while notes are sounding, easing to a stop after
+    const now = performance.now();
+    const dt = this._lastFrameAt ? Math.min(0.1, (now - this._lastFrameAt) / 1000) : 0;
+    this._lastFrameAt = now;
+    const sounding = now - this._lastNoteAt < 1500;
+    this._driftSpeed += ((this._drift && sounding ? 1 : 0) - this._driftSpeed) * Math.min(1, dt * 0.7);
+    this._driftT += dt * this._driftSpeed;
+    const camera = this._drift || this._driftT ? driftCamera(this._camera, this._driftT) : this._camera;
+
+    // In clean view: the frame, and the picture's overall size within it
+    const frame = this._frameRect(canvasW, fullH);
+    const W = frame.w;
+    const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : frame.h;
+    const zoom = this._clean ? this._size : 1;
 
     const bloom = this.bloom;
 
@@ -2217,13 +2300,13 @@ export class BloomVisualization {
     }
 
     // Standard clear + background
-    ctx.clearRect(0, 0, W, fullH);
+    ctx.clearRect(0, 0, canvasW, fullH);
     ctx.fillStyle = theme.bg;
-    ctx.fillRect(0, 0, W, fullH);
+    ctx.fillRect(0, 0, canvasW, fullH);
 
     if (!bloom || bloom.notes.length === 0) {
       this._lastHits = [];
-      this._drawEmpty(ctx, W / 2, H / 2, theme);
+      this._drawEmpty(ctx, frame.x + W / 2, frame.y + H / 2, theme);
       ctx.restore();
       return;
     }
@@ -2231,6 +2314,18 @@ export class BloomVisualization {
     const cx = W / 2;
     const cy = H / 2;
     const minDim = Math.min(W, H);
+
+    // draw in the frame's coordinates, scaled about its centre
+    ctx.save();
+    ctx.translate(frame.x, frame.y);
+    if (frame.w !== canvasW || frame.h !== fullH) {
+      ctx.beginPath();
+      ctx.rect(0, 0, frame.w, frame.h);
+      ctx.clip();
+    }
+    ctx.translate(cx, cy);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-cx, -cy);
 
     _hits = [];
     switch (this._mode) {
@@ -2247,7 +2342,7 @@ export class BloomVisualization {
         break;
 
       case 'spiral':
-        drawSpiralAt(ctx, cx, cy, minDim * 0.44, bloom, this.petalFlash, theme, this._showNoteLabels, this._camera);
+        drawSpiralAt(ctx, cx, cy, minDim * 0.44, bloom, this.petalFlash, theme, this._showNoteLabels, camera);
         break;
 
       case 'set':
@@ -2284,7 +2379,7 @@ export class BloomVisualization {
           beadProgress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
         }
         drawDeepAt(ctx, (W - unitW) / 2, (H - unitH) / 2, unitW, unitH,
-          bloom, this.petalFlash, this.playheadIndex, beadProgress, theme, this._showAxis, this._showNoteLabels, this._camera);
+          bloom, this.petalFlash, this.playheadIndex, beadProgress, theme, this._showAxis, this._showNoteLabels, camera);
         break;
       }
 
@@ -2296,6 +2391,13 @@ export class BloomVisualization {
     _hits = null;
     this._drawSelected(ctx, theme);
     this._drawPins(ctx, theme);
+    ctx.restore();
+    // hits were found in the frame's coordinates; clicks come in the canvas's
+    this._lastHits = this._lastHits.map(h => ({
+      i: h.i, x: frame.x + cx + (h.x - cx) * zoom, y: frame.y + cy + (h.y - cy) * zoom, r: h.r * zoom,
+    }));
+    this._drawBox(ctx, theme);
+    if (frame.w !== canvasW || frame.h !== fullH) this._shadeOutside(ctx, frame, canvasW, fullH, theme);
 
     if (lanesOn) {
       let progress = 0;
@@ -2327,6 +2429,12 @@ export class BloomVisualization {
         ctx.stroke();
       }
     }
+    ctx.restore();
+  }
+
+  /** The selection box being dragged, in canvas coordinates */
+  private _drawBox(ctx: CanvasRenderingContext2D, theme: Theme): void {
+    ctx.save();
     const b = this._box;
     if (b && Math.hypot(b.x1 - b.x0, b.y1 - b.y0) > 4) {
       ctx.fillStyle = withAlpha(theme.text, 0.06);
@@ -2338,6 +2446,21 @@ export class BloomVisualization {
       ctx.fillRect(x, y, w, hgt);
       ctx.strokeRect(x + 0.5, y + 0.5, w, hgt);
     }
+    ctx.restore();
+  }
+
+  /** Shade what lies outside the performance frame, so the crop is plain to see */
+  private _shadeOutside(ctx: CanvasRenderingContext2D, f: { x: number; y: number; w: number; h: number },
+    W: number, H: number, theme: Theme): void {
+    ctx.save();
+    ctx.fillStyle = withAlpha(theme.text, 0.07);
+    ctx.fillRect(0, 0, W, f.y);
+    ctx.fillRect(0, f.y + f.h, W, H - f.y - f.h);
+    ctx.fillRect(0, f.y, f.x, f.h);
+    ctx.fillRect(f.x + f.w, f.y, W - f.x - f.w, f.h);
+    ctx.strokeStyle = withAlpha(theme.text, 0.25);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(f.x - 1.5, f.y - 1.5, f.w + 3, f.h + 3);
     ctx.restore();
   }
 

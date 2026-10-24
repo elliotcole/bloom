@@ -738,6 +738,26 @@
         </span>
 
         <span class="s-section">
+          <span class="s-section-label">performance</span>
+          <label title="the frame a recording is cropped to; shown in clean view (opt-c), outside shaded — opt-f steps through">frame
+            <select id="perf-frame">
+              <option value="off">off</option>
+              <option value="16:9">16:9</option>
+              <option value="1:1">1:1</option>
+              <option value="4:5">4:5</option>
+              <option value="9:16">9:16</option>
+            </select>
+          </label>
+          <label title="the picture's overall size in clean view — opt-- / opt-= , opt-0 back to ×1">size
+            <input type="range" id="perf-size" min="0.3" max="2.5" step="0.01" value="1">
+            <span id="perf-size-val" class="s-note">×1.00</span>
+          </label>
+          <label title="deep and spiral sweep slowly through broad arcs while notes play — opt-a">drift
+            <input type="checkbox" id="perf-drift">
+          </label>
+        </span>
+
+        <span class="s-section">
           <span class="s-section-label">tuning</span>
           <select id="tuning-select" title="this bloom's tuning (b / B step through them)"></select>
           <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
@@ -940,6 +960,9 @@ playback &amp; garden keys unchanged</div>
 <b>|</b>        note labels
 <b>opt-\</b>    lanes (each list, own cursor)
 <b>opt-c</b>    clean view (esc leaves)
+<b>opt-f</b>    frame 16:9 1:1 4:5 9:16 (clean view)
+<b>opt- opt=</b> size (opt-0 back)
+<b>opt-a</b>    drift: deep sweeps while playing
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>

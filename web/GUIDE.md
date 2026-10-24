@@ -327,6 +327,17 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   or cursor. Made for recording video. Keys still work. `esc` or opt-`c`
   leaves. For a whole-screen picture, also make the browser full screen
   (ctrl-cmd-F).
+- **Performance (for video):**
+  - **Frame: opt-`f`** steps through 16:9, 1:1, 4:5 and 9:16. In clean view
+    the picture fits that frame, centred, with the outside shaded; the status
+    says its size in pixels, for setting up a screen recording's crop.
+  - **Size: opt-`-` / opt-`=`**, opt-`0` back to ×1: the picture's overall
+    size in clean view.
+  - **Drift: opt-`a`.** While notes play, deep and spiral sweep slowly through
+    broad arcs (about ±60° round, ±20° up and down, never quite repeating),
+    easing to a stop when the music stops. Dragging still turns the view on
+    top; reset view also resets the drift.
+  - The same controls are in ⚙ settings → performance, and are remembered.
 - **Views:** opt-`1`…`9`. The `\` key holds the display toggles: `\`
   console, `|` note labels, opt-`\` lanes.
 
