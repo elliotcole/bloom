@@ -305,7 +305,8 @@ list drifts through the notes in the loop): `0` is no figure.
   every `@3` changes. An empty slot plays the note as it is.
 
 `0 0 (1 2 3) 0 @3` on the notes: the third plays do re mi, the fifth plays
-slot 3. `b` opens a line holding the figures; `↵` sets them, shift-`↵` loops
+slot 3. `b` opens a line holding the figures (a `0` for each note when there are none;
+`←` `→` step through them an entry at a time); `↵` sets them, shift-`↵` loops
 what you typed to the notes' length, `esc` leaves them. `B` clears them. `*`
 bakes the subdividing figures into the notes (with the intervals); those
 from the garden stay as figures. Figures live at home only, as they change
@@ -410,7 +411,9 @@ pulsar, like any list of another length.
 *Typing it.* In any list mode `↵` opens a line with that list as text; type
 over it and `↵` again sets it, or **shift-`↵`** to loop what you typed round
 until the list is as long as the notes (`1 2 3` on 7 notes sets `1 2 3 1 2 3
-1`; so it lines up with the notes instead of drifting). `esc` leaves it. For intervals that's where
+1`; so it lines up with the notes instead of drifting). `esc` leaves it.
+`←` `→` select one whole entry at a time (a chord in brackets, a figure in
+parentheses), so you can step to the one you want and type over just it. For intervals that's where
 `-P5/10` goes. The console, the lanes and the notice all write the intervals
 this way too.
 
