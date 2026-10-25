@@ -1085,6 +1085,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     // } asks how many slices, then splits a note (one it chooses) into that many repeats
     if (ch === '}' && state.typeList) {
+      e.preventDefault();   // the line takes focus now: the } mustn't land in it
       state.typeList('split a note into:', String(_splitSlices), text => {
         const n = Number(text.trim());
         if (!Number.isInteger(n) || n < 2 || n > 16) return 'a whole number of slices, 2 to 16';
@@ -1374,6 +1375,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (!alt && ch === 'b' && state.typeList) {
+      e.preventDefault();   // the line takes focus now: the b mustn't land in it
       // the figures as they are, or a 0 for each note to type over
       const shown = b.hasFigures() ? formatFigures(b.figures) : b.notes.map(() => '0').join(' ');
       state.typeList('figures:', shown, (text, complete) => {
