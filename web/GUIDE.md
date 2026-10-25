@@ -461,6 +461,15 @@ nodes sit on a soft disc and the header shows `▣ 4`.
 
 ## Seeing it
 
+- **The cue line,** under the header, names the few keys that belong to where
+  you are: a mode's own keys (tuning mode, the freeze menu, a list mode), or
+  at home the situations that open keys up, two at most — a selection, pins, a
+  raga changing notes (`* bake what you hear`), intervals, a held tuning, a
+  running pulsar or loop, a loaded garden slot. With nothing special going on
+  it shows `space play · n new · ? all keys`, and every half minute a
+  lesser-known key instead. `?` in tuning mode or the freeze menu shows just
+  that section of the help. ⚙ settings → display → **cues** turns it off; it's
+  hidden in clean view and while the console is open.
 - **Lanes: opt-`\`.** A strip under the view showing the five lists (pitch, time,
   velocity, channels, intervals), each at its own length (×n). The time lane is drawn to
   scale. While playing, each lane has its own cursor, which cycles at that

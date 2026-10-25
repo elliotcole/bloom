@@ -8,6 +8,7 @@ import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
+import type { CueContext } from './cues';
 import {
   playOnce, startLooper, stopLooper, isLooping, updateLooper,
   startPulsar, stopPulsar, isPulsing, updatePulsar,
@@ -329,7 +330,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     _selection = [...new Set(idx)].sort((a, b) => a - b);
     selectionChanged();
     const n = _selection.length;
-    if (n) status(`${n} event${n === 1 ? '' : 's'} selected — keys change only these (esc or a click on empty space clears)`);
+    if (n) status(`${n} event${n === 1 ? '' : 's'} selected`);   // what that means is on the cue line
     else if (had) status('selection cleared');
   }
 
@@ -833,7 +834,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       if (_mode === 'chan' && Bloom.maxChan === 0) {
         status('channel mode — maxChan is 0, raise it in settings to hear channels');
       } else {
-        status(_mode ? `${MODE_NAME[m]} mode (${ch} or esc goes home)` : `${MODE_NAME[m]} mode off`);
+        status(_mode ? `${MODE_NAME[m]} mode` : `${MODE_NAME[m]} mode off`);   // its keys are on the cue line
       }
       return;
     }
@@ -1575,5 +1576,17 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
-  return { onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
+  /** Where the user is, for the cue line */
+  function cueContext(): CueContext {
+    const b = state.bloom;
+    return {
+      mode: _mode, tuning: !!state.tuningView?.isOpen(), freezeMenu: _freezeMenu,
+      selection: _selection.length, pins: _pinned.size,
+      ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), held: isHeld(),
+      pulsing: isPulsing() || isGardenPulsing(), looping: isLooping() || isGardenLooping(),
+      slot: !!state.garden?.current,
+    };
+  }
+
+  return { cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
 }

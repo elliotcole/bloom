@@ -346,6 +346,9 @@
       #hf-list-sec { display: none; }
       body.list-mode #hf-list-sec { display: block; }
       body.list-mode .hf-sec:not(#hf-list-sec) { display: none; }
+      /* in tuning mode and the freeze menu, ? shows their own section */
+      body.help-tuning .hf-sec:not(#hf-tuning-sec) { display: none; }
+      body.help-freeze .hf-sec:not(#hf-freeze-sec) { display: none; }
 
       /* Main canvas area — flex column: viz on top, garden on bottom */
       #canvas-area {
@@ -658,19 +661,21 @@
       body.clean #garden-area, body.clean #console-overlay { display: none !important; }
       body.clean #bloom-canvas { cursor: none !important; }
 
-      /* Welcome hint */
-      #welcome-hint {
+      /* Cue line: the keys that belong to where you are (ui/cues.ts) */
+      #cue-line {
+        flex: 0 0 auto;
         text-align: center;
-        padding: 8px 0;
-        font-size: 13px;
-        color: #556;
-        letter-spacing: 0.08em;
-        transition: opacity 0.6s ease-out;
+        padding: 5px 12px;
+        font-size: 11px;
+        color: #667;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: opacity 0.4s ease-out;
       }
-      #welcome-hint.hidden {
-        opacity: 0;
-        pointer-events: none;
-      }
+      #cue-line.tip { color: #4a4a5c; font-style: italic; }
+      #cue-line.off, body.clean #cue-line { display: none; }
 
     </style>
   </head>
@@ -795,6 +800,9 @@
           <label title="show each key, large, with what it did — for recordings">demo keys
             <input type="checkbox" id="demo-mode">
           </label>
+          <label title="the line under the header: the few keys that belong to where you are (a mode, a selection, a raga changing notes …), or now and then a lesser-known key">cues
+            <input type="checkbox" id="show-cues" checked>
+          </label>
         </span>
 
         <span class="s-section">
@@ -871,9 +879,8 @@
       </div>
     </div>
 
-    <div id="welcome-hint">space to play. n for new. ? for more.</div>
-
     <main id="canvas-area">
+      <div id="cue-line">space play · n new · ? all keys</div>
       <div id="viz-area">
         <canvas id="bloom-canvas"></canvas>
         <div id="console-overlay"></div>
@@ -937,7 +944,7 @@
 <b>W</b>    remove doubles
 <b>opt-w</b> wheels within wheels</div>
           </div>
-          <div class="hf-sec">
+          <div class="hf-sec" id="hf-tuning-sec">
             <div class="hf-h">Diatonicism</div>
             <div class="hf-body"><b>k</b>    choose nearest scale
 <b>K</b>    slant scale  <b>j</b>    lift scale
@@ -967,7 +974,7 @@
 same keys, same verbs, one list
 pitch mode has every pitch key from home</div>
           </div>
-          <div class="hf-sec">
+          <div class="hf-sec" id="hf-freeze-sec">
             <div class="hf-h">Freeze (F, then…)</div>
             <div class="hf-body"><b>p</b>    pitch (scale)
 <b>t r</b>  rhythm (durations)

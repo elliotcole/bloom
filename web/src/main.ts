@@ -25,6 +25,7 @@ import type { FrameAspect } from './ui/visualization';
 import { Display } from './ui/display';
 import type { KeyHandlerState } from './ui/keys';
 import { createKeyHandler } from './ui/keys';
+import { cueFor } from './ui/cues';
 import { setNoticeKey } from './ui/notice';
 import { BloomEditor } from './ui/bloomEditor';
 import { CommandPalette } from './ui/commandPalette';
@@ -250,22 +251,11 @@ async function main() {
   function toggleFullHelp() {
     showFullHelp = !showFullHelp;
     fullHelpEl.style.display = showFullHelp ? 'block' : 'none';
-    if (showFullHelp) dismissWelcomeHint();
   }
   function closeFullHelp() {
     if (showFullHelp) toggleFullHelp();
   }
 
-  // ─── Welcome hint ──────────────────────────────────────────────────────────
-  const welcomeHintEl = document.getElementById('welcome-hint') as HTMLElement;
-  let _hintDismissed = false;
-  function dismissWelcomeHint() {
-    if (_hintDismissed) return;
-    _hintDismissed = true;
-    welcomeHintEl.classList.add('hidden');
-    welcomeHintEl.addEventListener('transitionend', () => welcomeHintEl.remove(), { once: true });
-  }
-  setTimeout(dismissWelcomeHint, 20_000);
 
   const recordDotEl = document.getElementById('record-dot') as HTMLElement;
 
@@ -297,7 +287,30 @@ async function main() {
     },
   };
 
-  const { onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
+  const { cueContext, onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
+
+  // ─── Cue line: the keys that belong to where you are ───────────────────────
+  const cueEl = document.getElementById('cue-line') as HTMLElement;
+  const cueToggle = document.getElementById('show-cues') as HTMLInputElement | null;
+  try { if (cueToggle) cueToggle.checked = localStorage.getItem('bloom.cues') !== '0'; } catch { /* private window */ }
+  cueToggle?.addEventListener('change', () => {
+    try { localStorage.setItem('bloom.cues', cueToggle.checked ? '1' : '0'); } catch { /* best effort */ }
+    cueToggle.blur();
+    updateCue();
+  });
+  function updateCue() {
+    const ctx = cueContext();
+    document.body.classList.toggle('help-tuning', ctx.tuning);   // ? shows the section for where you are
+    document.body.classList.toggle('help-freeze', ctx.freezeMenu);
+    const off = !(cueToggle?.checked ?? true) || !!document.getElementById('console-overlay')?.classList.contains('visible');
+    cueEl.classList.toggle('off', off);
+    if (off) return;
+    const { text, tip } = cueFor(ctx);
+    if (cueEl.textContent !== text) cueEl.textContent = text;
+    cueEl.classList.toggle('tip', tip);
+  }
+  setInterval(updateCue, 250);   // modes, selections and playback all show within a moment
+  updateCue();
   // blur after a click so a later space plays rather than pressing the button again
   document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
