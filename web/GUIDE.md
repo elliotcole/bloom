@@ -109,7 +109,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
-- **Figures:** `b` types them, `B` clears them. See **Figures** below.
+- **Figures:** `b` enters figures mode (`↵` there types them), `B` clears them. See **Figures** below.
 - **Merge and split the garden:** buttons in **garden ▾** (with save and load). **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
@@ -305,19 +305,34 @@ list drifts through the notes in the loop): `0` is no figure.
   every `@3` changes. An empty slot plays the note as it is.
 
 `0 0 (1 2 3) 0 @3` on the notes: the third plays do re mi, the fifth plays
-slot 3. `b` opens a line holding the figures (a `0` for each note when there are none;
-`←` `→` step through them an entry at a time); `↵` sets them, shift-`↵` loops
-what you typed to the notes' length, `esc` leaves them. `B` clears them. `*`
-bakes the subdividing figures into the notes (with the intervals); those
-from the garden stay as figures. Figures live at home only, as they change
-both the notes and the rhythm. The views mark the notes a figure plays as
+slot 3.
+
+**Figures mode (`b`)** treats them as a list like the others. `↵` there opens a
+line holding them (a `0` for each note when there are none; `←` `→` step
+through them an entry at a time); `↵` sets them, shift-`↵` loops what you
+typed to the notes' length, `esc` leaves them. The shared verbs mean:
+
+- Length and order: `a` adds a figure already in use, `A` a new one, `z`
+  drops the last; the order keys (`s S R 9 0 u U d D`) as on any list; `o O`
+  shorter / longer figures first.
+- The figures themselves: `n` new figures in the same places, `N` new figures
+  and places; `m` a step changes in a few, `M` a few are new; `y` every figure
+  the commonest; `h H` one kind fewer / more; `i` flips up ↔ down; `1 2`
+  every step a scale step lower / higher; `;` `:` every run a step longer /
+  shorter (as they thicken and thin chords in intervals mode); `q` puts
+  chromatic steps in the scale (`+M2` → `2`); `x f` lace with / copy from the
+  garden slot's figures.
+
+Figures from the garden (`@3`) move with the order keys but aren't reshaped.
+At home, `B` clears the figures and `*` bakes the subdividing ones into the
+notes (with the intervals); those from the garden stay as figures. The views mark the notes a figure plays as
 they mark the intervals' added notes, where they sound in the views laid out
 in time (radial, piano, field, deep, score, helix); the console shows the list on the
 `fig:` line and the lanes on their own.
 
-## List modes: `p` `t` `v` `c` `5`
+## List modes: `p` `t` `v` `c` `5` `b`
 
-`p` pitch · `t` time · `v` velocity · `c` channels · `5` intervals. The badge in the header shows the mode.
+`p` pitch · `t` time · `v` velocity · `c` channels · `5` intervals · `b` figures (see **Figures**). The badge in the header shows the mode.
 The mode's own key or `esc` takes you home, and pressing another mode key
 switches straight across. Playback, garden, undo, `F` and every opt key work
 as usual. Any

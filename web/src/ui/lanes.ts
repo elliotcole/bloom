@@ -8,7 +8,7 @@ import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
 
 type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
-export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | null;
+export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig' | null;
 
 const LANE_H = 24;
 const LABEL_W = 70;
@@ -21,7 +21,7 @@ const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze?: 'pitch' | 't
   { key: 'vel',   name: 'vel',   mode: 'vel',  freeze: 'vel' },
   { key: 'chan',  name: 'chan',  mode: 'chan', freeze: 'chan' },
   { key: 'iv',    name: 'int',   mode: 'iv',   freeze: 'iv' },
-  { key: 'fig',   name: 'fig',   mode: null },   // b types them; no list mode
+  { key: 'fig',   name: 'fig',   mode: 'fig' }
 ];
 
 const MODE = '#e8a33a';
@@ -133,7 +133,7 @@ export class Lanes {
 
     LANES.forEach((L, r) => {
       const top = y0 + 4 + r * LANE_H, mid = top + (LANE_H - 3) / 2;
-      const active = L.mode !== null && mode === L.mode;
+      const active = mode === L.mode;
       const frozen = !!L.freeze && !!b.frozen[L.freeze];
       if (active) { ctx.fillStyle = amber(0.07); ctx.fillRect(x0, top, w, LANE_H - 3); }
       ctx.textAlign = 'left';

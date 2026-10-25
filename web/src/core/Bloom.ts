@@ -4,7 +4,7 @@ import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
 import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
-import type { Figure } from '../lib/figures';
+import type { Figure, FigureStep } from '../lib/figures';
 import { isRunFigure, isSlotFigure, isFigure, figureSlot } from '../lib/figures';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
@@ -88,7 +88,7 @@ function gcd(a: number, b: number): number {
 // ─── Lists, patterns, verbs ───────────────────────────────────────────────────
 
 /** The parallel lists of a bloom: pitches, times, velocities, channels, intervals */
-export type ListKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv';
+export type ListKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 
 /** Order and length patterns: identical on any list, or on whole notes */
 export type PatternOp =
@@ -1822,6 +1822,7 @@ export class Bloom {
       case 'vel': return this.velocities;
       case 'chan': return this.chans;
       case 'iv': return this.intervals;
+      case 'fig': return this.figures;
     }
   }
 
@@ -1832,6 +1833,7 @@ export class Bloom {
       case 'vel': this.velocities = arr as number[]; break;
       case 'chan': this.chans = arr as number[]; break;
       case 'iv': this.intervals = arr as IntervalVal[]; break;
+      case 'fig': this.figures = arr as Figure[]; break;
     }
   }
 
@@ -1898,6 +1900,7 @@ export class Bloom {
    * when the verb has no meaning for that list.
    */
   shapeList(k: ListKey, verb: ListVerb, amount = 4): boolean {
+    if (k === 'fig') return this.shapeFigures(verb);
     if (verb === 'tiltDown' || verb === 'tiltUp') return this.tiltList(k, verb === 'tiltUp' ? 1 : -1);
     if (k === 'notes') return this.shapePitch(verb, amount);
     // only pitch has a key to leave; elsewhere N is n
@@ -2696,6 +2699,142 @@ export class Bloom {
 
   hasExtraNotes(): boolean {
     return this.hasIntervals() || this.hasFigures();
+  }
+
+  /**
+   * The figures list as a list like any other. A run's steps count scale
+   * steps (chromatic ones keep their kind); a figure from the garden is left
+   * as it is by the verbs that reshape runs.
+   */
+  private shapeFigures(verb: ListVerb): boolean {
+    if (!this.figures.length) this.figures = [0];
+    const st = this.figures;
+    const key = (f: Figure) => JSON.stringify(f);
+    const live = st.map((_, i) => i).filter(i => isFigure(st[i]));
+    const runs = live.filter(i => isRunFigure(st[i]));
+    const copy = (f: Figure) => JSON.parse(JSON.stringify(f)) as Figure;
+    // every step of every run through fn (a rest stays a rest)
+    const eachStep = (fn: (s: number) => number) => {
+      if (!runs.length) return false;
+      this.figures = st.map(f => (isRunFigure(f) ? f.map(s => (s === null ? null : fn(s))) : f));
+      return true;
+    };
+    const moveStep = (s: number, k: number) => (isDiatonic(s) || s === 0 ? makeIv(true, (s === 0 ? 0 : countOf(s)) + k) : s + k);
+    const distinct = () => [...new Map(live.map(i => [key(st[i]), st[i]])).values()];
+    switch (verb) {
+      case 'dropLast': if (st.length <= 1) return false; this.figures = st.slice(0, -1); break;
+      case 'addFromPalette': this.figures = [...st, live.length ? copy(st[pick(live)]) : this.randomFigure()]; break;
+      case 'addRandom': this.figures = [...st, this.randomFigure()]; break;
+      // n: new figures where there are figures; N: new figures and places
+      case 'renew':
+        if (!live.length) return this.shapeFigures('renewWild');
+        this.figures = st.map(f => (isFigure(f) ? this.randomFigure() : 0));
+        break;
+      case 'renewWild': {
+        const n = Math.max(st.length, this.notes.length, 2);
+        const out: Figure[] = Array.from({ length: n }, () => (coin(1 / 3) ? this.randomFigure() : 0));
+        if (!out.some(isFigure)) out[Math.floor(Math.random() * n)] = this.randomFigure();
+        this.figures = out;
+        break;
+      }
+      // m: a few runs change one step by a scale step; M: a few figures are new
+      case 'mutate': {
+        if (!runs.length) return false;
+        const out = st.map(copy);
+        someIndices(runs.length, 1 / 3).forEach(k => {
+          const f = out[runs[k]] as FigureStep[];
+          const at = Math.floor(Math.random() * f.length);
+          f[at] = f[at] === null ? 0 : moveStep(f[at] as number, pick([-1, 1]));
+        });
+        this.figures = out;
+        break;
+      }
+      case 'mutateWild': {
+        if (!live.length) return false;
+        const out = st.map(copy);
+        someIndices(live.length, 1 / 3).forEach(k => { out[live[k]] = this.randomFigure(); });
+        this.figures = out;
+        break;
+      }
+      // y: every figure becomes the commonest
+      case 'unify': {
+        if (live.length < 2) return false;
+        const keys = live.map(i => key(st[i]));
+        const counts = new Map<string, number>();
+        keys.forEach(k => counts.set(k, (counts.get(k) ?? 0) + 1));
+        const common = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        this.figures = st.map(f => (isFigure(f) ? JSON.parse(common) as Figure : f));
+        break;
+      }
+      // h: the rarest figure becomes the commonest; H: one repeat becomes a new figure
+      case 'fewer': {
+        const d = distinct();
+        if (d.length < 2) return false;
+        const count = (f: Figure) => st.filter(x => key(x) === key(f)).length;
+        const sorted = [...d].sort((a, b) => count(a) - count(b));
+        const gone = key(sorted[0]), to = sorted[sorted.length - 1];
+        this.figures = st.map(f => (key(f) === gone ? copy(to) : f));
+        break;
+      }
+      case 'more': {
+        const repeated = live.filter(i => st.filter(x => key(x) === key(st[i])).length > 1);
+        const out = st.map(copy);
+        if (repeated.length) out[pick(repeated)] = this.randomFigure();
+        else out.push(this.randomFigure());
+        this.figures = out;
+        break;
+      }
+      // i: up ↔ down; 1 2: every step one scale step lower / higher
+      case 'invert': return eachStep(s => -s);
+      case 'nudgeDown': return eachStep(s => moveStep(s, -1));
+      case 'nudgeUp': return eachStep(s => moveStep(s, 1));
+      // into the scale: each chromatic step becomes the scale step nearest its size
+      case 'quantize':
+        if (!runs.some(i => (st[i] as FigureStep[]).some(s => s !== null && s !== 0 && !isDiatonic(s)))) return false;
+        return eachStep(s => (s === 0 || isDiatonic(s) ? s : makeIv(true, Math.sign(s) * Math.max(1, Math.round(Math.abs(s) * 7 / 12)))));
+      // o O: shorter figures first / longer first (none counts as shortest)
+      case 'sortUp': case 'sortDown': {
+        const size = (f: Figure) => (isRunFigure(f) ? f.length : isSlotFigure(f) ? 100 : 0);
+        this.figures = [...st].sort((a, b) => (verb === 'sortUp' ? size(a) - size(b) : size(b) - size(a)));
+        break;
+      }
+      default: return false;
+    }
+    return true;
+  }
+
+  /** ; : every run one step longer (a step from its last) or shorter (never below two) */
+  lengthenFigures(more: boolean): boolean {
+    const runs = this.figures.filter(isRunFigure);
+    if (!runs.length) return false;
+    if (!more && runs.every(f => f.length <= 2)) return false;
+    if (more && runs.every(f => f.length >= 32)) return false;
+    this.figures = this.figures.map(f => {
+      if (!isRunFigure(f)) return f;
+      if (!more) return f.length > 2 ? f.slice(0, -1) : f;
+      if (f.length >= 32) return f;
+      const last = [...f].reverse().find(s => s !== null) ?? 0;
+      const next = coin(0.25) ? last : isDiatonic(last) || last === 0 ? makeIv(true, (last === 0 ? 0 : countOf(last)) + pick([-1, 1])) : last + pick([-1, 1]);
+      return [...f, next];
+    });
+    return true;
+  }
+
+  /** A figure to start from: a ratchet, a neighbour, a turn, a little run */
+  private randomFigure(): Figure {
+    const d = (k: number) => makeIv(true, k);
+    const shapes: FigureStep[][] = [
+      [0, 0], [0, 0, 0], [0, d(1), 0], [0, d(-1), 0], [0, d(1), d(2)], [0, d(-1), d(-2)],
+      [0, null, 0], [0, d(1), d(-1), 0], [0, d(2), d(4)], [0, d(-1), d(1), 0],
+    ];
+    if (coin(0.3)) {   // a little walk
+      const n = 2 + Math.floor(Math.random() * 3);
+      const out: FigureStep[] = [0];
+      let at = 0;
+      for (let k = 1; k < n; k++) { at += pick([-1, 1, 1, -2, 2, 0]); out.push(at === 0 ? 0 : d(at)); }
+      return out;
+    }
+    return JSON.parse(JSON.stringify(pick(shapes))) as FigureStep[];
   }
 
   /** A pitch moved by an interval (lib/intervals) as the intervals list moves it, kept in range */

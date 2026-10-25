@@ -46,13 +46,13 @@ function nextQuantize(): number {
 
 // ─── List modes ───────────────────────────────────────────────────────────────
 
-type ListMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv';
+type ListMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 
-const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan', '5': 'iv' };
-const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c', iv: '5' };
-const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH', iv: 'IV' };
-const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel', iv: 'intervals' };
-const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan', iv: 'iv' };
+const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan', '5': 'iv', b: 'fig' };
+const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c', iv: '5', fig: 'b' };
+const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH', iv: 'IV', fig: 'FIG' };
+const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel', iv: 'intervals', fig: 'figures' };
+const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan', iv: 'iv', fig: 'fig' };
 
 /** One key, one verb, in every list mode. `labels` names what the verb does to a particular list. */
 type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } &
@@ -70,14 +70,14 @@ const LIST_KEYS: Record<string, ListAction> = {
   U: { pattern: 'sputter', label: 'sputter' },
   d: { pattern: 'braid', label: 'braid' },
   D: { pattern: 'pyramid', label: 'pyramid' },
-  o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo' } },
-  O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo' } },
+  o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo', fig: 'shorter figures first' } },
+  O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo', fig: 'longer figures first' } },
   z: { verb: 'dropLast', label: 'drop last' },
-  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale' } },
-  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)' } },
+  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale', fig: 'add one (a figure in use)' } },
+  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)', fig: 'add one (a new figure)' } },
   // values
-  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1', iv: 'all one lower' } },
-  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1', iv: 'all one higher' } },
+  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1', iv: 'all one lower', fig: 'every step a scale step lower' } },
+  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1', iv: 'all one higher', fig: 'every step a scale step higher' } },
   '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer', iv: 'an octave lower' } },
   '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder', iv: 'an octave higher' } },
   '3': { verb: 'stepDown', label: 'palette step down', labels: { pitch: 'scale step down' } },
@@ -87,23 +87,23 @@ const LIST_KEYS: Record<string, ListAction> = {
   '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics', iv: 'evener spacing' } },
   '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
   '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
-  y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
-  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below' } },
+  y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)', fig: 'unify (every figure the commonest)' } },
+  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below', fig: 'invert up ↔ down' } },
   I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
   w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins', iv: 'swell of widths' } },
   // vocabulary
-  m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)' } },
-  M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
-  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer' } },
-  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new chords, same places' } },
-  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new chords and places' } },
+  m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)', fig: 'mutate (a step in a few)' } },
+  M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)', fig: 'mutate (a few new figures)' } },
+  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer', fig: 'one kind of figure fewer' } },
+  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more', fig: 'one kind of figure more' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new chords, same places', fig: 'new figures, same places' } },
+  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new chords and places', fig: 'new figures and places' } },
 };
 
 // l tilts down and L up, in every list
 const TILT_LABELS: Record<'tiltDown' | 'tiltUp', Record<ListMode, string>> = {
-  tiltDown: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in' },
-  tiltUp: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out' },
+  tiltDown: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in', fig: 'tilt' },
+  tiltUp: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out', fig: 'tilt' },
 };
 function tiltKey(e: KeyboardEvent): 'tiltDown' | 'tiltUp' | null {
   if (e.code !== 'KeyL' || e.altKey) return null;
@@ -159,6 +159,11 @@ function listAsText(b: Bloom, m: ListMode): { text: string; set: (text: string) 
     case 'chan': return {
       text: b.chans.join(' '),
       set: t => { const r = parseIntList(t, 0, 15, 'channel'); if (r.error) return r.error; b.chans = r.values; return null; },
+    };
+    case 'fig': return {
+      // none yet: a 0 for each note to type over
+      text: b.hasFigures() ? formatFigures(b.figures) : b.notes.map(() => '0').join(' '),
+      set: t => { const r = parseFigures(t); if (r.error) return r.error; b.figures = r.list; return null; },
     };
     case 'iv': return {
       // none yet: a dot for each note to type over
@@ -331,6 +336,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     b.velocities = holdList(before.velocities, b.velocities, slotsIn(before.velocities.length));
     b.chans = holdList(before.chans, b.chans, slotsIn(before.chans.length));
     b.intervals = holdList(before.intervals, b.intervals, slotsIn(before.intervals.length));
+    b.figures = holdList(before.figures, b.figures, slotsIn(before.figures.length));
   }
 
   // ─── Selection ───────────────────────────────────────────────────────────────
@@ -695,6 +701,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const tilt = tiltKey(e);
     if (tilt) {
       const label = TILT_LABELS[tilt][m];
+      if (m === 'fig') { status(`${tag} no figures version of tilt`); return true; }
       b.shapeList(LIST_OF_MODE[m], tilt);
       status(`${tag} ${label}`);
       refresh(`${tag} ${label}`);
@@ -775,6 +782,21 @@ export function createKeyHandler(state: KeyHandlerState) {
       else status(`${tag} ${more ? 'no voice left to add' : 'every chord is one interval already'}`);
       return true;
     }
+    // figures: q puts their steps in the scale, ; : make every run a step longer / shorter
+    if (m === 'fig' && (ch === 'q' || ch === 'Q')) {
+      if (ch === 'Q') status(`${tag} q snaps the figures' steps to the scale (+M2 → 2)`);
+      else if (b.shapeList('fig', 'quantize')) { status(`${tag} snap to the scale: ${formatFigures(b.figures)}`); refresh(`${tag} snap to the scale`); }
+      else status(`${tag} already in the scale`);
+      return true;
+    }
+    if (m === 'fig' && (ch === ';' || ch === ':')) {
+      const more = ch === ';';
+      if (b.lengthenFigures(more)) { const msg = `${tag} ${more ? 'longer' : 'shorter'} figures: ${formatFigures(b.figures)}`; status(msg); refresh(msg); }
+      else status(`${tag} ${b.figures.some(f => Array.isArray(f)) ? (more ? 'the figures are as long as they go' : 'every figure is two steps already') : 'no figures to lengthen: n makes some'}`);
+      return true;
+    }
+    // * bakes, as at home
+    if (m === 'fig' && ch === '*') return false;
     if (ch === 'q') {
       const q = currentQuantize();
       apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
@@ -800,7 +822,8 @@ export function createKeyHandler(state: KeyHandlerState) {
       if ('pattern' in action) {
         apply(label, () => b.patternList(LIST_OF_MODE[m], action.pattern));
       } else if (b.shapeList(LIST_OF_MODE[m], action.verb)) {
-        const said = m === 'iv' ? `${tag} ${label}: ${formatIntervals(b.intervals)}` : `${tag} ${label}`;   // intervals say what they now are
+        // intervals and figures say what they now are
+        const said = m === 'iv' ? `${tag} ${label}: ${formatIntervals(b.intervals)}` : m === 'fig' ? `${tag} ${label}: ${formatFigures(b.figures)}` : `${tag} ${label}`;
         status(said);
         refresh(said);
       } else {
@@ -1365,29 +1388,13 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     // ─── Figures ──────────────────────────────────────────────────────────────
     // What a note plays instead of itself, one entry per note: 0, (1 2 3), @3.
-    // At home only: they change the notes and the rhythm together
+    // b is figures mode (↵ there types them); B clears them
     if (!alt && ch === 'B') {
       const had = b.hasFigures();
       b.figures = [0];
       const msg = had ? 'figures cleared' : 'no figures to clear';
       status(msg);
       refresh(msg);
-      return;
-    }
-    if (!alt && ch === 'b' && state.typeList) {
-      e.preventDefault();   // the line takes focus now: the b mustn't land in it
-      // the figures as they are, or a 0 for each note to type over
-      const shown = b.hasFigures() ? formatFigures(b.figures) : b.notes.map(() => '0').join(' ');
-      state.typeList('figures:', shown, (text, complete) => {
-        const r = parseFigures(text);
-        if (r.error) return r.error;
-        const want = b.notes.length;
-        b.figures = complete && want ? Array.from({ length: want }, (_, i) => r.list[i % r.list.length]) : r.list;
-        const msg = b.hasFigures() ? `figures${complete ? ', looped to the notes' : ''}: ${formatFigures(b.figures)}` : 'no figures';
-        status(msg);
-        refresh(msg);
-        return null;
-      });
       return;
     }
 

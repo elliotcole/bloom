@@ -7,7 +7,7 @@
 // nothing special going on, the line teaches: it shows space · n · ?, and every
 // half minute a lesser-known key instead.
 
-export type CueMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv';
+export type CueMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 
 export interface CueContext {
   mode: CueMode | null;
@@ -29,6 +29,7 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · r divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
+  fig: '↵ type them: 0 (1 2 3) @3 · n N new · ; : longer / shorter · a z add / drop · b home',
   iv: '↵ type them: -P5/10 · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 
@@ -56,8 +57,8 @@ const TIPS = [
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',
   '5 ↵ add a chord every few notes: -P5/10',
-  'b figures: 0 (1 2 3) 0 — a note plays do re mi in its time',
-  'b figures: @3 — a note plays garden slot 3 from itself',
+  'b ↵ figures: 0 (1 2 3) 0 — a note plays do re mi in its time',
+  'b ↵ figures: @3 — a note plays garden slot 3 from itself',
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
 ];
@@ -69,7 +70,7 @@ function situations(c: CueContext): string[] {
   if (c.selection) out.push('esc clears · shift-esc inverts · keys act on these only');
   if (c.pins) out.push('esc unpins · click toggles a pin');
   if (c.ragaMoves) out.push('* bake what you hear');
-  if (c.figures) out.push('b retype the figures · * bake · B clear');
+  if (c.figures) out.push('b figures mode · * bake · B clear');
   if (c.intervals) out.push(c.ragaMoves ? '8 reset intervals' : '7 & sparser / denser · * bake · 8 reset');
   if (c.held) out.push('opt-t releases the hold');
   if (c.pulsing) out.push('< > rate · . stop');

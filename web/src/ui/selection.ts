@@ -4,8 +4,8 @@
 
 import { Bloom } from '../core/Bloom';
 
-type Field = 'notes' | 'timeIntervals' | 'velocities' | 'chans' | 'intervals';
-const FIELDS: Field[] = ['notes', 'timeIntervals', 'velocities', 'chans', 'intervals'];
+type Field = 'notes' | 'timeIntervals' | 'velocities' | 'chans' | 'intervals' | 'figures';
+const FIELDS: Field[] = ['notes', 'timeIntervals', 'velocities', 'chans', 'intervals', 'figures'];
 
 const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 /** Each event's value: a shorter list wraps, as at playback */
@@ -38,7 +38,7 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   // settings a key may change (scale, ranges, legato …) come from the worked bloom
   const settings = worked.clone();
   settings.notes = out.notes; settings.timeIntervals = out.timeIntervals;
-  settings.velocities = out.velocities; settings.chans = out.chans; settings.intervals = out.intervals;
+  settings.velocities = out.velocities; settings.chans = out.chans; settings.intervals = out.intervals; settings.figures = out.figures;
   out.import(settings);
 
   const n = full.notes.length;
