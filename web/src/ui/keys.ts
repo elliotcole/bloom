@@ -10,6 +10,7 @@ import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
 import { formatIntervals, parseIntervals } from '../lib/intervals';
+import { formatFigures, parseFigures } from '../lib/figures';
 import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
 import {
   playOnce, startLooper, stopLooper, isLooping, updateLooper,
@@ -1358,6 +1359,31 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
 
+    // ─── Figures ──────────────────────────────────────────────────────────────
+    // What a note plays instead of itself, one entry per note: 0, (1 2 3), @3.
+    // At home only: they change the notes and the rhythm together
+    if (!alt && ch === 'B') {
+      const had = b.hasFigures();
+      b.figures = [0];
+      const msg = had ? 'figures cleared' : 'no figures to clear';
+      status(msg);
+      refresh(msg);
+      return;
+    }
+    if (!alt && ch === 'b' && state.typeList) {
+      state.typeList('figures:', b.hasFigures() ? formatFigures(b.figures) : '', (text, complete) => {
+        const r = parseFigures(text);
+        if (r.error) return r.error;
+        const want = b.notes.length;
+        b.figures = complete && want ? Array.from({ length: want }, (_, i) => r.list[i % r.list.length]) : r.list;
+        const msg = b.hasFigures() ? `figures${complete ? ', looped to the notes' : ''}: ${formatFigures(b.figures)}` : 'no figures';
+        status(msg);
+        refresh(msg);
+        return null;
+      });
+      return;
+    }
+
     // ─── Intervals ────────────────────────────────────────────────────────────
     // Notes added at playback; the bloom's own notes are untouched
     if (!alt) {
@@ -1370,8 +1396,11 @@ export function createKeyHandler(state: KeyHandlerState) {
         '*': ['bake into notes', () => {
           const raga = b.bakeRaga();
           const ivs = b.hasIntervals();
+          const figs = b.bakeFigures();   // the intervals go in with them
           b.bakeIntervals();
-          return raga && ivs ? 'bake the raga and the intervals into the notes' : raga ? 'bake the raga into the notes, as they sound' : ivs ? 'bake intervals into notes' : 'nothing to bake';
+          const what = [raga && 'the raga', figs && 'the figures', ivs && 'the intervals'].filter(Boolean) as string[];
+          const kept = b.hasFigures() ? ' (figures from the garden stay)' : '';
+          return what.length ? `bake ${what.join(' and ').replace(/ and (?=.* and )/, ', ')} into the notes${kept}` : `nothing to bake${kept}`;
         }],
       };
       const hit = intervalKeys[ch];
@@ -1644,7 +1673,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     return {
       mode: _mode, tuning: !!state.tuningView?.isOpen(), freezeMenu: _freezeMenu,
       selection: _selection.length, pins: _pinned.size,
-      ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), held: isHeld(),
+      ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), figures: b.hasFigures(), held: isHeld(),
       pulsing: isPulsing() || isGardenPulsing(), looping: isLooping() || isGardenLooping(),
       slot: !!state.garden?.current,
     };

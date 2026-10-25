@@ -1,8 +1,8 @@
 // Playback scheduler — uses performance.now() + Web MIDI timestamps (no Tone.js Transport)
 
-import { Bloom, ADDED_NOTE_VELOCITY } from '../core/Bloom';
+import { Bloom } from '../core/Bloom';
 import { applyTuning } from './tuningOut';
-import type { IntervalVal } from '../core/Bloom';
+import type { IntervalVal, Sound } from '../core/Bloom';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
@@ -22,11 +22,6 @@ export function getBpm(): number {
 
 export function beatsToMs(beats: number): number {
   return (beats / _bpm) * 60_000;
-}
-
-/** Velocity of a note added by the intervals array */
-function addedVelocity(vel: number): number {
-  return Math.max(1, Math.round(vel * ADDED_NOTE_VELOCITY));
 }
 
 // ─── Voices ───────────────────────────────────────────────────────────────────
@@ -61,6 +56,25 @@ function endVoice(out: MidiOutput, chan: number, note: number, id: number, atMs:
 /** Forget held voices (after all-notes-off). */
 function clearVoices(out: MidiOutput): void { _voices.delete(out); }
 
+/**
+ * Sound one Sound at `atMs` (performance.now's clock). The note-on is handed
+ * to the output `lead` ms ahead, not when it's worked out: a figure's later
+ * steps may be beats away, and the voices should know what's sounding when it
+ * sounds. Its timers go into `timers` so they can be cancelled (with no lead,
+ * a cancelled play leaves nothing pending at the output).
+ */
+function scheduleSound(out: MidiOutput, s: Sound, atMs: number, lead: number, timers?: ReturnType<typeof setTimeout>[]): void {
+  const gateMs = Math.max(10, beatsToMs(s.gate));
+  const ids: [number, number][] = [];
+  const on = setTimeout(() => {
+    s.notes.forEach(n => { if (n >= 0 && n <= 127) ids.push([n, startVoice(out, s.chan, n, s.vel, atMs)]); });
+  }, Math.max(0, atMs - performance.now() - lead));
+  const off = setTimeout(() => {
+    ids.forEach(([n, id]) => endVoice(out, s.chan, n, id, atMs + gateMs));
+  }, Math.max(0, atMs + gateMs - performance.now()));
+  timers?.push(on, off);
+}
+
 // ─── One-shot playback ────────────────────────────────────────────────────────
 
 export interface ActiveNote {
@@ -79,47 +93,16 @@ export function playOnce(
   tick = 0,
 ): () => void {
   applyTuning(bloom);   // each bloom sounds in its own tuning, garden slots included
-  const events = bloom.toEvents(tick);
-  const now = performance.now();
+  const view = bloom.sounding(tick);   // a raga's notes as they sound
+  const now = performance.now() + 5;
   let cursor = 0; // ms offset from now
   const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-  events.forEach((ev, i) => {
-    const gateMs = sustain !== null
-      ? beatsToMs(sustain)
-      : beatsToMs(ev.time * legato);
-
-    const notes = Array.isArray(ev.note) ? ev.note as number[] : [ev.note as number];
-    const added = ev.added;
-    const vel = ev.velocity;
-    const chan = ev.chan;
-    const onAt = cursor;
-
-    // Schedule note-on(s) + visual callback
-    const ids: [number, number][] = [];   // [pitch, voice id]
-    const t = setTimeout(() => {
-      if (vel > 0) {
-        notes.forEach(n => {
-          if (n < 0 || n > 127) return;
-          ids.push([n, startVoice(out, chan, n, vel, now + onAt)]);
-        });
-        added.forEach(n => {
-          if (n < 0 || n > 127) return;
-          ids.push([n, startVoice(out, chan, n, addedVelocity(vel), now + onAt)]);
-        });
-      }
-      onNoteOn?.(i, tick + i);
-    }, onAt);
-    timeouts.push(t);
-
-    // Schedule note-off(s)
-    const offAt = onAt + Math.max(10, gateMs);
-    const tOff = setTimeout(() => {
-      ids.forEach(([n, id]) => endVoice(out, chan, n, id, now + offAt));
-    }, offAt);
-    timeouts.push(tOff);
-
-    cursor += beatsToMs(ev.time);
+  bloom.notes.forEach((_, i) => {
+    const onAt = now + cursor;
+    view.soundsAt(i, tick + i, legato, sustain).forEach(s => scheduleSound(out, s, onAt + beatsToMs(s.at), 0, timeouts));
+    timeouts.push(setTimeout(() => onNoteOn?.(i, tick + i), cursor));
+    cursor += beatsToMs(wrapAt(bloom.timeIntervals, tick + i));
   });
 
   return () => {
@@ -218,30 +201,15 @@ export function startLooper(
       }
 
       const view = b.sounding(state.globalTick - noteIdx);   // a raga's notes as they sound
-      const noteVal = view.notes[noteIdx];
-      const notes = Array.isArray(noteVal) ? noteVal as number[] : [noteVal as number];
-      const added = view.addedNotesAt(noteIdx, state.globalTick);
-      const vel  = wrapAt(b.velocities,    state.globalTick);
       const time = wrapAt(b.timeIntervals, state.globalTick);
-      const chan = wrapAt(b.chans,         state.globalTick);
-
       const atMs = state.nextEventTime;
-      const legato = b.legato;
-      const sustain = b.sustain;
-      const gateMs = sustain !== null ? beatsToMs(sustain) : beatsToMs(time * legato);
 
-      if (vel > 0) {
-        const sound = (n: number, v: number) => {
-          if (n < 0 || n > 127) return;
-          const id = startVoice(out, chan, n, v, atMs);
-          setTimeout(
-            () => endVoice(out, chan, n, id, atMs + Math.max(10, gateMs)),
-            atMs - now + Math.max(10, gateMs),
-          );
-        };
-        notes.forEach(n => sound(n, vel));
-        added.forEach(n => sound(n, addedVelocity(vel)));
-      }
+      // the note, the notes its intervals add, or its figure; a figure's steps follow a running clock too
+      const lock = state.lock;
+      view.soundsAt(noteIdx, state.globalTick).forEach(s => {
+        const t = lock && s.at ? timebase()?.timeAtBeat(lock.start + lock.beats + s.at) ?? null : null;
+        scheduleSound(out, s, t ?? atMs + beatsToMs(s.at), LOOKAHEAD_MS);
+      });
 
       // Fire visual callback at actual note-on time
       const idxSnap = noteIdx, tickSnap = state.globalTick;

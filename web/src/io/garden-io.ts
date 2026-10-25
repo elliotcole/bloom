@@ -14,6 +14,7 @@ interface BloomJSON {
   chans: number[];
   intervals?: unknown;          // IntervalVal[] — absent in files saved before intervals existed
   intervalsDiatonic?: boolean;
+  figures?: unknown;            // Figure[] — absent in files saved before figures existed
   lowestPossibleNote: number;
   highestPossibleNote: number;
   lowestSeedNote: number;
@@ -49,6 +50,7 @@ function bloomToJSON(b: Bloom): BloomJSON {
     chans: [...b.chans],
     intervals: JSON.parse(JSON.stringify(b.intervals)),
     intervalsDiatonic: b.intervalsDiatonic,
+    figures: JSON.parse(JSON.stringify(b.figures)),
     lowestPossibleNote: b.lowestPossibleNote,
     highestPossibleNote: b.highestPossibleNote,
     lowestSeedNote: b.lowestSeedNote,
@@ -76,7 +78,8 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   if (Array.isArray(json.intervals) && json.intervals.length > 0) {
     b.intervals = json.intervals as Bloom['intervals'];
   }
-  b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);   // older saves: one unit for every interval
+  b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);
+  if (Array.isArray(json.figures) && json.figures.length > 0) b.figures = json.figures as Bloom['figures'];   // older saves: one unit for every interval
   b.lowestPossibleNote = json.lowestPossibleNote;
   b.highestPossibleNote = json.highestPossibleNote;
   b.lowestSeedNote = json.lowestSeedNote;

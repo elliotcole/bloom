@@ -4,6 +4,8 @@ import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
 import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
+import type { Figure } from '../lib/figures';
+import { isRunFigure, isSlotFigure, isFigure, figureSlot } from '../lib/figures';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
   wrapAt, wrapExtend, flatNotes, coin, exprand, rrand,
@@ -44,6 +46,19 @@ export type IntervalVal = number | number[];
 
 /** Notes added by the intervals array sound this much quieter than their parent */
 export const ADDED_NOTE_VELOCITY = 0.85;
+
+/** Something that sounds for a note: its own pitches, those the intervals add, or a step of its figure */
+export interface Sound {
+  /** beats after the note's onset */
+  at: number;
+  notes: number[];
+  vel: number;
+  chan: number;
+  /** beats held */
+  gate: number;
+  added?: boolean;
+  figure?: boolean;
+}
 
 // Pools the random interval operations draw from (lib/intervals: diatonic ones are steps + 100)
 const CHROMATIC_INTERVALS = [-12, -9, -8, -7, -5, -4, -3, 3, 4, 5, 7, 8, 9, 12];
@@ -109,6 +124,7 @@ export interface NoteEvent {
   time: number;
   chan: number;
   iv: IntervalVal;
+  fig?: Figure;
 }
 
 /** Step sizes for the whole-bloom gestures (calm, intensify, vary) */
@@ -228,6 +244,12 @@ export class Bloom {
   intervals: IntervalVal[];
   /** true: intervals count steps of the scale; false: semitones */
   intervalsDiatonic: boolean;
+  /**
+   * What a note plays instead of itself (lib/figures): 0 nothing, a run of
+   * steps in its time, or a garden slot on its own timeline. Cycles at its own
+   * length; never alters `notes`.
+   */
+  figures: Figure[];
 
   lowestPossibleNote: number;
   highestPossibleNote: number;
@@ -288,6 +310,7 @@ export class Bloom {
     this.chans = Array.isArray(c) ? (c as number[]) : this.notes.map(() => c as number);
     this.intervals = [0];
     this.intervalsDiatonic = false;
+    this.figures = [0];
   }
 
   // ─── Copy / Import ─────────────────────────────────────────────────────────
@@ -300,6 +323,7 @@ export class Bloom {
     b.chans = [...this.chans];
     b.intervals = JSON.parse(JSON.stringify(this.intervals));
     b.intervalsDiatonic = this.intervalsDiatonic;
+    b.figures = JSON.parse(JSON.stringify(this.figures));
     b.lowestPossibleNote = this.lowestPossibleNote;
     b.highestPossibleNote = this.highestPossibleNote;
     b.lowestSeedNote = this.lowestSeedNote;
@@ -330,6 +354,7 @@ export class Bloom {
     this.chans = b.chans;
     this.intervals = b.intervals;
     this.intervalsDiatonic = b.intervalsDiatonic;
+    this.figures = b.figures;
     this.lowestPossibleNote = b.lowestPossibleNote;
     this.highestPossibleNote = b.highestPossibleNote;
     this.lowestSeedNote = b.lowestSeedNote;
@@ -1785,6 +1810,7 @@ export class Bloom {
       time: at(this.timeIntervals, i, 0.25),
       chan: at(this.chans, i, Bloom.defaultChan),
       iv: at(this.intervals, i, 0 as IntervalVal),
+      fig: at(this.figures, i, 0 as Figure),
     }));
   }
 
@@ -1792,11 +1818,13 @@ export class Bloom {
     if (evs.length === 0) return this;
     // an untouched [0] intervals list stays as it is
     const carryIntervals = this.hasIntervals();
+    const carryFigures = this.hasFigures();
     this.notes = evs.map(e => JSON.parse(JSON.stringify(e.note)) as NoteVal);
     this.velocities = evs.map(e => e.vel);
     this.timeIntervals = evs.map(e => e.time);
     this.chans = evs.map(e => e.chan);
     if (carryIntervals) this.intervals = evs.map(e => JSON.parse(JSON.stringify(e.iv)) as IntervalVal);
+    if (carryFigures) this.figures = evs.map(e => JSON.parse(JSON.stringify(e.fig ?? 0)) as Figure);
     return this;
   }
 
@@ -2644,6 +2672,140 @@ export class Bloom {
     return added;
   }
 
+  // ─── Figures ───────────────────────────────────────────────────────────────
+  // A sixth list, applied as the bloom is rendered: a note plays a figure
+  // instead of itself (lib/figures). `notes` is never modified.
+
+  hasFigures(): boolean {
+    return this.figures.some(isFigure);
+  }
+
+  /** The figure the note read at `tick` plays, or null for none (an @slot that's empty is none) */
+  figureAt(tick: number): Figure | null {
+    if (!this.figures.length) return null;
+    const f = wrapAt(this.figures, tick);
+    if (isSlotFigure(f)) { const src = figureSlot(f.slot); return src && src.notes.length ? f : null; }
+    return isFigure(f) ? f : null;
+  }
+
+  /** A pitch moved by an interval (lib/intervals) as the intervals list moves it, kept in range */
+  private moveBy(parent: number, iv: number): number {
+    const scale = this.scale;
+    let n = isDiatonic(iv)
+      ? degreeToKey(Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + countOf(iv), scale.degrees, scale.pitchesPerOctave)
+      : parent + iv;
+    while (n > this.highestPossibleNote) n -= 12;
+    while (n < this.lowestPossibleNote) n += 12;
+    return n;
+  }
+
+  /**
+   * Everything that sounds for the note at `index` (of this view: call it on
+   * sounding()), its other lists read at `tick`: the note with the notes the
+   * intervals add, or its figure in their place. Times and gates in beats,
+   * `at` from the note's onset.
+   */
+  soundsAt(index: number, tick = index, legato = this.legato, sustain = this.sustain): Sound[] {
+    const noteVal = wrapAt(this.notes, index);
+    const notes = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
+    const vel = wrapAt(this.velocities, tick);
+    const time = wrapAt(this.timeIntervals, tick);
+    const chan = wrapAt(this.chans, tick);
+    const gateOf = (t: number, s = sustain, l = legato) => (s !== null ? s : t * l);
+    if (vel <= 0) return [];
+    const added = this.addedNotesAt(index, tick);
+    const out: Sound[] = [];
+    const fig = this.figureAt(tick);
+    if (added.length) out.push({ at: 0, notes: added, vel: Math.max(1, Math.round(vel * ADDED_NOTE_VELOCITY)), chan, gate: gateOf(time), added: true });
+
+    if (!fig) { out.unshift({ at: 0, notes, vel, chan, gate: gateOf(time) }); return out; }
+
+    if (isRunFigure(fig)) {
+      // subdivide: the steps share the note's time, each from the note itself
+      const dt = time / fig.length;
+      fig.forEach((step, k) => {
+        if (step === null) return;
+        out.push({ at: k * dt, notes: notes.map(p => (step === 0 ? p : this.moveBy(p, step))), vel, chan, gate: gateOf(dt), figure: true });
+      });
+      return out;
+    }
+
+    // superimpose: the slot's bloom from its first note, moved to land on this one
+    const src = figureSlot((fig as { slot: number }).slot)!.sounding();
+    const first = flatNotes([src.notes[0]] as NoteArray) as number[];
+    const from = Math.min(...first), to = Math.min(...notes);
+    const scale = this.appliedScale;
+    const deg = (p: number) => keyToDegree(p, scale!.degrees, scale!.pitchesPerOctave);
+    const move = (p: number): number => {
+      let n = scale
+        ? degreeToKey(Math.round(deg(to)) + Math.round(deg(p)) - Math.round(deg(from)), scale.degrees, scale.pitchesPerOctave)
+        : p - from + to;
+      while (n > this.highestPossibleNote) n -= 12;
+      while (n < this.lowestPossibleNote) n += 12;
+      return n;
+    };
+    const peak = Math.max(1, ...src.velocities);   // its loudest note as loud as this one
+    let at = 0;
+    src.notes.forEach((nv, i) => {
+      const v = wrapAt(src.velocities, i);
+      const t = wrapAt(src.timeIntervals, i);
+      if (v > 0) {
+        const ps = Array.isArray(nv) ? flatNotes(nv as NoteArray) as number[] : [nv as number];
+        out.push({
+          at, notes: ps.map(move), chan: wrapAt(src.chans, i),
+          vel: Math.min(127, Math.max(1, Math.round(v * vel / peak))),
+          gate: gateOf(t, src.sustain, src.legato), figure: true,
+        });
+      }
+      at += t;
+    });
+    return out;
+  }
+
+  /**
+   * Write the figures that divide notes into the notes (with the intervals
+   * too, which sound at each note's start). Lists that phase are first played
+   * out until they come out even. Figures from the garden run on their own
+   * timelines, so they stay. False when there was nothing to bake.
+   */
+  bakeFigures(): boolean {
+    if (!this.figures.some(isRunFigure) || this.notes.length === 0) return false;
+    const n = this.notes.length;
+    const m = this.figures.length;
+    const length = Math.min((n * m) / gcd(n, m), Math.max(n, MAX_BAKED_LENGTH));
+    const view = this.sounding();
+    const notes: NoteVal[] = [], vels: number[] = [], times: number[] = [], chans: number[] = [], figs: Figure[] = [];
+    for (let i = 0; i < length; i++) {
+      const fig = this.figureAt(i);
+      const vel = wrapAt(this.velocities, i), time = wrapAt(this.timeIntervals, i), chan = wrapAt(this.chans, i);
+      const own = wrapAt(view.notes, i);
+      const added = view.addedNotesAt(i % n, i);
+      const chord = (ps: number[], extra: number[]): NoteVal => {
+        const all = [...new Set([...ps, ...extra])].sort((a, b) => a - b);
+        return all.length === 1 ? all[0] : all;
+      };
+      if (!fig || !isRunFigure(fig) || vel <= 0) {
+        notes.push(added.length ? chord(Array.isArray(own) ? flatNotes(own as NoteArray) as number[] : [own as number], added) : JSON.parse(JSON.stringify(own)));
+        vels.push(vel); times.push(time); chans.push(chan);
+        const raw = wrapAt(this.figures, i);
+        figs.push(isSlotFigure(raw) ? { slot: raw.slot } : 0);   // an @slot stays, empty or not
+        continue;
+      }
+      // a rest inside the figure is a silent note
+      const steps = view.soundsAt(i % n, i).filter(x => !x.added);
+      const dt = time / fig.length;
+      fig.forEach((step, k) => {
+        const sound = steps.find(x => Math.abs(x.at - k * dt) < 1e-9);
+        notes.push(sound ? chord(sound.notes, k === 0 ? added : []) : JSON.parse(JSON.stringify(own)));
+        vels.push(step === null ? 0 : vel); times.push(dt); chans.push(chan); figs.push(0);
+      });
+    }
+    this.notes = notes; this.velocities = vels; this.timeIntervals = times; this.chans = chans;
+    this.figures = figs.some(isFigure) ? figs : [0];
+    if (this.hasIntervals()) this.intervals = [0];
+    return true;
+  }
+
   /**
    * The kind new intervals take: true for diatonic. The kind most of the
    * list's intervals have; with none, diatonic when a scale is attached.
@@ -3051,17 +3213,6 @@ export class Bloom {
     return true;
   }
 
-  toEvents(tick = 0): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
-    const src = this.sounding(tick);   // intervals stack on the note that sounds
-    return src.notes.map((note, i) => ({
-      note: Array.isArray(note) ? (note as number[]) : note as number,
-      added: src.addedNotesAt(i, tick + i),
-      velocity: wrapAt(this.velocities, tick + i),
-      time: wrapAt(this.timeIntervals, tick + i),
-      chan: wrapAt(this.chans, tick + i),
-    }));
-  }
-
   // ─── Report ────────────────────────────────────────────────────────────────
 
   report(): string {
@@ -3075,6 +3226,7 @@ export class Bloom {
       this.hasIntervals()
         ? `intervals:  ${JSON.stringify(this.intervals)} ${this.intervalsDiatonic ? 'scale steps' : 'semitones'}`
         : '',
+      this.hasFigures() ? `figures:    ${JSON.stringify(this.figures)}` : '',
       `scale:      [${scale.degrees.join(',')}]${scaleName}`,
       this.name ? `name:       ${this.name}` : '',
     ].filter(Boolean);

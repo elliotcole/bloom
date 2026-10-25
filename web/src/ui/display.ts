@@ -1,6 +1,7 @@
 // Status text display — console-scroll mode (newest entry at top)
 
 import { formatIntervals } from '../lib/intervals';
+import { formatFigures } from '../lib/figures';
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import { spell, spellOctave } from '../lib/numbers';
@@ -78,6 +79,9 @@ export class Display {
       `${chanLabel.padEnd(8)}${chanStrs.join('  ')}`,
       bloom.hasIntervals()
         ? `${intvLabel.padEnd(8)}${intvStr}`
+        : '',
+      bloom.hasFigures()
+        ? `${`fig${bloom.figures.length !== N ? `(${bloom.figures.length})` : ''}:`.padEnd(8)}${formatFigures(bloom.figures)}`
         : '',
       `scale:  ${scaleStr}   dur: ${dur}b`,
       soundingTuning(bloom) ? `tuning: ${isHeld() ? 'held ' : ''}${soundingTuning(bloom)!.name} @ ${spell(soundingRoot(bloom))}   ${

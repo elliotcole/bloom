@@ -107,7 +107,8 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
-- **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound). See **Intervals** below.
+- **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
+- **Figures:** `b` types them, `B` clears them. See **Figures** below.
 - **Merge and split the garden:** buttons in **garden ▾** (with save and load). **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
@@ -282,6 +283,33 @@ behaves like any scale.
 
 ---
 
+## Figures: `b`
+
+A figure is what a note plays instead of itself. The figures are a list like
+the velocities, one entry per note, cycling at its own length (so a shorter
+list drifts through the notes in the loop): `0` is no figure.
+
+- **Subdivide**, in brackets: `(1 2 3)` plays do re mi in the time the note
+  had, starting on the note. The numbers count steps of the scale as
+  musicians name them: `1` the note itself, `2` a step up, `-2` a step down,
+  `5` a fifth up. Chromatic intervals go by name (`+P5`, `-m2`), and `·` is a
+  rest. `(1 1 1)` is a ratchet, `(1 -2 1)` a lower neighbour, `(1 · 1 1)` a
+  little rhythm.
+- **Superimpose**, `@3`: garden slot 3 (numbered as the console shows the
+  slots, from 0), a tiny bloom with its own times, velocities and channels,
+  played from the note on its own timeline; it can run on over the notes that
+  follow. Its first note lands on the note (moved in the scale when the bloom
+  has one), its loudest note is as loud as the note, and it plays only its
+  own notes (not its intervals or figures). It's read live: change slot 3 and
+  every `@3` changes. An empty slot plays the note as it is.
+
+`0 0 (1 2 3) 0 @3` on the notes: the third plays do re mi, the fifth plays
+slot 3. `b` opens a line holding the figures; `↵` sets them, shift-`↵` loops
+what you typed to the notes' length, `esc` leaves them. `B` clears them. `*`
+bakes the subdividing figures into the notes (with the intervals); those
+from the garden stay as figures. Figures live at home only, as they change
+both the notes and the rhythm; the console shows them on the `fig:` line.
+
 ## List modes: `p` `t` `v` `c` `5`
 
 `p` pitch · `t` time · `v` velocity · `c` channels · `5` intervals. The badge in the header shows the mode.
@@ -363,6 +391,9 @@ above (+) or below (−):
 |---|---|---|
 | chromatic | `m2 M2 m3 M3 P4 TT P5 m6 M6 m7 M7 P8`, on to `P15` | semitones, always |
 | diatonic | `2nd 3rd 4th 5th 6th 7th 8ve`, on to `15th` | steps of the bloom's scale |
+
+A bare number is the diatonic one, as musicians count: `-5` is `-5th`, `8` is
+`8ve`. Chromatic intervals go by name only.
 
 A step can hold any number of them, of either kind: `-P5`, `+3rd+5th` (a
 triad above, in the scale), `-P5-P8+M3`. `/N` after a step fills the rest of

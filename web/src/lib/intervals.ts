@@ -2,7 +2,8 @@
 // chromatic (m3, P5, … counted in semitones) or diatonic (3rd, 5th, … counted
 // in steps of the bloom's scale). A step of the intervals list is a chord: its
 // intervals written one after another, the sign of each saying above (+) or
-// below (−): -P5-P8, +3rd+5th, -P5+M3. A step adding nothing is a dot.
+// below (−): -P5-P8, +3rd+5th, -P5+M3. A step adding nothing is a dot. A bare
+// number counts in the scale, as musicians name it: -5 is the 5th below.
 //
 // Stored as plain numbers so lists stay JSON and the list verbs stay simple: a
 // chromatic interval is its semitones (±1…24), a diatonic one its scale steps
@@ -62,10 +63,10 @@ export function formatIntervals(list: (number | number[])[]): string {
   return out.join(' ');
 }
 
-/** One interval written without its sign: P5, m3, 3rd, 8ve, or a number of semitones */
-function parseOne(word: string): number | null {
+/** One interval written without its sign: P5, m3 by name, or 3rd, 8ve, 5 in steps of the scale (5 is a fifth) */
+export function parseInterval(word: string): number | null {
   const w = word.trim();
-  if (/^\d+$/.test(w)) { const n = parseInt(w, 10); return n >= 1 && n <= MAX_CHROMATIC ? n : null; }
+  if (/^\d+$/.test(w)) { const k = parseInt(w, 10) - 1; return k >= 1 && k <= MAX_DIATONIC ? DIA + k : null; }
   const c = CHROMATIC_NAMES.indexOf(w) > 0 ? CHROMATIC_NAMES.indexOf(w)
     : CHROMATIC_NAMES.findIndex((x, i) => i > 0 && x.toLowerCase() === w.toLowerCase() && !/^[mM]/.test(w));
   if (c > 0) return c;
@@ -100,8 +101,8 @@ export function parseIntervals(text: string): { list: (number | number[])[]; err
       const ivs: number[] = [];
       for (const p of parts) {
         const sign = p.startsWith('-') ? -1 : 1;
-        const iv = parseOne(p.replace(/^[+-]/, ''));
-        if (iv === null) return { list: [], error: `"${p}" isn't an interval (try P5, m3, 3rd, 8ve)` };
+        const iv = parseInterval(p.replace(/^[+-]/, ''));
+        if (iv === null) return { list: [], error: `"${p}" isn't an interval (try P5, m3 by name, 3 or 3rd in the scale)` };
         ivs.push(sign * iv);
       }
       step = ivs.length === 1 ? ivs[0] : [...new Set(ivs)].sort(chordOrder);

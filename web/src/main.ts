@@ -7,6 +7,7 @@ import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { ClockFollower, setTimebase } from './audio/clockSync';
+import { setFigureSlots } from './lib/figures';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
 import { askRestore } from './ui/restorePrompt';
@@ -45,6 +46,7 @@ async function main() {
   // ─── Core state ─────────────────────────────────────────────────────────────
   const bloom = new Bloom().seed();
   const garden = new Garden();
+  setFigureSlots(i => garden.slots[i] ?? null);   // @3 in the figures list: slot 3, live
   // A past session is offered, not assumed: restore it or start fresh
   const saved = peekAutosave();
   const restored = saved !== null && await askRestore(saved) && restoreAutosave(saved.raw, bloom, garden);
@@ -174,6 +176,8 @@ async function main() {
     reg('narrowintervals', 'narrow intervals by one',   b => b.incrementIntervals(-1));
     reg('resetintervals', 'reset intervals (none)',     b => b.resetIntervals());
     reg('bakeintervals',  'bake intervals into notes',  b => b.bakeIntervals());
+    reg('bakefigures',    'bake figures into notes (those from the garden stay)', b => b.bakeFigures());
+    reg('clearfigures',   'clear the figures (none)',   b => { b.figures = [0]; });
     reg('sparserintervals', 'intervals further apart (one more rest after each)', b => b.spaceIntervals(true));
     reg('denserintervals', 'intervals closer together (one rest fewer after each)', b => b.spaceIntervals(false));
 

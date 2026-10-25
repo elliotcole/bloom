@@ -64,7 +64,7 @@ export class Notice {
 
 /** A snapshot small enough to keep per key, and to compare */
 export interface Snap {
-  notes: string; flat: number[]; time: number[]; vel: number[]; chan: number[]; intervals: string;
+  notes: string; flat: number[]; time: number[]; vel: number[]; chan: number[]; intervals: string; figures: string;
   scaleName: string; scaleDegs: string; nNotes: number; pcs: number; nIv: number; ivMode: boolean;
   tuning: string; tuningName: string;
 }
@@ -74,7 +74,7 @@ export function snap(b: Bloom): Snap {
   return {
     notes: JSON.stringify(b.notes), flat: flatNotes(b.notes) as number[],
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
-    intervals: JSON.stringify(b.intervals), nNotes: b.notes.length, nIv: b.intervals.length,
+    intervals: JSON.stringify(b.intervals), figures: JSON.stringify(b.figures), nNotes: b.notes.length, nIv: b.intervals.length,
     ivMode: b.intervalsDiatonic,
     pcs: new Set((flatNotes(b.notes) as number[]).map(m => ((Math.round(m) % 12) + 12) % 12)).size,
     scaleName: sc.name, scaleDegs: [...sc.degrees].sort((x, y) => x - y).join(','),
@@ -84,7 +84,7 @@ export function snap(b: Bloom): Snap {
 }
 
 export function sameSnap(a: Snap, z: Snap): boolean {
-  return a.notes === z.notes && a.intervals === z.intervals && a.ivMode === z.ivMode && a.scaleDegs === z.scaleDegs
+  return a.notes === z.notes && a.intervals === z.intervals && a.figures === z.figures && a.ivMode === z.ivMode && a.scaleDegs === z.scaleDegs
     && a.time.join() === z.time.join() && a.vel.join() === z.vel.join() && a.chan.join() === z.chan.join()
     && a.tuning === z.tuning;
 }
@@ -130,5 +130,6 @@ export function describeChange(a: Snap, z: Snap): string {
     const same = x.map(v => JSON.stringify(v)).sort().join() === y.map(v => JSON.stringify(v)).sort().join();
     parts.push(same ? 'intervals reordered' : `${changed} intervals changed`);
   }
+  if (a.figures !== z.figures) parts.push('figures changed');
   return parts.slice(0, 3).join(' · ');
 }

@@ -17,6 +17,7 @@ export interface CueContext {
   pins: number;             // events pinned
   ragaMoves: boolean;       // a raga sounds some notes other than written
   intervals: boolean;
+  figures: boolean;
   held: boolean;            // a tuning held over every bloom
   pulsing: boolean;
   looping: boolean;
@@ -55,6 +56,8 @@ const TIPS = [
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',
   '5 ↵ add a chord every few notes: -P5/10',
+  'b figures: 0 (1 2 3) 0 — a note plays do re mi in its time',
+  'b figures: @3 — a note plays garden slot 3 from itself',
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
 ];
@@ -66,6 +69,7 @@ function situations(c: CueContext): string[] {
   if (c.selection) out.push('esc clears · shift-esc inverts · keys act on these only');
   if (c.pins) out.push('esc unpins · click toggles a pin');
   if (c.ragaMoves) out.push('* bake what you hear');
+  if (c.figures) out.push('b retype the figures · * bake · B clear');
   if (c.intervals) out.push(c.ragaMoves ? '8 reset intervals' : '7 & sparser / denser · * bake · 8 reset');
   if (c.held) out.push('opt-t releases the hold');
   if (c.pulsing) out.push('< > rate · . stop');

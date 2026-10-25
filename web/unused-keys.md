@@ -10,11 +10,11 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
-- `b`  `q`  `y`  *(`q` `y` quantize and unify in the list modes)*
+- `q`  `y`  *(`q` `y` quantize and unify in the list modes; `b` `B` are figures)*
 
 ## Shift keys
 
-- `B`  `P`  `Q`  `V`  `Z`  *(`T` is tuning mode; `L` is tilt up)*
+- `P`  `Q`  `V`  `Z`  *(`T` is tuning mode; `L` is tilt up)*
 - `"`  `_`  `%`  *(`#` `$` are breeze; `%` was semitones ↔ scale steps, now each interval names its own kind)*
 
 ## Option (alt) keys
