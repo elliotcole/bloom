@@ -40,7 +40,7 @@ const IDLE_CUE = 'space play · n new · ? all keys';
 const TIPS = [
   "' vary: a few small changes at once",
   '- = calm / intensify',
-  '{ } merge / split a note',
+  '{ } merge / split a note (} asks into how many)',
   '( ) pivot on the highest / loudest note',
   '[ ] step the scale flatward / sharpward',
   'l L tilt the line down / up',

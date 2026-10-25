@@ -217,6 +217,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   // each step remembers the pins with the bloom: a key can move them (events
   // added before a pin), and undo must put them back on the same events
   const _undo: { bloom: Bloom; pins: number[] }[] = [];
+  let _splitSlices = 2;   // what } offered last time
   const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
   let _prevBloom = snapshotOf(state.bloom);
@@ -1081,10 +1082,17 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('merge');
       return;
     }
-    if (ch === '}') {
-      status('split a note');
-      b.splitNote();
-      refresh('split');
+    // } asks how many slices, then splits a note (one it chooses) into that many repeats
+    if (ch === '}' && state.typeList) {
+      state.typeList('split a note into:', String(_splitSlices), text => {
+        const n = Number(text.trim());
+        if (!Number.isInteger(n) || n < 2 || n > 16) return 'a whole number of slices, 2 to 16';
+        _splitSlices = n;
+        const msg = b.splitNote(n) ? `split a note into ${n}` : `no note is long enough for ${n} slices`;
+        status(msg);
+        refresh(msg);
+        return null;
+      });
       return;
     }
 
@@ -1167,12 +1175,6 @@ export function createKeyHandler(state: KeyHandlerState) {
       status('spray');
       b.spray();
       refresh('spray');
-      return;
-    }
-    if (ch === 'r' && !shift) {
-      status('ratchet');
-      b.ratchet();
-      refresh('ratchet');
       return;
     }
     if (ch === 'R' && shift) {

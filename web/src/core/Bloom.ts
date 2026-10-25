@@ -878,28 +878,6 @@ export class Bloom {
     return this.slide(windowLength);
   }
 
-  ratchet(repetitions?: number, index?: number): this {
-    // one of the long notes (at least half the longest, likelier the longer)
-    // repeats two or three times in its own time
-    const evs = this.events();
-    if (evs.length === 0) return this;
-    const longest = Math.max(...evs.map(e => e.time));
-    let i = index;
-    if (i === undefined) {
-      const weights = evs.map(e => (e.time >= longest / 2 && e.time / 2 >= MIN_TIME ? e.time * e.time : 0));
-      if (weights.every(w => w === 0)) return this;
-      i = weightedIndex(weights);
-    }
-    const ev = evs[i];
-    if (!ev || ev.time <= 0) return this;
-    const reps = repetitions ?? (ev.time / 3 >= MIN_TIME && coin(0.5) ? 3 : 2);
-    const part = roundTime(ev.time / reps);
-    evs.splice(i, 1, ...Array.from({ length: reps }, () => ({ ...ev, time: part })));
-    this.setEvents(evs);
-    return this;
-  }
-
-
   /** Snap times to a 1/grid grid. A duration never rounds down to 0 (that would stack notes on one instant): it gets one grid step. */
   quantize(grid = 4, margin = 0, strength = 1): this {
     const resolution = 1 / grid;
@@ -2494,13 +2472,13 @@ export class Bloom {
   }
 
   // ─── Split / merge ─────────────────────────────────────────────────────────
-  // Groove-safe rhythm edits. A split turns a note into two repeats of half its
-  // length; a merge lets a note absorb the next one's time. The total stays the
+  // Groove-safe rhythm edits. A split turns a note into repeats of itself
+  // sharing its length (two, unless asked for more); a merge lets a note absorb the next one's time. The total stays the
   // same and durations stay among halves and doubles of what's already there.
 
-  splitNote(): this {
-    this._splitAt();
-    return this;
+  /** Split a note into `slices` repeats; false when none is long enough */
+  splitNote(slices = 2): boolean {
+    return this._splitAt(-1, slices) >= 0;
   }
 
   mergeNote(): this {
@@ -2508,19 +2486,19 @@ export class Bloom {
     return this;
   }
 
-  /** Split a note (not `avoid`), preferring long notes whose half is already in the palette. Returns its index or -1. */
-  private _splitAt(avoid = -1): number {
+  /** Split a note (not `avoid`) into `slices`, preferring long notes whose slice is already in the palette. Returns its index or -1. */
+  private _splitAt(avoid = -1, slices = 2): number {
     const evs = this.events();
     if (evs.length === 0) return -1;
     const pal = new Set(this.paletteOf('time'));
     const weights = evs.map((e, i) => {
-      if (i === avoid || e.time / 2 < MIN_TIME) return 0;
-      return e.time * (pal.has(roundTime(e.time / 2)) ? 3 : 1);
+      if (i === avoid || e.time / slices < MIN_TIME) return 0;
+      return e.time * (pal.has(roundTime(e.time / slices)) ? 3 : 1);
     });
     if (weights.every(w => w === 0)) return -1;
     const i = weightedIndex(weights);
-    const half = roundTime(evs[i].time / 2);
-    evs.splice(i, 1, { ...evs[i], time: half }, { ...evs[i], time: half });
+    const part = roundTime(evs[i].time / slices);
+    evs.splice(i, 1, ...Array.from({ length: slices }, () => ({ ...evs[i], time: part })));
     this.setEvents(evs);
     return i;
   }

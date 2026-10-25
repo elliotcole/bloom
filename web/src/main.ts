@@ -185,7 +185,6 @@ async function main() {
     reg('stutter',   'stutter pattern',           b => b.stutter());
     reg('sputter',   'sputter pattern',           b => b.sputter());
     reg('spray',     'spray pattern',             b => b.spray());
-    reg('ratchet',   'ratchet rhythm',            b => b.ratchet());
     reg('mirror',    'mirror whole notes',        b => b.mirror());
     reg('braid',     'braid pattern',             b => b.braid());
     reg('pyramid',   'pyramid pattern',           b => b.pyramid());
@@ -224,7 +223,7 @@ async function main() {
     reg('calm',      'calm: sparser, softer, narrower',  b => b.calm());
     reg('intensify', 'intensify: busier, louder, wider', b => b.intensify());
     reg('vary',      'small variations all through',     b => b.vary());
-    reg('split',     'split a note into two halves',     b => b.splitNote());
+    reg('split',     'split a note into two halves',     b => { b.splitNote(); });
     reg('merge',     'merge a note with the next',       b => b.mergeNote());
     reg(['breeze+', 'breeze'], 'some notes up a scale step', b => b.breeze(1));
     reg('breeze-',   'some notes down a scale step',     b => b.breeze(-1));

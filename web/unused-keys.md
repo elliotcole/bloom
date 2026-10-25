@@ -10,7 +10,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
-- `q`  `y`  *(`q` `y` quantize and unify in the list modes; `b` `B` are figures)*
+- `r`  `q`  `y`  *(`r` divides in time mode; `q` `y` quantize and unify in the list modes; `b` `B` are figures)*
 
 ## Shift keys
 

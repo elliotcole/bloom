@@ -45,7 +45,7 @@ Levels 1–3 live at **home**. Level 4 is a **list mode**. Pitch has both: the c
 | `=` | **intensify** | splits a note in two, louder with sharper accents, pushes the outermost pitches a scale step outward, brings back one rest, maybe moves one channel |
 | `'` | **vary** | about 1 in 5 pitches move a scale step, sometimes a merge is traded for a split elsewhere, small velocity changes, a few channel swaps within the ones in use |
 | `{` | **merge** | one note absorbs the next one's time |
-| `}` | **split** | one note becomes two repeats of half its length |
+| `}` | **split** | asks how many slices (2 to start; it remembers), then one note becomes that many repeats sharing its length |
 
 Each press is small; press again to go further, and **cmd-Z** to step back. The step sizes are in `GESTURE` near the top of
 `src/core/Bloom.ts`.
@@ -53,7 +53,8 @@ Each press is small; press again to go further, and **cmd-Z** to step back. The 
 **Rhythm only changes by splitting and merging**, so the total duration stays
 the same and durations stay among halves and doubles of what's already there.
 Merges prefer pairs that add up to a duration you already use (½ + ½ → 1); splits
-prefer notes whose half you already use.
+prefer notes whose slice you already use (a split into 3 or more brings in
+new durations: that's the point of asking).
 
 ## Whole notes (home)
 
@@ -65,7 +66,7 @@ These move each note together with its time, velocity, channel and interval.
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
 | `d` | braid | `D` | pyramid |
-| `r` | ratchet: a long note repeats 2 or 3 times in its own time | `Y` | spray |
+| `Y` | spray | | |
 | `h` | thin | `H` | thicken |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
@@ -356,7 +357,7 @@ half the longest, the longer the likelier, about a fifth of them) each divide
 into two or three equal parts. Short durations are never divided, so a run of
 presses works down from the long end. No notes are added: the time list grows
 longer than the notes, so it phases against them, a new rhythm under the same
-line. (At home, `r` ratchets: the note itself repeats in its own time.)
+line. (At home, `}` split repeats the note itself in its own time.)
 
 **In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
 semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
