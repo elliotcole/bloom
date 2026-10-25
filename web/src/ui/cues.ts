@@ -28,7 +28,7 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · r ratchet · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
-  iv: '↵ type them: -P5/10 · 7 & sparser / denser · i above ↔ below · esc home',
+  iv: '↵ type them: -P5/10 · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 
 const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · esc home';

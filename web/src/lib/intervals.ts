@@ -26,6 +26,8 @@ export const mapCount = (iv: number, fn: (n: number) => number): number => makeI
 export const octaveOf = (iv: number): number => (isDiatonic(iv) ? 7 : 12);
 /** Roughly how wide, in semitones, for comparing intervals of either kind */
 export const widthOf = (iv: number): number => (isDiatonic(iv) ? countOf(iv) * 12 / 7 : iv);
+/** A chord's order: closest to the note first, above before below at the same width */
+export const chordOrder = (a: number, b: number): number => Math.abs(widthOf(a)) - Math.abs(widthOf(b)) || b - a;
 
 const CHROMATIC_NAMES = ['', 'm2', 'M2', 'm3', 'M3', 'P4', 'TT', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8',
   'm9', 'M9', 'm10', 'M10', 'P11', 'A11', 'P12', 'm13', 'M13', 'm14', 'M14', 'P15'];
@@ -102,7 +104,7 @@ export function parseIntervals(text: string): { list: (number | number[])[]; err
         if (iv === null) return { list: [], error: `"${p}" isn't an interval (try P5, m3, 3rd, 8ve)` };
         ivs.push(sign * iv);
       }
-      step = ivs.length === 1 ? ivs[0] : [...new Set(ivs)].sort((a, b) => widthOf(a) - widthOf(b));
+      step = ivs.length === 1 ? ivs[0] : [...new Set(ivs)].sort(chordOrder);
     }
     list.push(step);
     if (every !== undefined) {

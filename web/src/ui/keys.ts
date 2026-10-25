@@ -62,7 +62,7 @@ const LIST_KEYS: Record<string, ListAction> = {
   s: { pattern: 'scramble', label: 'scramble' },
   S: { pattern: 'shuffle', label: 'shuffle' },
   R: { pattern: 'mirror', label: 'mirror' },
-  r: { verb: 'ratchet', label: 'ratchet', labels: { time: 'ratchet: a few long durations split in 2 or 3' } },
+  r: { verb: 'ratchet', label: 'ratchet', labels: { time: 'ratchet: a few long durations split in 2 or 3', iv: 'ratchet: a few chords sound on the rest after them too' } },
   '9': { pattern: 'rotate<', label: 'rotate <<' },
   '0': { pattern: 'rotate>', label: 'rotate >>' },
   u: { pattern: 'stutter', label: 'stutter' },
@@ -83,9 +83,9 @@ const LIST_KEYS: Record<string, ListAction> = {
   '4': { verb: 'stepUp', label: 'palette step up', labels: { pitch: 'scale step up' } },
   '#': { verb: 'breezeDown', label: 'breeze: some a step down' },
   '$': { verb: 'breezeUp', label: 'breeze: some a step up' },
-  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics', iv: 'narrower' } },
-  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'wider' } },
-  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'wider' } },
+  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics', iv: 'evener spacing' } },
+  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
+  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
   y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)' } },
   i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below' } },
   I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
@@ -95,8 +95,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)' } },
   h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer' } },
   H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new intervals' } },
-  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new intervals' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new chords, same places' } },
+  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new chords and places' } },
 };
 
 // l tilts down and L up, in every list
@@ -758,14 +758,28 @@ export function createKeyHandler(state: KeyHandlerState) {
       else status(`${tag} q snaps to the scale; k K j J choose it`);
       return true;
     }
+    // intervals: q puts them in the scale, as it puts pitches in it in pitch mode
+    if (m === 'iv' && (ch === 'q' || ch === 'Q')) {
+      if (ch === 'Q') status(`${tag} q snaps the intervals to the scale (m3 → 3rd)`);
+      else if (b.shapeList('iv', 'quantize')) { status(`${tag} snap to the scale: ${formatIntervals(b.intervals)}`); refresh(`${tag} snap to the scale`); }
+      else status(`${tag} already in the scale`);
+      return true;
+    }
+    // and ; : thicken and thin the chords, as they clump and flatten them at home
+    if (m === 'iv' && (ch === ';' || ch === ':')) {
+      const more = ch === ';';
+      if (b.thickenIntervals(more)) { const msg = `${tag} ${more ? 'thicker' : 'thinner'} chords: ${formatIntervals(b.intervals)}`; status(msg); refresh(msg); }
+      else status(`${tag} ${more ? 'no voice left to add' : 'every chord is one interval already'}`);
+      return true;
+    }
     if (ch === 'q') {
       const q = currentQuantize();
-      apply(m === 'time' ? `quantize [1/${q}]` : m === 'iv' ? `≤ ${q} kinds of step` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
+      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
       return true;
     }
     if (ch === 'Q') {
       const q = nextQuantize();
-      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : m === 'iv' ? `≤ ${q} kinds of step` : `≤ ${q} levels`}`);
+      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`}`);
       return true;
     }
     if (ch === 'x' || ch === 'f') {
@@ -783,8 +797,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       if ('pattern' in action) {
         apply(label, () => b.patternList(LIST_OF_MODE[m], action.pattern));
       } else if (b.shapeList(LIST_OF_MODE[m], action.verb)) {
-        status(`${tag} ${label}`);
-        refresh(`${tag} ${label}`);
+        const said = m === 'iv' ? `${tag} ${label}: ${formatIntervals(b.intervals)}` : `${tag} ${label}`;   // intervals say what they now are
+        status(said);
+        refresh(said);
       } else {
         status(`${tag} no ${MODE_NAME[m]} version of ${label}`);
       }

@@ -2,7 +2,7 @@
 
 import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
-import { countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
+import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
@@ -54,7 +54,7 @@ const MAX_BAKED_LENGTH = 256;
 const ivArr = (s: IntervalVal): number[] => (Array.isArray(s) ? s : [s]).filter(x => x !== 0);
 function ivVal(a: number[]): IntervalVal {
   const u = [...new Set(a.filter(x => x !== 0).map(x => mapCount(x, n => n)))]
-    .sort((x, y) => widthOf(x) - widthOf(y));
+    .sort(chordOrder);
   return u.length === 0 ? 0 : u.length === 1 ? u[0] : u;
 }
 const ivKey = (s: IntervalVal): string => JSON.stringify(ivVal(ivArr(s)));
@@ -1895,7 +1895,7 @@ export class Bloom {
     if (verb === 'tiltDown' || verb === 'tiltUp') return this.tiltList(k, verb === 'tiltUp' ? 1 : -1);
     if (k === 'notes') return this.shapePitch(verb, amount);
     // only pitch has a key to leave; elsewhere N is n
-    if (verb === 'renewWild') verb = 'renew';
+    if (verb === 'renewWild' && k !== 'iv') verb = 'renew';   // intervals: n keeps where, N doesn't
     if (k === 'time') return this.shapeTimes(verb, amount);
     if (k === 'vel') return this.shapeVels(verb, amount);
     if (k === 'iv') return this.shapeIntervals(verb, amount);
@@ -2396,8 +2396,18 @@ export class Bloom {
         this.rememberBreeze('iv', heat, moving, this.intervals);
         break;
       }
-      case 'converge': this.incrementIntervals(-1); break;
-      case 'diverge': this.incrementIntervals(1); break;
+      // where the chords fall: evener gaps, or more uneven ones
+      case 'converge': return this.respaceIntervals(true);
+      case 'diverge': return this.respaceIntervals(false);
+      // a few chords also sound on the rest after them
+      case 'ratchet': {
+        const can = st.map((_, i) => i).filter(i => ivArr(st[i]).length && i + 1 < n && !ivArr(st[i + 1]).length);
+        if (!can.length) return false;
+        const out = [...st];
+        someIndices(can.length, 1 / 3).forEach(k => { out[can[k] + 1] = JSON.parse(JSON.stringify(st[can[k]])); });
+        this.intervals = out;
+        break;
+      }
       // every step that adds something adds the commonest step
       case 'unify': {
         if (!pal.length) break;
@@ -2443,12 +2453,19 @@ export class Bloom {
         else this.intervals = [...st, iv];
         break;
       }
+      // into the scale: each chromatic interval becomes the scale step nearest its size
       case 'quantize': {
-        let guard = 64;
-        while (this.intervalPalette().length > Math.max(1, amount) && guard-- > 0) fewer();
+        if (!singles.some(iv => !isDiatonic(iv))) return false;
+        this.intervals = st.map(s => ivVal(ivArr(s).map(iv => (isDiatonic(iv) ? iv : makeIv(true, Math.sign(iv) * Math.max(1, Math.round(Math.abs(iv) * 7 / 12)))))));
         break;
       }
-      case 'renew': this.randIntervals(); break;
+      // n: new chords in the same places; N: new chords and places
+      case 'renew': {
+        if (!live.length) { this.randIntervals(); break; }
+        this.intervals = st.map(s => (ivArr(s).length ? (coin(0.15) ? ivVal([this.randomInterval(), this.randomInterval()]) : this.randomInterval()) : 0));
+        break;
+      }
+      case 'renewWild': this.randIntervals(); break;
       case 'dropLast': this.dropInterval(); break;
       case 'addFromPalette': this.intervals = [...st, pal.length ? JSON.parse(JSON.stringify(pick(pal))) : this.randomInterval()]; break;
       case 'addRandom': this.intervals = [...st, randomStep()]; break;
@@ -2720,6 +2737,64 @@ export class Bloom {
     }
     this.intervalsDiatonic = false;
     return this;
+  }
+
+  /**
+   * Evener (true) or more uneven gaps between the chords, keeping the list's
+   * length and the chords in order: one rest moves per press, from the widest
+   * gap to the narrowest, or from a gap to another at random. The list is
+   * taken round, so rests before the first chord belong to the last gap.
+   */
+  respaceIntervals(even: boolean): boolean {
+    const st = this.intervals;
+    const at = st.map((_, i) => i).filter(i => ivArr(st[i]).length);
+    if (at.length < 2) return false;
+    const L = st.length;
+    const gaps = at.map((p, k) => ((at[(k + 1) % at.length] - p + L) % L) || L);
+    let from: number, to: number;
+    if (even) {
+      const hi = Math.max(...gaps), lo = Math.min(...gaps);
+      if (hi - lo < 2) return false;   // as even as whole steps allow
+      from = pick(gaps.map((_, k) => k).filter(k => gaps[k] === hi));
+      to = pick(gaps.map((_, k) => k).filter(k => gaps[k] === lo));
+    } else {
+      const roomy = gaps.map((_, k) => k).filter(k => gaps[k] > 1);
+      if (!roomy.length) return false;
+      from = pick(roomy);
+      to = pick(gaps.map((_, k) => k).filter(k => k !== from));
+    }
+    gaps[from]--; gaps[to]++;
+    const out: IntervalVal[] = [];
+    at.forEach((p, k) => { out.push(st[p]); for (let r = 1; r < gaps[k]; r++) out.push(0); });
+    // keep the first chord where it was
+    this.intervals = rotateArr(out, at[0]);
+    return true;
+  }
+
+  /**
+   * One more voice in every chord (true), or one fewer (never fewer than one):
+   * a new interval of the chord's own kind, from the consonant ones, on the
+   * chord's side; thinning drops the widest.
+   */
+  thickenIntervals(more: boolean): boolean {
+    let changed = false;
+    this.intervals = this.intervals.map(s => {
+      const ivs = ivArr(s);
+      if (!ivs.length) return s;
+      if (!more) {
+        if (ivs.length < 2) return s;
+        changed = true;
+        const widest = ivs.reduce((w, iv) => (Math.abs(widthOf(iv)) > Math.abs(widthOf(w)) ? iv : w));
+        return ivVal(ivs.filter(iv => iv !== widest));
+      }
+      const dia = isDiatonic(ivs[0]);
+      const side = Math.sign(ivs.reduce((a, iv) => a + Math.sign(iv), 0)) || Math.sign(ivs[0]);
+      const pool = (dia ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS).filter(iv => Math.sign(iv) === side && !ivs.includes(iv));
+      if (!pool.length) return s;
+      changed = true;
+      return ivVal([...ivs, pick(pool)]);
+    });
+    return changed;
   }
 
   /** Something to hear when the list is empty: a fifth below every fourth note */

@@ -378,16 +378,28 @@ until the list is as long as the notes (`1 2 3` on 7 notes sets `1 2 3 1 2 3
 `-P5/10` goes. The console, the lanes and the notice all write the intervals
 this way too.
 
-*The keys.* `7 &` (at home and here) make them sparser / denser: one more or
-one fewer rest after each step, so `/10` becomes `/11` or `/9`. `1 2` move
-every interval one semitone or scale step (each keeps its kind), `3 4`
-narrow / widen each to the next size in use, `- =` narrow / widen (a chord's
-spacing opens too), `! @` an octave (so `+P5` becomes `-P4`: the same note on
-the other side), `i` flips above ↔ below, `I` swaps wide ↔ close, `y` makes
-every step the commonest, `h H` one kind of step fewer / more, `n` new
-intervals, `a A` add a step (one in use / a fresh one). The order keys work as
-on any list, and `6 ^ 8 *` mean what they mean at home. `F 5` freezes the
-steps in use. New intervals are of the kind most of the list has (diatonic
+*The keys.* The list holds two things: **where** the chords fall and
+**what** they are.
+
+- Where: `7 &` (at home and here) sparser / denser, one more or one fewer
+  rest after each chord, so `/10` becomes `/11` or `/9`. `- =` evener / more
+  uneven gaps between the chords, the list's length kept (`-P5/2 +M3/12
+  -P4/2` evens out to `/5 /6 /5`). `r` ratchet: a few chords also sound on the
+  rest after them. The order keys move them about as on any list.
+- What: `1 2` move every interval one semitone or scale step (each keeps its
+  kind), `3 4` narrow / widen each to the next size in use, `! @` an octave
+  (so `+P5` becomes `-P4`: the same note on the other side), `# $` breeze,
+  `i` flips above ↔ below, `I` swaps wide ↔ close, `w` `l L` swell and tilt
+  the widths, `y` makes every chord the commonest, `h H` one kind of chord
+  fewer / more, `m M` mutate. `;` `:` thicken / thin every chord by a voice
+  (as they clump and flatten chords at home; thinning drops the widest).
+  `q` snaps the intervals to the scale: each chromatic one becomes the scale
+  step nearest its size (`+M3` → `+3rd`, `-P5` → `-5th`).
+- Both: `n` new chords in the same places, `N` new chords and places. `a A`
+  add a step at the end, `z` drops the last.
+
+`6 ^ 8 *` mean what they mean at home. `F 5` freezes the chords in use.
+Chords are written closest interval first. New intervals are of the kind most of the list has (diatonic
 when it's empty and a scale is attached).
 
 ### Vocabulary ("palette")
