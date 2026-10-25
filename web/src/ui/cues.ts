@@ -26,7 +26,7 @@ export interface CueContext {
 
 const MODE_CUES: Record<CueMode, string> = {
   pitch: '9 0 rotate · q snap to the scale · ( ) pivot · esc home',
-  time: '9 0 rotate · q quantize · r ratchet · ! @ double / half time · esc home',
+  time: '9 0 rotate · q quantize · r divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
   iv: '↵ type them: -P5/10 · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',

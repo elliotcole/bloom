@@ -351,11 +351,12 @@ point: stutter only the velocities and the accent pattern drifts.
 | `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 
-**Ratchet, in time mode only: `r`** (as `r` at home). A few of the longest
-durations (at least half the longest, the longer the likelier, about a fifth
-of them) each split into two or three equal parts. Short durations are never
-split, so a run of presses works down from the long end. The time list grows
-longer than the notes, so it phases against them.
+**Divide, in time mode only: `r`.** A few of the longest durations (at least
+half the longest, the longer the likelier, about a fifth of them) each divide
+into two or three equal parts. Short durations are never divided, so a run of
+presses works down from the long end. No notes are added: the time list grows
+longer than the notes, so it phases against them, a new rhythm under the same
+line. (At home, `r` ratchets: the note itself repeats in its own time.)
 
 **In pitch mode the palette is the scale.** `3 4` move a scale step, `1 2` a
 semitone, `! @` an octave. `- =` narrow or widen the range a scale step,
