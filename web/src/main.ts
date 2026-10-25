@@ -6,6 +6,7 @@ import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
 import { Garden } from './garden';
 import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
 import { stopAll, setBpm, getBpm } from './audio/scheduler';
+import { ClockFollower, setTimebase } from './audio/clockSync';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
 import { askRestore } from './ui/restorePrompt';
@@ -552,37 +553,31 @@ async function main() {
     }
   });
 
-  // MIDI clock sync (0xF8 = 248 = timing clock, 24 per beat)
+  // MIDI clock: the tempo, and while the transport plays, the beat (audio/clockSync)
   const clockStatus = document.getElementById('clock-sync-status') as HTMLElement;
-  let _clockPulses: number[] = [];
-  let _clockSynced = false;
-  onMidiMessage((data, atMs) => {
-    if (data[0] !== 0xf8) return;
-    _clockPulses.push(atMs);
-    if (_clockPulses.length > 25) _clockPulses.shift();
-    if (_clockPulses.length >= 3) {
-      const span = _clockPulses[_clockPulses.length - 1] - _clockPulses[0];
-      const pulseCount = _clockPulses.length - 1;
-      const bpm = Math.round(60_000 / ((span / pulseCount) * 24));
-      if (bpm >= 20 && bpm <= 300) {
-        setBpm(bpm);
-        if (bpmInput) bpmInput.value = String(bpm);
-        if (!_clockSynced) {
-          _clockSynced = true;
-          if (clockStatus) { clockStatus.textContent = 'clk: sync'; clockStatus.classList.add('synced'); }
-        }
+  const clock = new ClockFollower();
+  setTimebase(() => clock.state(performance.now()).running ? clock : null);
+  onMidiMessage((data, atMs) => { clock.message(data, atMs); });
+  let _bpmShownAt = 0;
+  setInterval(() => {
+    const now = performance.now();
+    const st = clock.state(now);
+    if (st.bpm !== null && st.bpm >= 20 && st.bpm <= 300) {
+      setBpm(st.bpm);
+      if (bpmInput && document.activeElement !== bpmInput && now - _bpmShownAt > 500) {
+        bpmInput.value = st.bpm.toFixed(1);
+        _bpmShownAt = now;
       }
     }
-  });
-  // Clear sync indicator if no clock pulse for 1s
-  setInterval(() => {
-    const last = _clockPulses[_clockPulses.length - 1] ?? 0;
-    if (_clockSynced && performance.now() - last > 1000) {
-      _clockSynced = false;
-      _clockPulses = [];
-      if (clockStatus) { clockStatus.textContent = 'clk: free'; clockStatus.classList.remove('synced'); }
-    }
-  }, 500);
+    if (!clockStatus) return;
+    const beat = st.running ? clock.beatAt(now) : null;
+    clockStatus.textContent = !st.synced ? 'clk: free'
+      : beat !== null ? `clk ▶ beat ${Math.floor(beat) % 4 + 1}` : 'clk: tempo';
+    clockStatus.classList.toggle('synced', st.synced);
+    clockStatus.title = !st.synced ? 'no MIDI clock coming in: Bloom keeps its own tempo'
+      : st.running ? 'following a MIDI clock: its tempo, and its beat (a loop starts on the next beat and stays locked to it)'
+      : 'following a MIDI clock\'s tempo; for its beat too, start the transport (in Live: Song sync on for this port, so it sends Start and Song Position)';
+  }, 50);
 
   // Legato
   const legatoInput = document.getElementById('legato-input') as HTMLInputElement;

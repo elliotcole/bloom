@@ -6,6 +6,7 @@ import type { IntervalVal } from '../core/Bloom';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
+import { timebase } from './clockSync';
 
 // ─── BPM state ────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,8 @@ interface LoopState {
   /** Called at the start of every notes cycle with the effective vel/time/chan arrays for that cycle */
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void;
   onLoop?: () => void;
+  /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
+  lock: { start: number; beats: number } | null;
 }
 
 let _loop: LoopState | null = null;
@@ -175,6 +178,7 @@ export function startLooper(
     onNoteOn,
     onCycleUpdate,
     onLoop,
+    lock: null,
   };
 
   state.intervalId = setInterval(() => {
@@ -192,6 +196,15 @@ export function startLooper(
 
       // At the start of each notes cycle: update the display + fire onLoop
       if (noteIdx === 0) {
+        // a running clock (Live playing): the cycle starts on its next beat and follows it
+        const tb = timebase();
+        const at = tb && !state.lock ? tb.beatAt(state.nextEventTime) : null;
+        if (tb && at !== null) {
+          const start = Math.ceil(at - 0.02);
+          state.lock = { start, beats: 0 };
+          state.nextEventTime = tb.timeAtBeat(start) ?? state.nextEventTime;
+          if (state.nextEventTime >= horizon) break;
+        }
         const N = b.notes.length;
         if (state.onCycleUpdate) {
           state.onCycleUpdate(
@@ -204,9 +217,10 @@ export function startLooper(
         if (state.globalTick > 0) state.onLoop?.();
       }
 
-      const noteVal = b.notes[noteIdx];
+      const view = b.sounding(state.globalTick - noteIdx);   // a raga's notes as they sound
+      const noteVal = view.notes[noteIdx];
       const notes = Array.isArray(noteVal) ? noteVal as number[] : [noteVal as number];
-      const added = b.addedNotesAt(noteIdx, state.globalTick);
+      const added = view.addedNotesAt(noteIdx, state.globalTick);
       const vel  = wrapAt(b.velocities,    state.globalTick);
       const time = wrapAt(b.timeIntervals, state.globalTick);
       const chan = wrapAt(b.chans,         state.globalTick);
@@ -235,6 +249,12 @@ export function startLooper(
       setTimeout(() => state.onNoteOn?.(idxSnap, tickSnap), visualDelay);
 
       state.globalTick++;
+      if (state.lock) {
+        state.lock.beats += time;
+        const t = timebase()?.timeAtBeat(state.lock.start + state.lock.beats) ?? null;
+        if (t !== null) { state.nextEventTime = t; continue; }
+        state.lock = null;   // the clock stopped: carry on in our own time
+      }
       state.nextEventTime += beatsToMs(time);
     }
   }, TICK_MS);

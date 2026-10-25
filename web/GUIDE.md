@@ -473,6 +473,16 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   - **play ▾** while you play: bpm, tap, clock sync; the freezes (duration,
     grid, palette); level (vel max) and reverb.
   - **garden ▾** save, load, merge, curdle.
+- **Following Ableton's clock.** Send Bloom a MIDI clock: in Live's Link,
+  Tempo & MIDI settings, turn on **Sync** for an output port Bloom listens to
+  (an IAC bus works), and **Song** as well if you can. Bloom follows the tempo
+  exactly (no rounding, read over the last three beats), and while Live plays
+  it knows the beat too: a loop (`,`) starts on the next beat and stays
+  locked to Live's beats as both play, at whatever tempo Live is at. play ▾
+  shows `clk ▶ beat 3` while locked, `clk: tempo` when only the tempo is
+  coming (start Live's transport, or press play again, to tell Bloom where the
+  beat is), `clk: free` with no clock. The pulsar and the garden loop follow
+  the tempo but not yet the beat.
   - **perform ▾** for video: clean view, frame, size, drift, demo keys.
   - **⚙** set once: display (skin, axis, note labels, cues), MIDI channels,
     the compass, and the tuning library (load .scl files, forget them, the

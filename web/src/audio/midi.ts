@@ -41,8 +41,7 @@ export function offMidiMessage(handler: MidiMsgHandler): void {
   _msgHandlers.delete(handler);
 }
 
-function _dispatchMsg(data: Uint8Array): void {
-  const atMs = performance.now();
+function _dispatchMsg(data: Uint8Array, atMs = performance.now()): void {
   _msgHandlers.forEach(h => h(data, atMs));
 }
 
@@ -109,7 +108,8 @@ function _refreshInputs(): void {
     state.inputs.push({ name: input.name ?? 'Unknown', id: input.id });
     // Attach message handler (safe to re-attach — browser deduplicates)
     input.onmidimessage = (ev: MIDIMessageEvent) => {
-      if (ev.data) _dispatchMsg(ev.data as Uint8Array);
+      // the event's own timestamp is when it arrived, before the page got round to it
+      if (ev.data) _dispatchMsg(ev.data as Uint8Array, ev.timeStamp || performance.now());
     };
   });
 }
