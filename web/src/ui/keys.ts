@@ -1373,7 +1373,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     if (!alt && ch === 'b' && state.typeList) {
-      state.typeList('figures:', b.hasFigures() ? formatFigures(b.figures) : '', (text, complete) => {
+      // the figures as they are, or a 0 for each note to type over
+      const shown = b.hasFigures() ? formatFigures(b.figures) : b.notes.map(() => '0').join(' ');
+      state.typeList('figures:', shown, (text, complete) => {
         const r = parseFigures(text);
         if (r.error) return r.error;
         const want = b.notes.length;
