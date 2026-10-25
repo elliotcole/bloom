@@ -52,6 +52,7 @@ export function drawTuningPie(
   ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number,
   bloom: Bloom, flashValues: number[], theme: Theme, marks: PieMarks,
 ): void {
+  bloom = bloom.sounding();   // slices light as the notes sound
   const t = editable(soundingTuning(bloom));
   const root = soundingRoot(bloom);
   const dev = deviations(soundingTuning(bloom), root);

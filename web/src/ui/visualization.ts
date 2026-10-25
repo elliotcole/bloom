@@ -93,6 +93,36 @@ function drawAddedMark(
 }
 
 /**
+ * Where a raga sounds another note than the one written (Bloom.sounding): a
+ * faint dashed ring at the written pitch, so the note drawn is the one heard.
+ */
+function drawWrittenMark(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, theme: Theme): void {
+  ctx.save();
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = withAlpha(theme.text, 0.45);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r + 1, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Pitch-class circles: a dashed ring on each pitch class written but not sounding there */
+function drawWrittenPcMarks(
+  ctx: CanvasRenderingContext2D, bloom: Bloom, theme: Theme,
+  cx: number, cy: number, outerR: number, nodeR: number, angleOf: (p: number) => number,
+): void {
+  const done = new Set<number>();
+  for (let i = 0; i < bloom.notes.length; i++) {
+    const w = bloom.writtenAt(i);
+    if (w === null || done.has(pc(w))) continue;
+    done.add(pc(w));
+    const ang = angleOf(pc(w));
+    drawWrittenMark(ctx, cx + Math.cos(ang) * outerR, cy + Math.sin(ang) * outerR, nodeR * 1.4, theme);
+  }
+}
+
+/**
  * Pitch-class circles (tonal, set): a diamond on each pitch class the intervals
  * add — around the node when the bloom already has that pitch class.
  */
@@ -182,6 +212,7 @@ export function drawRadialAt(
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
   const times = notes.map((_, i) => wrapAt(bloom.timeIntervals, i));
@@ -250,6 +281,11 @@ export function drawRadialAt(
       const len = (pitch / 127) * radius * 0.8 + radius * 0.08;
       drawAddedMark(ctx, cx - Math.sin(angle) * len, cy + Math.cos(angle) * len, 4.5, pitch, vel, flash, theme);
     });
+    const w = bloom.writtenAt(i);
+    if (w !== null) {
+      const len = (w / 127) * radius * 0.8 + radius * 0.08;
+      drawWrittenMark(ctx, cx - Math.sin(noteAngles[i]) * len, cy + Math.cos(noteAngles[i]) * len, 4.5, theme);
+    }
   }
 
   ctx.globalCompositeOperation = 'source-over';
@@ -289,6 +325,7 @@ export function drawPianoAt(
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
 
@@ -425,6 +462,8 @@ export function drawPianoAt(
     });
     bloom.addedNotesAt(i).forEach(pitch =>
       drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
+    const written = bloom.writtenAt(i);
+    if (written !== null) drawWrittenMark(ctx, nx, noteToY(written), baseR, theme);
     t += wrapAt(bloom.timeIntervals, i);
   }
 
@@ -484,6 +523,7 @@ export function drawFieldAt(
   showLabels = true,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
 
@@ -617,6 +657,8 @@ export function drawFieldAt(
     });
     bloom.addedNotesAt(i).forEach(pitch =>
       drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
+    const written = bloom.writtenAt(i);
+    if (written !== null) drawWrittenMark(ctx, nx, noteToY(written), baseR, theme);
     t += wrapAt(bloom.timeIntervals, i);
   }
 
@@ -678,6 +720,7 @@ export function drawDeepAt(
   showNoteLabels = false,
   camera: CameraParams = DEFAULT_CAMERA,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
   if (n === 0) return;
@@ -794,7 +837,7 @@ export function drawDeepAt(
 
   // Build flat list of all note instances for depth-sorted drawing
   type Inst = {
-    added?: boolean;
+    added?: boolean; written?: boolean;
     pitch: number; vel: number; flash: number;
     projX: number; projY: number;
     dotScale: number; depthAlpha: number; zNorm: number;
@@ -821,6 +864,8 @@ export function drawDeepAt(
     bloom.addedNotesAt(i).forEach(pitch => {
       instances.push({ added: true, pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
     });
+    const written = bloom.writtenAt(i);
+    if (written !== null) instances.push({ written: true, pitch: written, vel, flash, projX, projY: noteToY(written) + depthToY(vel), dotScale, depthAlpha, zNorm });
 
     t += wrapAt(bloom.timeIntervals, i);
   }
@@ -852,6 +897,7 @@ export function drawDeepAt(
       drawAddedMark(ctx, projX, projY, baseR * dotScale * 0.8, pitch, vel, flash, theme, depthAlpha);
       continue;
     }
+    if (inst.written) { drawWrittenMark(ctx, projX, projY, baseR * dotScale, theme); continue; }
     const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
     const finalA = a * depthAlpha;
     const r = baseR * dotScale + flash * 7 * zNorm;
@@ -937,6 +983,7 @@ export function drawScoreAt(
   showLabels = false,
   compact = false,          // garden mode: no clefs/brace, staff fills the slot
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
 
@@ -1148,6 +1195,13 @@ export function drawScoreAt(
       ctx.stroke();
     });
 
+    // The written note, where a raga sounds another: a dashed ghost notehead
+    const written = bloom.writtenAt(i);
+    if (written !== null) {
+      const { pos } = midiToStaff(written);
+      drawWrittenMark(ctx, nx + NH_W * 1.9, posToY(pos), HALF, theme);
+    }
+
     // Optional pitch-name labels above/below the staff.
     if (showLabels) {
       ctx.font         = '8px monospace';
@@ -1177,6 +1231,7 @@ export function drawOrbitAt(
   orbitRotation = 0,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
   const minR = radius * 0.10;
@@ -1277,6 +1332,12 @@ export function drawOrbitAt(
       ctx.stroke();
       drawAddedMark(ctx, cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, 3 + (vel / 127) * 5, pitch, vel, flash, theme);
     });
+    const written = bloom.writtenAt(i);
+    if (written !== null) {
+      const r = minR + (written / 127) * (maxR - minR);
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2 + orbitRotation;
+      drawWrittenMark(ctx, cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, 3 + (vel / 127) * 5, theme);
+    }
   }
 
   ctx.globalCompositeOperation = 'source-over';
@@ -1318,6 +1379,7 @@ export function drawTonalAt(
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const outerR = radius * 0.82;
   const nodeR = clamp(radius * 0.075, 4, 16);
   const labelR = outerR + nodeR + 16;
@@ -1458,6 +1520,7 @@ export function drawTonalAt(
   }
 
   drawAddedPcMarks(ctx, bloom, flashValues, theme, cx, cy, outerR, nodeR, fifthsAngle, pcCount);
+  drawWrittenPcMarks(ctx, bloom, theme, cx, cy, outerR, nodeR, fifthsAngle);
 
   // Center dot
   ctx.beginPath();
@@ -1482,6 +1545,7 @@ export function drawSetAt(
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const outerR = radius * 0.82;
   const nodeR = clamp(radius * 0.075, 4, 16);
   const labelR = outerR + nodeR + 16;
@@ -1621,6 +1685,7 @@ export function drawSetAt(
   }
 
   drawAddedPcMarks(ctx, bloom, flashValues, theme, cx, cy, outerR, nodeR, chromaticAngle, pcCount);
+  drawWrittenPcMarks(ctx, bloom, theme, cx, cy, outerR, nodeR, chromaticAngle);
 
   // Center dot
   ctx.beginPath();
@@ -1642,6 +1707,7 @@ export function drawSpiralAt(
   showNoteLabels = false,
   camera: CameraParams = DEFAULT_CAMERA,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const loNote = bloom.lowestPossibleNote;
   const hiNote = bloom.highestPossibleNote;
   const noteRange = Math.max(1, hiNote - loNote);
@@ -1708,7 +1774,7 @@ export function drawSpiralAt(
   }
 
   // ── Build note positions ────────────────────────────────────────────────────
-  type NotePos = { px: number; py: number; sinT: number; flash: number; vel: number; midiPitch: number; added?: boolean };
+  type NotePos = { px: number; py: number; sinT: number; flash: number; vel: number; midiPitch: number; added?: boolean; written?: boolean };
   const positions: NotePos[] = [];
 
   for (let i = 0; i < bloom.notes.length; i++) {
@@ -1725,6 +1791,11 @@ export function drawSpiralAt(
       const { x, y, sinT } = project(midi);
       positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi, added: true });
     });
+    const written = bloom.writtenAt(i);
+    if (written !== null) {
+      const { x, y, sinT } = project(written);
+      positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: written, written: true });
+    }
   }
 
   // ── Constellation lines (cylinder-surface geodesics) ────────────────────────
@@ -1772,11 +1843,12 @@ export function drawSpiralAt(
   positions.sort((a, b) => a.sinT - b.sinT);
   const nodeR = clamp(radius * 0.055, 3, 12);
 
-  for (const { px, py, flash, vel, midiPitch, added } of positions) {
+  for (const { px, py, flash, vel, midiPitch, added, written } of positions) {
     if (added) {
       drawAddedMark(ctx, px, py, nodeR * (0.6 + vel / 127 * 0.8), midiPitch, vel, flash, theme);
       continue;
     }
+    if (written) { drawWrittenMark(ctx, px, py, nodeR * (0.6 + vel / 127 * 0.8), theme); continue; }
     const p = ((Math.round(midiPitch) % 12) + 12) % 12;
     const [h, s, l, a] = theme.noteHsla(p, vel, flash);
     const nr = nodeR * (0.6 + vel / 127 * 0.8) + flash * nodeR * 0.8;
@@ -1828,6 +1900,7 @@ export function drawHelixAt(
   theme: Theme = THEMES.dark,
   showNoteLabels = false,
 ): void {
+  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
   const notes = bloom.notes;
   const n = notes.length;
   if (n === 0) return;
@@ -1934,6 +2007,11 @@ export function drawHelixAt(
       const pos = spiralPos(tAdded, pitch);
       drawAddedMark(ctx, pos.x, pos.y, 3 + (vel / 127) * 3, pitch, vel, flash, theme);
     });
+    const written = bloom.writtenAt(i);
+    if (written !== null) {
+      const pos = spiralPos(tAdded, written);
+      drawWrittenMark(ctx, pos.x, pos.y, 3 + (vel / 127) * 3, theme);
+    }
     tAdded += wrapAt(bloom.timeIntervals, i);
   }
 

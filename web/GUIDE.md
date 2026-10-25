@@ -107,7 +107,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
-- **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes.
+- **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes (with a raga attached, it also writes the notes as they sound).
 - **Merge and split the garden:** buttons in ⚙ settings → garden. **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
@@ -264,8 +264,10 @@ of the form, the way the line is going.
 
 This happens as the bloom plays: the bloom keeps the raga's full set (both
 forms together), so every key works on it as on any scale, and a Pa that
-can't sound in this order comes back when the line is reversed. The note list
-can therefore show a Pa that sounds as Ma.
+can't sound in this order comes back when the line is reversed. The views
+draw the notes as they sound, with a dashed ring where the written note
+differs. `*` bakes them: the notes become what you hear (and any intervals
+are baked as usual); the raga stays attached.
 
 Two ragas have a turn the rule can't follow: Bageshri's descent climbs m P D
 and Shudh Sarang's M P, and neither P nor M is in its arohana, so those notes

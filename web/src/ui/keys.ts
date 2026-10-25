@@ -1296,19 +1296,24 @@ export function createKeyHandler(state: KeyHandlerState) {
     // ─── Intervals ────────────────────────────────────────────────────────────
     // Notes added at playback; the bloom's own notes are untouched
     if (!alt) {
-      const intervalKeys: Record<string, [string, () => void]> = {
+      const intervalKeys: Record<string, [string, () => unknown]> = {
         '6': ['widen intervals', () => b.incrementIntervals(1)],
         '^': ['narrow intervals', () => b.incrementIntervals(-1)],
         '7': ['add interval', () => b.addInterval()],
         '&': ['drop interval', () => b.dropInterval()],
         '8': ['reset intervals', () => b.resetIntervals()],
-        '*': ['bake intervals into notes', () => b.bakeIntervals()],
+        '*': ['bake into notes', () => {
+          const raga = b.bakeRaga();
+          const ivs = b.hasIntervals();
+          b.bakeIntervals();
+          return raga && ivs ? 'bake the raga and the intervals into the notes' : raga ? 'bake the raga into the notes, as they sound' : ivs ? 'bake intervals into notes' : 'nothing to bake';
+        }],
         '%': ['intervals', () => b.toggleIntervalsDiatonic()],
       };
       const hit = intervalKeys[ch];
       if (hit) {
-        hit[1]();
-        const msg = ch === '%'
+        const said = hit[1]();
+        const msg = typeof said === 'string' ? said : ch === '%'
           ? `intervals in ${b.intervalsDiatonic ? 'scale steps' : 'semitones'}`
           : hit[0];
         status(msg);

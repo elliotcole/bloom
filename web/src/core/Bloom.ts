@@ -239,6 +239,8 @@ export class Bloom {
   sustain: number | null;
 
   appliedScale: Scale | null;
+  /** only on a view from sounding(): the notes as written */
+  declare writtenNotes?: NoteArray;
   keyRoot: number;
   name: string;
   /** null: 12-TET. Degree 0 of the tuning sits on tuningRoot, which follows the key */
@@ -2888,14 +2890,42 @@ export class Bloom {
 
   /** Returns flat list of { note, velocity, time, chan } events for playback */
   /** One pass of the notes. `tick` is the running count the other lists are read at, so they keep phasing across passes. */
+  /**
+   * The bloom as it sounds: a raga sounds each note in the form of the step it
+   * takes next (fitByDirection), so its notes can differ from those written.
+   * A light view over this bloom with only the notes replaced, the written
+   * ones kept in `writtenNotes`; the bloom itself when nothing differs.
+   */
+  sounding(tick = 0): Bloom {
+    const s = this.appliedScale;
+    if (!s?.up || !s.down) return this;
+    const fitted = fitByDirection(this.notes, i => wrapAt(this.velocities, tick + i) > 0, s);
+    if (fitted.every((v, i) => v === this.notes[i])) return this;
+    const view = Object.create(this) as Bloom;
+    view.notes = fitted;
+    view.writtenNotes = this.notes;
+    return view;
+  }
+
+  /** The note written at i, when the bloom sounds a different one there (a view from sounding()) */
+  writtenAt(i: number): number | null {
+    const w = this.writtenNotes?.[i];
+    return typeof w === 'number' && w !== this.notes[i] ? w : null;
+  }
+
+  /** Write what a raga sounds into the notes (see sounding()); false when nothing differs */
+  bakeRaga(): boolean {
+    const view = this.sounding();
+    if (view === this) return false;
+    this.notes = view.notes;
+    return true;
+  }
+
   toEvents(tick = 0): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
-    // a raga sounds each note in the form of the step it takes next
-    const notes = this.appliedScale
-      ? fitByDirection(this.notes, i => wrapAt(this.velocities, tick + i) > 0, this.appliedScale)
-      : this.notes;
-    return notes.map((note, i) => ({
+    const src = this.sounding(tick);   // intervals stack on the note that sounds
+    return src.notes.map((note, i) => ({
       note: Array.isArray(note) ? (note as number[]) : note as number,
-      added: this.addedNotesAt(i, tick + i),
+      added: src.addedNotesAt(i, tick + i),
       velocity: wrapAt(this.velocities, tick + i),
       time: wrapAt(this.timeIntervals, tick + i),
       chan: wrapAt(this.chans, tick + i),
