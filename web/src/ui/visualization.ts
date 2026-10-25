@@ -2179,7 +2179,7 @@ export class BloomVisualization {
   get showLanes(): boolean { return this._showLanes; }
   /** Clean: the picture alone, no strips or overlays (for recording) */
   setClean(on: boolean): void { this._clean = on; }
-  /** Show the performance frame and size outside clean view too (while the settings panel is open) */
+  /** Show the performance frame and size outside clean view too (while the perform menu is open) */
   setFramePreview(on: boolean): void { this._framePreview = on; }
   private _framePreview = false;
   /** Frame and size apply in clean view, and as a preview while they're being set */

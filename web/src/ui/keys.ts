@@ -388,7 +388,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** The next (1) or previous (−1) loaded tuning: the held one's while held, else the bloom's */
   function stepTuningBy(dir: 1 | -1) {
     const lib = tuningLibrary();
-    if (lib.length < 2) { status('no tunings loaded — ⚙ settings → tuning → load .scl files'); return; }
+    if (lib.length < 2) { status('no tunings loaded — ⚙ → tunings → load .scl files'); return; }
     // a new base under the same alterations
     const cur = soundingTuning(state.bloom);
     const next = rebase(cur, stepTuning(cur, dir));
@@ -831,7 +831,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       const m = MODE_KEYS[ch];
       setListMode(_mode === m ? null : m);
       if (_mode === 'chan' && Bloom.maxChan === 0) {
-        status('channel mode — maxChan is 0, raise it in settings to hear channels');
+        status('channel mode — maxChan is 0, raise max ch in ⚙ → midi to hear channels');
       } else {
         status(_mode ? `${MODE_NAME[m]} mode` : `${MODE_NAME[m]} mode off`);   // its keys are on the cue line
       }
@@ -1561,7 +1561,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
   }
 
-  // ─── Fission / fusion (buttons in ⚙ settings, no keys) ──────────────────────
+  // ─── Fission / fusion (buttons in garden ▾, no keys) ──────────────────────
   function mergeGarden() {
     status('merge garden >> bloom');
     state.bloom.fromListOfBlooms(state.garden.slots);

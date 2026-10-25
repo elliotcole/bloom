@@ -16,7 +16,7 @@ tuning to every MTS-ESP client plugin, in Ableton Live or any other host.
 2. Get it, either way:
    - Download the ready-built one (Intel and Apple Silicon) in Terminal:
      `curl -fLo ~/bloom-mts https://bloom.ecc.xyz/bloom-mts && chmod +x ~/bloom-mts`
-     (Bloom's ⚙ settings → tuning → **copy helper command** copies this line).
+     (Bloom's ⚙ → tunings → **copy helper command** copies this line).
      Use curl rather than the browser: macOS won't open an unsigned program a
      browser downloaded. If you did use the browser, run
      `xattr -d com.apple.quarantine bloom-mts` on it first.
@@ -24,8 +24,8 @@ tuning to every MTS-ESP client plugin, in Ableton Live or any other host.
      rebuilds the downloadable copy in `web/public/`.
 3. Run: `~/bloom-mts` (or `./bloom-mts` where you built it). It prints each
    tuning it receives, as cents from 12-TET for the twelve notes from middle C, and how many clients are connected.
-4. In Bloom, load `.scl` files in ⚙ settings → tuning and press `b`. The
-   browser asks once to allow SysEx; allow it. The settings menu shows
+4. In Bloom, load `.scl` files in ⚙ → tunings and pick one in bloom ▾ → tuning (or `T`, then `]`). The
+   browser asks once to allow SysEx; allow it. ⚙ → tunings shows
    `helper: connected`.
 5. In Ableton, use synths that are MTS-ESP clients (Surge XT, Vital, Pigments,
    u-he synths, and many more). They follow each tuning as Bloom sends it.

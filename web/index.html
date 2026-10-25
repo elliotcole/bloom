@@ -172,8 +172,8 @@
       .s-btn.active { color: #8cf; border-color: #48a; }
       #clock-sync-status { color: #333; font-size: 10px; }
       #clock-sync-status.synced { color: #4a9; }
-      /* Settings toggle button (in header) */
-      #settings-toggle {
+      /* Menu buttons (in header): each opens its panel in the bar below */
+      .menu-btn {
         background: transparent;
         color: #666;
         border: 1px solid #333;
@@ -182,8 +182,10 @@
         cursor: pointer;
         font-family: inherit;
       }
-      #settings-toggle:hover { color: #aaa; border-color: #555; }
-      #settings-toggle.active { color: #8cf; border-color: #48a; }
+      .menu-btn:hover { color: #aaa; border-color: #555; }
+      .menu-btn.active { color: #8cf; border-color: #48a; }
+      .menu-panel { display: none; }
+      .menu-panel.open { display: flex; }
       /* Recording dot */
       #record-dot {
         width: 7px;
@@ -717,29 +719,48 @@
       </select>
       <button id="reset-camera" title="reset camera view" style="display:none">⊹ reset view</button>
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
-      <button id="settings-toggle" title="toggle settings">⚙ settings</button>
+      <button class="menu-btn" data-menu="bloom" title="this bloom: scale, tuning, legato, sustain">bloom ▾</button>
+      <button class="menu-btn" data-menu="play" title="while you play: tempo, freezes, level, reverb">play ▾</button>
+      <button class="menu-btn" data-menu="garden" title="save, load, merge and curdle the garden">garden ▾</button>
+      <button class="menu-btn" data-menu="perform" title="for video: clean view, frame, size, drift, demo keys">perform ▾</button>
       <span id="record-dot" title="recording"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
       <span id="scale-badge"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
-      <button id="save-garden" class="hdr-btn hdr-right" title="save bloom and garden to a file (cmd-s)">save</button>
-      <button id="load-garden" class="hdr-btn" title="load a .bloom file (cmd-o)">load</button>
+      <button class="menu-btn hdr-right" data-menu="setup" title="set once: display, MIDI, compass, the tuning library">⚙</button>
       <button id="help-toggle" class="hdr-btn">? help</button>
     </header>
 
     <div id="settings-bar">
-      <!-- Row 1: timing, freeze, sound -->
-      <div class="s-row">
+      <div class="s-row menu-panel" data-menu="bloom">
+<span class="s-section">
+          <span class="s-section-label">scale</span>
+          <button class="s-btn" id="scale-pick" title="every scale and raga by name, on a root you choose (or click the scale badge); k K j J choose one by ear">choose scale…</button>
+        </span>
         <span class="s-section">
+          <span class="s-section-label">tuning</span>
+          <select id="tuning-select" title="this bloom's tuning (] / [ step through them in tuning mode, T)"></select>
+          <button class="s-btn" id="tuning-edit" title="tuning mode (T): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
+        </span>
+<span class="s-section">
+          <span class="s-section-label">sound</span>
+          <label>legato <input type="number" id="legato-input" min="0.05" max="8" step="0.05" value="2.00"></label>
+          <label title="fixed note gate in beats (overrides legato)">sustain
+            <input type="checkbox" id="sustain-enabled">
+            <input type="number" id="sustain-input" min="0.05" max="8" step="0.05" value="0.50" disabled>
+          </label>
+        </span>
+      </div>
+      <div class="s-row menu-panel" data-menu="play">
+<span class="s-section">
           <span class="s-section-label">timing</span>
           <label>bpm <input type="number" id="bpm-input" min="20" max="300" step="1" value="60"></label>
           <button class="s-btn" id="tap-tempo">tap</button>
           <span id="clock-sync-status">clk: free</span>
         </span>
-
-        <span class="s-section">
+<span class="s-section">
           <span class="s-section-label">freeze</span>
           <label title="lock total duration before each play">duration
             <input type="checkbox" id="fixed-dur-enabled">
@@ -754,8 +775,7 @@
             <input type="number" id="fixed-grid-size" min="2" max="16" step="1" value="8" disabled>
           </label>
         </span>
-
-        <span class="s-section" title="lock a list to the palette it has when ticked; anything off-palette snaps back before each play">
+<span class="s-section" title="lock a list to the palette it has when ticked; anything off-palette snaps back before each play">
           <span class="s-section-label">palette</span>
           <label title="pitch: lock to the current scale">pitch
             <input type="checkbox" class="freeze-palette" data-list="pitch">
@@ -773,32 +793,59 @@
             <input type="checkbox" class="freeze-palette" data-list="iv">
           </label>
         </span>
-
-        <span class="s-section">
-          <span class="s-section-label">sound</span>
-          <label>legato <input type="number" id="legato-input" min="0.05" max="8" step="0.05" value="2.00"></label>
-          <label title="fixed note gate in beats (overrides legato)">sustain
-            <input type="checkbox" id="sustain-enabled">
-            <input type="number" id="sustain-input" min="0.05" max="8" step="0.05" value="0.50" disabled>
-          </label>
+<span class="s-section">
+          <span class="s-section-label">level</span>
           <label title="maximum velocity sent to built-in piano (0–127)">vel max
             <input type="number" id="vel-ceiling" min="0" max="127" step="1" value="100" style="width:42px">
           </label>
+          <label title="dry/wet mix">mix
+            <input type="range" id="reverb-mix" min="0" max="1" step="0.05" value="0.4" style="width:50px">
+            <span id="reverb-mix-val" style="color:#555;width:24px">0.4</span>
+          </label>
+          <label title="decay time in seconds">decay
+            <input type="number" id="reverb-decay" min="0.1" max="20" step="0.5" value="4" style="width:42px">
+          </label>
         </span>
       </div>
-
-      <!-- Row 2: compass, display, reverb, file -->
-      <div class="s-row">
+      <div class="s-row menu-panel" data-menu="garden">
         <span class="s-section">
-          <span class="s-section-label">compass</span>
-          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
-          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
-          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
-          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
-          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
+          <span class="s-section-label">file</span>
+          <button class="s-btn" id="save-garden" title="save the bloom and garden to a file">save</button>
+          <button class="s-btn" id="load-garden" title="load a saved file">load</button>
         </span>
-
-        <span class="s-section">
+<span class="s-section">
+          <span class="s-section-label">garden</span>
+          <button class="s-btn" id="merge-garden" title="every garden slot, joined into the bloom">merge garden → bloom</button>
+          <button class="s-btn" id="curdle-bloom" title="split the bloom into pieces, inserted into the garden after this slot">curdle bloom → garden</button>
+        </span>
+      </div>
+      <div class="s-row menu-panel" data-menu="perform">
+<span class="s-section">
+          <span class="s-section-label">video</span>
+          <button class="s-btn" id="perf-clean" title="the picture alone, framed and sized as set here, for recording (opt-c; esc leaves)">clean view</button>
+          <label title="the frame a recording is cropped to, outside shaded; previewed while this panel is open, used in clean view">frame
+            <select id="perf-frame">
+              <option value="off">off</option>
+              <option value="16:9">16:9</option>
+              <option value="1:1">1:1</option>
+              <option value="4:5">4:5</option>
+              <option value="9:16">9:16</option>
+            </select>
+          </label>
+          <label title="the picture's overall size; previewed while this panel is open, used in clean view">size
+            <input type="range" id="perf-size" min="0.3" max="2.5" step="0.01" value="1">
+            <span id="perf-size-val" class="s-note">×1.00</span>
+          </label>
+          <label title="deep and spiral sweep slowly through broad arcs while notes play">drift
+            <input type="checkbox" id="perf-drift">
+          </label>
+                  <label title="show each key, large, with what it did — for recordings">demo keys
+            <input type="checkbox" id="demo-mode">
+          </label>
+        </span>
+      </div>
+      <div class="s-row menu-panel" data-menu="setup">
+<span class="s-section">
           <span class="s-section-label">display</span>
           <label>skin
             <select id="viz-theme-select">
@@ -817,77 +864,33 @@
           <label title="show pitch+octave labels on notes">notes
             <input type="checkbox" id="show-note-labels">
           </label>
-          <label title="show each key, large, with what it did — for recordings">demo keys
-            <input type="checkbox" id="demo-mode">
-          </label>
           <label title="the line under the header: the few keys that belong to where you are (a mode, a selection, a raga changing notes …), or now and then a lesser-known key">cues
             <input type="checkbox" id="show-cues" checked>
           </label>
         </span>
-
-        <span class="s-section">
-          <span class="s-section-label">reverb</span>
-          <label title="dry/wet mix">mix
-            <input type="range" id="reverb-mix" min="0" max="1" step="0.05" value="0.4" style="width:50px">
-            <span id="reverb-mix-val" style="color:#555;width:24px">0.4</span>
-          </label>
-          <label title="decay time in seconds">decay
-            <input type="number" id="reverb-decay" min="0.1" max="20" step="0.5" value="4" style="width:42px">
-          </label>
-        </span>
-
-        <span class="s-section">
+<span class="s-section">
           <span class="s-section-label">midi</span>
           <label title="highest MIDI channel (0-based)">max ch
             <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
           </label>
         </span>
-
-        <span class="s-section">
-          <span class="s-section-label">garden</span>
-          <button class="s-btn" id="merge-garden" title="every garden slot, joined into the bloom">merge garden → bloom</button>
-          <button class="s-btn" id="curdle-bloom" title="split the bloom into pieces, inserted into the garden after this slot">curdle bloom → garden</button>
+<span class="s-section">
+          <span class="s-section-label">compass</span>
+          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
+          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
+          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
+          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
+          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
         </span>
-
-        <span class="s-section">
-          <span class="s-section-label">performance</span>
-          <button class="s-btn" id="perf-clean" title="the picture alone, framed and sized as set here, for recording (opt-c; esc leaves)">clean view</button>
-          <label title="the frame a recording is cropped to, outside shaded; previewed while this panel is open, used in clean view">frame
-            <select id="perf-frame">
-              <option value="off">off</option>
-              <option value="16:9">16:9</option>
-              <option value="1:1">1:1</option>
-              <option value="4:5">4:5</option>
-              <option value="9:16">9:16</option>
-            </select>
-          </label>
-          <label title="the picture's overall size; previewed while this panel is open, used in clean view">size
-            <input type="range" id="perf-size" min="0.3" max="2.5" step="0.01" value="1">
-            <span id="perf-size-val" class="s-note">×1.00</span>
-          </label>
-          <label title="deep and spiral sweep slowly through broad arcs while notes play">drift
-            <input type="checkbox" id="perf-drift">
-          </label>
-        </span>
-
-        <span class="s-section">
-          <span class="s-section-label">scale</span>
-          <button class="s-btn" id="scale-pick" title="every scale and raga by name, on a root you choose (or click the scale badge); k K j J choose one by ear">choose scale…</button>
-        </span>
-
-        <span class="s-section">
-          <span class="s-section-label">tuning</span>
-          <select id="tuning-select" title="this bloom's tuning (] / [ step through them in tuning mode, T)"></select>
+<span class="s-section">
+          <span class="s-section-label">tunings</span>
           <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of twelve notes; pick several, or a whole folder">load .scl files</button>
-          <button class="s-btn" id="tuning-edit" title="tuning mode (T): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
-          <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">clear</button>
+          <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">forget all</button>
           <button class="s-btn" id="tuning-helper" title="copies a Terminal command that downloads the bloom-mts helper (an MTS-ESP master for synths in Ableton, macOS) and starts it; it also plays each tuning out of Bloom Tuning Cues, for a MIDI track to record (see the guide)">copy helper command</button>
           <span id="tuning-status" class="s-note"></span>
         </span>
-
       </div>
     </div>
-
     <div id="restore-prompt">
       <div id="rp-box">
         <div>pick up where you left off?</div>
@@ -974,7 +977,7 @@
      <b>9 0</b> rotate alterations, <b>3 4</b> a comma,
      <b># $</b> breeze, <b>2</b> clear, <b>1</b> off / on
 <b>opt-t</b> hold the tuning over every bloom
-     (load .scl files in ⚙ settings;
+     (load .scl files in ⚙ setup;
       the tuning's root follows the key)</div>
           </div>
           <div class="hf-sec">

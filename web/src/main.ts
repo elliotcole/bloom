@@ -318,7 +318,7 @@ async function main() {
   viz.onNodeClick = togglePin;
   viz.onSelect = select;
 
-  // ─── Performance: frame, size and drift; previewed while the settings panel is open ──
+  // ─── Performance: frame, size and drift; previewed while the perform menu is open ──
   const perfFrame = document.getElementById('perf-frame') as HTMLSelectElement | null;
   const perfSize = document.getElementById('perf-size') as HTMLInputElement | null;
   const perfSizeVal = document.getElementById('perf-size-val');
@@ -508,14 +508,28 @@ async function main() {
 
   document.getElementById('help-toggle')?.addEventListener('click', toggleFullHelp);
 
-  // ─── Settings bar ─────────────────────────────────────────────────────────────
-  const settingsToggleBtn = document.getElementById('settings-toggle') as HTMLButtonElement;
+  // ─── Menus: bloom ▾ play ▾ garden ▾ perform ▾ ⚙ — one panel at a time, in the bar under the header ──
   const settingsBar = document.getElementById('settings-bar') as HTMLElement;
-  settingsToggleBtn?.addEventListener('click', () => {
-    const visible = settingsBar.classList.toggle('visible');
-    viz.setFramePreview(visible);
-    settingsToggleBtn.classList.toggle('active', visible);
-  });
+  const menuBtns = [...document.querySelectorAll<HTMLButtonElement>('.menu-btn')];
+  const menuPanels = [...settingsBar.querySelectorAll<HTMLElement>('.menu-panel')];
+  function openMenu(name: string | null) {
+    menuPanels.forEach(p => p.classList.toggle('open', p.dataset.menu === name));
+    menuBtns.forEach(b => b.classList.toggle('active', b.dataset.menu === name));
+    settingsBar.classList.toggle('visible', name !== null);
+    viz.setFramePreview(name === 'perform');   // frame and size show while you set them
+  }
+  const openMenuName = () => menuPanels.find(p => p.classList.contains('open'))?.dataset.menu ?? null;
+  menuBtns.forEach(b => b.addEventListener('click', () => {
+    b.blur();
+    openMenu(openMenuName() === b.dataset.menu ? null : b.dataset.menu ?? null);
+  }));
+  // a key played on the bloom closes the menu (typing into one of its fields doesn't)
+  document.addEventListener('keydown', e => {
+    const t = e.target as HTMLElement | null;
+    if (!openMenuName() || (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
+    if (e.metaKey || e.ctrlKey || ['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) return;
+    openMenu(null);
+  }, true);
 
   // BPM
   const bpmInput = document.getElementById('bpm-input') as HTMLInputElement;

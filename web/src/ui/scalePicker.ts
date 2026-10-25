@@ -1,5 +1,5 @@
 // The scale picker: every scale and raga in the library, by name, on a chosen
-// root. Opened from ⚙ settings (or a click on the scale badge); type to filter,
+// root. Opened from bloom ▾ (or a click on the scale badge); type to filter,
 // ↑↓ to move, ↵ or a click to attach, esc to close.
 
 import type { Scale } from '../lib/scales';

@@ -108,7 +108,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes (with a raga attached, it also writes the notes as they sound).
-- **Merge and split the garden:** buttons in ⚙ settings → garden. **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
+- **Merge and split the garden:** buttons in **garden ▾** (with save and load). **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
   change is remembered (the last 300).
@@ -117,19 +117,19 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Tunings: `T` (tuning mode), opt-`t` (hold)
 
-Load Scala (`.scl`) files in ⚙ settings → **tuning**: pick several at once.
+Load Scala (`.scl`) files in ⚙ → **tunings**: pick several at once.
 Scales of twelve notes to the period are taken; others are listed as skipped,
 with the reason. The library stays in this browser.
 
 - **Each bloom has its own tuning.** In tuning mode (`T`), `]` steps to the
   next loaded tuning and `[` to the one before; 12-TET comes first. The
-  settings menu picks one too. A bloom keeps its tuning in the garden and in
+  **bloom ▾** → tuning picks one too. A bloom keeps its tuning in the garden and in
   saved files, and the garden loop retunes as each bloom comes round. `n` keeps
   the tuning, as it keeps the scale; `N` starts from 12-TET.
 - **Hold: opt-`t`** (anywhere). The tuning that's sounding then plays over
   every bloom: moving through the garden, the loop, loading and undo all keep
   it, so you can try tunings against one bloom after another without each
-  resetting it. While held, `]` / `[`, the settings menu and the tuning view
+  resetting it. While held, `]` / `[`, **bloom ▾** → tuning and the tuning view
   change the held tuning, not the blooms; new blooms (`n`, `N`) take it as
   their own. The blooms keep their own tunings, and opt-`t` again gives them
   back. The header shows `◊ held: ji-5 @ D`. In the tuning view, **held root**
@@ -148,7 +148,7 @@ with the reason. The library stays in this browser.
 - **The scale badge** in the header shows the attached scale and its key,
   `♮ Aeolian · key E♭`, `♮ Yaman · Sa G`, or `no key`; it's hidden while none
   is attached. Click it for the scale picker.
-- **The scale picker** (⚙ settings → **choose scale…**, or a click on the
+- **The scale picker** (**bloom ▾** → **choose scale…**, or a click on the
   scale badge) lists every scale and raga by name, grouped by size, ragas
   first, each with its notes on the root you choose (the bloom's key to start
   with). Type to filter, ↑↓ to move, ↵ or a click attaches it, esc closes. The
@@ -156,8 +156,8 @@ with the reason. The library stays in this browser.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
-- **Tuning mode: `T`** opens the tuning view (or click the ◊ badge, or ⚙
-  settings → tuning → **edit tuning**); the header shows TUNING. The main area shows the tuning as a pie, C at the top as
+- **Tuning mode: `T`** opens the tuning view (or click the ◊ badge, or
+  **bloom ▾** → tuning → **edit tuning**); the header shows TUNING. The main area shows the tuning as a pie, C at the top as
   in the set view. Each note's slice reaches halfway to its neighbours, so its
   width shows how much room the tuning gives it; the dot on the rim is the
   note's true place, 12-TET's places are faint ticks outside, the root is
@@ -210,11 +210,11 @@ with the reason. The library stays in this browser.
     **save to library** keeps it, alterations and all, under a name for `]` / `[`; **export .scl**
     downloads it; **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
-  Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ settings →
-  tuning → **copy helper command** copies a Terminal line that downloads and
+  Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ →
+  tunings → **copy helper command** copies a Terminal line that downloads and
   starts it; source in `mts-helper/`): it is an MTS-ESP master that takes its tuning from Bloom, so
   every MTS-ESP client plugin follows it. The browser asks once for permission
-  to send it SysEx; the settings menu says whether the helper is connected.
+  to send it SysEx; ⚙ → tunings says whether the helper is connected.
 - **Recording the tunings with a take:** DAWs don't record SysEx, so the
   helper also plays each tuning Bloom sends out of a second port, **Bloom
   Tuning Cues**, as a short chord of notes that holds the whole tuning. It
@@ -398,11 +398,11 @@ set of values. Press **`F`**, then:
 | `v` | dynamics | the velocity levels in use right now |
 | `c` | channels | the channels in use right now |
 | `5` | intervals | the interval steps in use right now (steps of 0 stay 0) |
-| `d` | duration | the total length (amount set in ⚙ settings). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
-| `g` | grid | a time grid (size set in ⚙ settings) |
+| `d` | duration | the total length (amount set in **play ▾**). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
+| `g` | grid | a time grid (size set in **play ▾**) |
 
 The menu is sticky, like the list modes: each key toggles one freeze (`d` cycles through three states) and the menu stays open, so you can set several or step `d` round. `F` or `esc` closes it. Playback, garden and view keys work while it's open. The header shows
-what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …`. The same switches are in ⚙ settings under
+what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …`. The same switches are in **play ▾** under
 **freeze** and **palette**, and the two always agree.
 
 - **Palette freezes capture the palette when you switch them on.** To take a
@@ -466,6 +466,17 @@ nodes sit on a soft disc and the header shows `▣ 4`.
 
 ## Seeing it
 
+- **The header menus** open a strip under the header, one at a time; a key
+  played on the bloom closes it (typing in its fields doesn't).
+  - **bloom ▾** this bloom, saved with it: scale (**choose scale…**), tuning
+    (pick, **edit tuning**), legato, sustain.
+  - **play ▾** while you play: bpm, tap, clock sync; the freezes (duration,
+    grid, palette); level (vel max) and reverb.
+  - **garden ▾** save, load, merge, curdle.
+  - **perform ▾** for video: clean view, frame, size, drift, demo keys.
+  - **⚙** set once: display (skin, axis, note labels, cues), MIDI channels,
+    the compass, and the tuning library (load .scl files, forget them, the
+    helper command).
 - **The cue line,** under the header, names the few keys that belong to where
   you are: a mode's own keys (tuning mode, the freeze menu, a list mode), or
   at home the situations that open keys up, two at most — a selection, pins, a
@@ -473,7 +484,7 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   running pulsar or loop, a loaded garden slot. With nothing special going on
   it shows `space play · n new · ? all keys`, and every half minute a
   lesser-known key instead. `?` in tuning mode or the freeze menu shows just
-  that section of the help. ⚙ settings → display → **cues** turns it off; it's
+  that section of the help. ⚙ → display → **cues** turns it off; it's
   hidden in clean view and while the console is open.
 - **Lanes: opt-`\`.** A strip under the view showing the five lists (pitch, time,
   velocity, channels, intervals), each at its own length (×n). The time lane is drawn to
@@ -487,8 +498,8 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   or cursor. Made for recording video. Keys still work. `esc` or opt-`c`
   leaves. For a whole-screen picture, also make the browser full screen
   (ctrl-cmd-F).
-- **Performance (for video): ⚙ settings → performance.** Set once; they're
-  remembered. While the settings panel is open, the frame and size show on
+- **Performance (for video): perform ▾.** Set once; they're
+  remembered. While that menu is open, the frame and size show on
   the picture as you set them (unless lanes are on); **clean view** there
   enters clean view with them.
   - **Frame:** 16:9, 1:1, 4:5 or 9:16. In clean view the picture fits that
@@ -525,7 +536,7 @@ times 3 → 6", "3 of 8 pitches moved · range C3–G5". It fades after five
 seconds and stays out of the way while the console (`\`) is open, since
 the console says the same, and in clean view.
 
-**Demo keys** (⚙ settings → display) adds the key you pressed, large, above
+**Demo keys** (**perform ▾**) adds the key you pressed, large, above
 the notice and centres it: for screen recordings.
 
 ## Saving
