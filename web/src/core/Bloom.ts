@@ -1333,9 +1333,9 @@ export class Bloom {
     return this;
   }
 
-  /** Attach a raga (or any scale written on C) with its Sa on this pitch class: the bloom's key, unless given */
-  applyRaga(raga: Scale, sa = this.keyTuningRoot()): this {
-    return this.applyScale(scaleTranspose(raga, sa));
+  /** Attach a scale written on C (a raga's Sa is its C) on this root: the bloom's key, unless given */
+  applyScaleOn(scale: Scale, root = this.keyTuningRoot()): this {
+    return this.applyScale(scaleTranspose(scale, root));
   }
 
   private _chooseScaleObj(): Scale {

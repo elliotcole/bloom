@@ -147,7 +147,12 @@ with the reason. The library stays in this browser.
   pitch; the other notes are tuned from it.
 - **The scale badge** in the header shows the attached scale and its key,
   `♮ Aeolian · key E♭`, `♮ Yaman · Sa G`, or `no key`; it's hidden while none
-  is attached.
+  is attached. Click it for the scale picker.
+- **The scale picker** (⚙ settings → **choose scale…**, or a click on the
+  scale badge) lists every scale and raga by name, grouped by size, ragas
+  first, each with its notes on the root you choose (the bloom's key to start
+  with). Type to filter, ↑↓ to move, ↵ or a click attaches it, esc closes. The
+  scale keys (`k K j J`) choose by ear; the picker is for when you know which.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
@@ -249,9 +254,9 @@ with the reason. The library stays in this browser.
 ## Ragas
 
 The 25 ragas of the Kirana archive are scales too, each with its arohana
-(rising form) and avarohana (falling form). Attach one in ⚙ settings →
-**raga**: its Sa goes on the bloom's key (C when it has none), and the notes
-move into the raga. `k` and `K` find ragas as well as scales, when they fit the
+(rising form) and avarohana (falling form). Attach one with the scale picker
+(below): its Sa goes on the root you choose, the bloom's key to start with,
+and the notes move into the raga. `k` and `K` find ragas as well as scales, when they fit the
 notes best. The badge shows `♮ Yaman · Sa C`; its tooltip lists both forms.
 
 **Each note sounds in the form of the step it takes next.** A note followed

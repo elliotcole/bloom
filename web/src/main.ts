@@ -15,7 +15,7 @@ import {
 } from './audio/tuningOut';
 import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
-import { RAGA_SCALES } from './lib/scales';
+import { ScalePicker } from './ui/scalePicker';
 import { spell } from './lib/numbers';
 import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
@@ -344,18 +344,17 @@ async function main() {
     display.setStatus('clean view — esc leaves');
   });
 
-  // ─── Raga: attached by name, Sa on the bloom's key ──────────────────────────
-  const ragaSelect = document.getElementById('raga-select') as HTMLSelectElement | null;
-  if (ragaSelect) {
-    ragaSelect.append(new Option('—', ''), ...RAGA_SCALES.map(r => new Option(r.name, r.name)));
-    ragaSelect.addEventListener('change', () => {
-      const r = RAGA_SCALES.find(x => x.name === ragaSelect.value);
-      ragaSelect.blur();
-      if (!r) return;
-      bloom.applyRaga(r);
-      keysRefresh(`raga: ${r.name} on Sa ${spell(bloom.keyTuningRoot())}`);
-    });
-  }
+  // ─── Scale picker: every scale and raga by name, on a chosen root ───────────
+  const scalePicker = new ScalePicker({
+    current: () => bloom.appliedScale,
+    root: () => bloom.keyTuningRoot(),
+    apply: (scale, root) => {
+      bloom.applyScaleOn(scale, root);
+      keysRefresh(`scale: ${scale.name} on ${scale.root !== undefined ? 'Sa ' : ''}${spell(root)}`);
+    },
+  });
+  document.getElementById('scale-pick')?.addEventListener('click', e => { (e.currentTarget as HTMLElement).blur(); scalePicker.open(); });
+  document.getElementById('scale-badge')?.addEventListener('click', () => scalePicker.open());
 
   // ─── Tuning: a library of .scl files; each bloom picks one ──────────────────
   const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;
@@ -460,7 +459,7 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open
-    if (bloomEditor.isOpen() || commandPalette.isOpen()) return;
+    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen()) return;
     // ...or while typing in a text field (the tuning editor, settings numbers)
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'TEXTAREA'

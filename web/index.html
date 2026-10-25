@@ -629,6 +629,26 @@
       .cp-status--err { color: #a55; }
       .cp-status--ok  { color: #5a9; }
 
+      /* Scale picker (ui/scalePicker.ts), styled as the command palette */
+      #scale-picker {
+        display: none; position: fixed; inset: 0; z-index: 400;
+        background: rgba(0, 0, 0, 0.55);
+        align-items: flex-start; justify-content: center; padding-top: 10vh;
+      }
+      #scale-picker.open { display: flex; }
+      #sp-box {
+        background: #0c0c18; border: 1px solid #2a2a44; width: min(560px, 92vw);
+        padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px;
+      }
+      .sp-top { display: flex; gap: 10px; align-items: center; }
+      .sp-root { font-size: 11px; color: #556; white-space: nowrap; }
+      .sp-root select { background: #07070f; color: #9ab; border: 1px solid #252540; font-family: inherit; }
+      .sp-list { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; }
+      .sp-group { font-size: 9px; color: #445; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 8px 2px; }
+      #scale-picker .cp-sug-name { flex: 0 0 190px; }
+      #scale-picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
+      #scale-badge.active { cursor: pointer; }
+
       /* ─── Demo mode toast ───────────────────────────────────────────────────── */
       /* Notice: what the last key did and changed (hidden while the console is open) */
       #notice {
@@ -851,8 +871,8 @@
         </span>
 
         <span class="s-section">
-          <span class="s-section-label">raga</span>
-          <select id="raga-select" title="attach a raga to this bloom, its Sa on the bloom's key: each note sounds in the arohana when the next note is higher, the avarohana when it's lower (k may find ragas too)"></select>
+          <span class="s-section-label">scale</span>
+          <button class="s-btn" id="scale-pick" title="every scale and raga by name, on a root you choose (or click the scale badge); k K j J choose one by ear">choose scale…</button>
         </span>
 
         <span class="s-section">
