@@ -15,7 +15,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 ## Shift keys
 
 - `B`  `P`  `Q`  `V`  `Z`  *(`T` is tuning mode; `L` is tilt up)*
-- `"`  `_`  *(`#` `$` are breeze)*
+- `"`  `_`  `%`  *(`#` `$` are breeze; `%` was semitones ↔ scale steps, now each interval names its own kind)*
 
 ## Option (alt) keys
 

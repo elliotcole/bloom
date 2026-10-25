@@ -28,7 +28,7 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · r ratchet · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
-  iv: 'i above ↔ below · ! @ an octave · * bake · esc home',
+  iv: '↵ type them: -P5/10 · 7 & sparser / denser · i above ↔ below · esc home',
 };
 
 const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · esc home';
@@ -54,7 +54,7 @@ const TIPS = [
   'opt-1 … 9 change the view',
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',
-  '5 intervals mode: notes added at playback',
+  '5 ↵ add a chord every few notes: -P5/10',
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
 ];
@@ -66,7 +66,7 @@ function situations(c: CueContext): string[] {
   if (c.selection) out.push('esc clears · shift-esc inverts · keys act on these only');
   if (c.pins) out.push('esc unpins · click toggles a pin');
   if (c.ragaMoves) out.push('* bake what you hear');
-  if (c.intervals) out.push(c.ragaMoves ? '8 reset intervals' : '* bake · 8 reset · % semitones ↔ steps');
+  if (c.intervals) out.push(c.ragaMoves ? '8 reset intervals' : '7 & sparser / denser · * bake · 8 reset');
   if (c.held) out.push('opt-t releases the hold');
   if (c.pulsing) out.push('< > rate · . stop');
   else if (c.looping) out.push('. stop');

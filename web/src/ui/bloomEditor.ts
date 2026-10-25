@@ -1,7 +1,7 @@
 // Manual bloom editor — open with Option+E, Shift+Enter to apply, Esc to close
 
 import { Bloom } from '../core/Bloom';
-import type { IntervalVal } from '../core/Bloom';
+import { formatIntervals, parseIntervals } from '../lib/intervals';
 import type { NoteVal } from '../lib/arrays';
 import { spellOctave } from '../lib/numbers';
 
@@ -69,7 +69,7 @@ function tokenizeNotes(text: string): string[] {
   return tokens;
 }
 
-function parseNoteList(text: string): { notes: NoteVal[]; error: string | null } {
+export function parseNoteList(text: string): { notes: NoteVal[]; error: string | null } {
   const tokens = tokenizeNotes(text);
   if (!tokens.length) return { notes: [], error: 'No notes entered' };
   const notes: NoteVal[] = [];
@@ -81,7 +81,7 @@ function parseNoteList(text: string): { notes: NoteVal[]; error: string | null }
   return { notes, error: null };
 }
 
-function parseIntList(
+export function parseIntList(
   text: string, min: number, max: number, label: string,
 ): { values: number[]; error: string | null } {
   const parts = text.trim().split(/\s+/).filter(Boolean);
@@ -96,7 +96,7 @@ function parseIntList(
   return { values, error: null };
 }
 
-function parseFloatList(text: string): { values: number[]; error: string | null } {
+export function parseFloatList(text: string): { values: number[]; error: string | null } {
   const parts = text.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return { values: [], error: 'No times entered' };
   const values: number[] = [];
@@ -106,31 +106,6 @@ function parseFloatList(text: string): { values: number[]; error: string | null 
     values.push(v);
   }
   return { values, error: null };
-}
-
-/** Intervals: integers, with [...] grouping several added notes on one step */
-function parseIntervalList(text: string): { values: IntervalVal[]; error: string | null } {
-  const tokens = tokenizeNotes(text);
-  if (!tokens.length) return { values: [0], error: null }; // blank → nothing added
-  const values: IntervalVal[] = [];
-  for (const tok of tokens) {
-    const grouped = tok.startsWith('[');
-    if (grouped && !tok.endsWith(']')) return { values: [], error: `Invalid interval: "${tok}"` };
-    const parts = (grouped ? tok.slice(1, -1) : tok).trim().split(/[\s,]+/).filter(Boolean);
-    if (!parts.length || parts.some(p => !/^-?\d+$/.test(p))) {
-      return { values: [], error: `Invalid interval: "${tok}"` };
-    }
-    const nums = parts.map(p => parseInt(p, 10));
-    if (nums.some(v => Math.abs(v) > 48)) {
-      return { values: [], error: `Interval out of range: "${tok}" (−48 to 48)` };
-    }
-    values.push(grouped ? nums : nums[0]);
-  }
-  return { values, error: null };
-}
-
-function formatIntervalVal(v: IntervalVal): string {
-  return Array.isArray(v) ? '[' + v.join(' ') + ']' : String(v);
 }
 
 function parseDegrees(text: string): { degrees: number[] | null; error: string | null } {
@@ -148,7 +123,7 @@ function parseDegrees(text: string): { degrees: number[] | null; error: string |
   return { degrees, error: null };
 }
 
-function formatNoteVal(n: NoteVal): string {
+export function formatNoteVal(n: NoteVal): string {
   if (Array.isArray(n)) return '[' + (n as number[]).map(spellOctave).join(' ') + ']';
   return spellOctave(n as number);
 }
@@ -162,7 +137,6 @@ export class BloomEditor {
   private _timeTA!: HTMLTextAreaElement;
   private _chanTA!: HTMLTextAreaElement;
   private _intvTA!: HTMLTextAreaElement;
-  private _intvDiatonic!: HTMLInputElement;
   private _scaleInp!: HTMLInputElement;
   private _statusEl!: HTMLElement;
   private _onApply: (bloom: Bloom) => void;
@@ -198,12 +172,8 @@ export class BloomEditor {
           <textarea id="be-chan" class="be-ta" rows="1" spellcheck="false"></textarea>
         </div>
         <div class="be-row">
-          <div class="be-lbl">intervals<br><span class="be-sub">0 = none, -5, [4 7]</span></div>
+          <div class="be-lbl">intervals<br><span class="be-sub">-P5/10 · +3rd+5th · ·</span></div>
           <textarea id="be-intv" class="be-ta" rows="1" spellcheck="false"></textarea>
-        </div>
-        <div class="be-row">
-          <div class="be-lbl"></div>
-          <label class="be-sub"><input id="be-intv-diatonic" type="checkbox"> intervals count scale steps</label>
         </div>
         <div class="be-row">
           <div class="be-lbl">scale<br><span class="be-sub">degrees 0–11 · blank=keep</span></div>
@@ -222,7 +192,6 @@ export class BloomEditor {
     this._timeTA   = ov.querySelector('#be-time')!;
     this._chanTA   = ov.querySelector('#be-chan')!;
     this._intvTA   = ov.querySelector('#be-intv')!;
-    this._intvDiatonic = ov.querySelector('#be-intv-diatonic')!;
     this._scaleInp = ov.querySelector('#be-scale')!;
     this._statusEl = ov.querySelector('#be-status')!;
 
@@ -247,8 +216,7 @@ export class BloomEditor {
     this._velTA.value    = bloom.velocities.join(' ');
     this._timeTA.value   = bloom.timeIntervals.join(' ');
     this._chanTA.value   = bloom.chans.join(' ');
-    this._intvTA.value   = bloom.intervals.map(formatIntervalVal).join(' ');
-    this._intvDiatonic.checked = bloom.intervalsDiatonic;
+    this._intvTA.value   = formatIntervals(bloom.intervals);
     this._scaleInp.value = bloom.scale.degrees.join(' ');
     this._statusEl.textContent = '';
     this._statusEl.className = 'be-status';
@@ -281,7 +249,7 @@ export class BloomEditor {
     const cr = parseIntList(this._chanTA.value, 0, 15, 'channel');
     if (cr.error) { this._err(cr.error); return; }
 
-    const ir = parseIntervalList(this._intvTA.value);
+    const ir = parseIntervals(this._intvTA.value);
     if (ir.error) { this._err(ir.error); return; }
 
     const sr = parseDegrees(this._scaleInp.value);
@@ -291,8 +259,7 @@ export class BloomEditor {
     b.velocities    = vr.values;
     b.timeIntervals = tr.values;
     b.chans         = cr.values;
-    b.intervals     = ir.values;
-    b.intervalsDiatonic = this._intvDiatonic.checked;
+    b.intervals     = ir.list;
     if (sr.degrees) b.applyScale(sr.degrees);
 
     this._onApply(b);

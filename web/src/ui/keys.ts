@@ -9,6 +9,8 @@ import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
+import { formatIntervals, parseIntervals } from '../lib/intervals';
+import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
 import {
   playOnce, startLooper, stopLooper, isLooping, updateLooper,
   startPulsar, stopPulsar, isPulsing, updatePulsar,
@@ -138,6 +140,32 @@ const PITCH_ONLY: Record<string, [PatternOp, PatternOp]> = {
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
+/** A bloom's list as text to type over, and how to set it from text (returning a problem, or null) */
+function listAsText(b: Bloom, m: ListMode): { text: string; set: (text: string) => string | null } {
+  switch (m) {
+    case 'pitch': return {
+      text: b.notes.map(formatNoteVal).join('  '),
+      set: t => { const r = parseNoteList(t); if (r.error) return r.error; b.notes = r.notes; return null; },
+    };
+    case 'time': return {
+      text: b.timeIntervals.join(' '),
+      set: t => { const r = parseFloatList(t); if (r.error) return r.error; b.timeIntervals = r.values; return null; },
+    };
+    case 'vel': return {
+      text: b.velocities.join(' '),
+      set: t => { const r = parseIntList(t, 0, 127, 'velocity'); if (r.error) return r.error; b.velocities = r.values; return null; },
+    };
+    case 'chan': return {
+      text: b.chans.join(' '),
+      set: t => { const r = parseIntList(t, 0, 15, 'channel'); if (r.error) return r.error; b.chans = r.values; return null; },
+    };
+    case 'iv': return {
+      text: formatIntervals(b.intervals),
+      set: t => { const r = parseIntervals(t); if (r.error) return r.error; b.intervals = r.list; return null; },
+    };
+  }
+}
+
 export interface KeyHandlerState {
   bloom: Bloom;
   garden: Garden;
@@ -160,6 +188,8 @@ export interface KeyHandlerState {
   /** Called after every refresh, so the tuning editor follows the bloom */
   afterRefreshFn?: () => void;
   /** The tuning view (opt-t) */
+  /** ↵ in a list mode: type the list (main.ts gives it the line to type on) */
+  typeList?: (label: string, text: string, commit: (text: string, complete: boolean) => string | null) => void;
   tuningView?: {
     toggle(): void; close(): void; isOpen(): boolean;
     /** the alterations palette's comma, and the slices selected on the pie */
@@ -672,6 +702,26 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.code === 'Escape' && !e.shiftKey) {
       setListMode(null);
       status(`${MODE_NAME[m]} mode off`);
+      return true;
+    }
+
+    // ↵ types the list: the same in every list mode
+    if (e.code === 'Enter' && state.typeList) {
+      const typed = listAsText(b, m);
+      state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete) => {
+        const problem = typed.set(text);
+        if (problem) return problem;
+        // shift-↵: what was typed, round and round, as long as the notes
+        if (complete) {
+          const want = b.notes.length;
+          const list = b.getList(LIST_OF_MODE[m]);
+          if (list.length && want) b.setList(LIST_OF_MODE[m], Array.from({ length: want }, (_, i) => list[i % list.length]));
+        }
+        const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}`;
+        status(msg);
+        refresh(msg, false);
+        return null;
+      });
       return true;
     }
 
@@ -1297,10 +1347,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     // Notes added at playback; the bloom's own notes are untouched
     if (!alt) {
       const intervalKeys: Record<string, [string, () => unknown]> = {
-        '6': ['widen intervals', () => b.incrementIntervals(1)],
+        '6': ['widen intervals', () => (b.hasIntervals() ? b.incrementIntervals(1) : (b.startIntervals(), 'intervals: a fifth below every 4th note'))],
         '^': ['narrow intervals', () => b.incrementIntervals(-1)],
-        '7': ['add interval', () => b.addInterval()],
-        '&': ['drop interval', () => b.dropInterval()],
+        '7': ['intervals sparser', () => b.spaceIntervals(true)],
+        '&': ['intervals denser', () => b.spaceIntervals(false)],
         '8': ['reset intervals', () => b.resetIntervals()],
         '*': ['bake into notes', () => {
           const raga = b.bakeRaga();
@@ -1308,14 +1358,12 @@ export function createKeyHandler(state: KeyHandlerState) {
           b.bakeIntervals();
           return raga && ivs ? 'bake the raga and the intervals into the notes' : raga ? 'bake the raga into the notes, as they sound' : ivs ? 'bake intervals into notes' : 'nothing to bake';
         }],
-        '%': ['intervals', () => b.toggleIntervalsDiatonic()],
       };
       const hit = intervalKeys[ch];
       if (hit) {
         const said = hit[1]();
-        const msg = typeof said === 'string' ? said : ch === '%'
-          ? `intervals in ${b.intervalsDiatonic ? 'scale steps' : 'semitones'}`
-          : hit[0];
+        // say what the intervals now are, by name
+        const msg = typeof said === 'string' ? said : ch === '8' ? hit[0] : `${hit[0]}: ${formatIntervals(b.intervals)}`;
         status(msg);
         refresh(msg);
         return;

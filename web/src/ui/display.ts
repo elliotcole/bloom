@@ -1,5 +1,6 @@
 // Status text display — console-scroll mode (newest entry at top)
 
+import { formatIntervals } from '../lib/intervals';
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import { spell, spellOctave } from '../lib/numbers';
@@ -59,9 +60,7 @@ export class Display {
     const timeLabel = `time${bloom.timeIntervals.length < N ? `(${bloom.timeIntervals.length})` : ''}:`;
     const chanLabel = `chan${bloom.chans.length         < N ? `(${bloom.chans.length})`         : ''}:`;
 
-    const intvStrs = bloom.intervals.map(step =>
-      Array.isArray(step) ? `[${step.join(',')}]` : String(step),
-    );
+    const intvStr = formatIntervals(bloom.intervals);
     const intvLabel = `intv${bloom.intervals.length !== N ? `(${bloom.intervals.length})` : ''}:`;
 
     const scale = bloom.scale;
@@ -78,7 +77,7 @@ export class Display {
       `${timeLabel.padEnd(8)}${timeStrs.join('  ')}`,
       `${chanLabel.padEnd(8)}${chanStrs.join('  ')}`,
       bloom.hasIntervals()
-        ? `${intvLabel.padEnd(8)}${intvStrs.join('  ')}   ${bloom.intervalsDiatonic ? 'scale steps' : 'semitones'}`
+        ? `${intvLabel.padEnd(8)}${intvStr}`
         : '',
       `scale:  ${scaleStr}   dur: ${dur}b`,
       soundingTuning(bloom) ? `tuning: ${isHeld() ? 'held ' : ''}${soundingTuning(bloom)!.name} @ ${spell(soundingRoot(bloom))}   ${

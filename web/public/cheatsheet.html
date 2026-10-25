@@ -210,9 +210,9 @@
       <table class="k">
         <tr><td><kbd>5</kbd></td><td><b>intervals mode</b> (randomize there with <kbd>n</kbd>)</td></tr>
         <tr><td><kbd>6</kbd> <kbd>^</kbd></td><td>widen / narrow</td></tr>
-        <tr><td><kbd>7</kbd> <kbd>&amp;</kbd></td><td>add / drop a step</td></tr>
+        <tr><td><kbd>7</kbd> <kbd>&amp;</kbd></td><td>sparser / denser (a rest more / fewer)</td></tr>
         <tr><td><kbd>8</kbd></td><td>reset (nothing added)</td></tr>
-        <tr><td><kbd>%</kbd></td><td>count in semitones ↔ scale steps</td></tr>
+        <tr><td><kbd>5</kbd> <kbd>↵</kbd></td><td>type them: <code>-P5/10</code>, <code>+3rd+5th</code></td></tr>
         <tr><td><kbd>*</kbd></td><td>bake into the notes as chords; a raga's fit too</td></tr>
       </table>
     </section>
@@ -250,7 +250,7 @@
     <tr><td><kbd>x</kbd> / <kbd>f</kbd></td><td>with the garden slot</td><td colspan="5">lace this list with the slot's / copy the slot's</td></tr>
     <tr><td colspan="2"><b>Only in time mode</b></td><td colspan="5"><kbd>r</kbd> <b>ratchet</b>: a few of the longest durations split into 2 or 3 equal parts (never the short ones)</td></tr>
     <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>e E</kbd> shear / center · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
-    <tr><td colspan="2"><b>Also in pitch &amp; intervals mode</b></td><td colspan="5"><kbd>6 ^ 7 &amp; 8 % *</kbd> mean what they mean at home</td></tr>
+    <tr><td colspan="2"><b>Also in pitch &amp; intervals mode</b></td><td colspan="5"><kbd>6 ^ 7 &amp; 8 *</kbd> mean what they mean at home; <kbd>↵</kbd> types the list (<kbd>⇧↵</kbd> loops it to the notes)</td></tr>
   </table>
 
   <div class="ideas">
@@ -274,7 +274,7 @@
     </div>
     <div class="idea">
       <h3>Intervals</h3>
-      <p>Each step adds notes <b>above (+) or below (−)</b> the note it falls on, at playback; 0 adds nothing. They count semitones or scale steps (<kbd>%</kbd>). The list cycles at its own length, so harmony phases too. <kbd>*</kbd> writes them into the notes as chords.</p>
+      <p>Each step adds a chord at playback, by name, <b>+ above, − below</b>: <code>-P5</code>, <code>+3rd+5th</code> (in the scale), <code>·</code> nothing. <code>/N</code> spaces it: <code>-P5/10</code> is a fifth below every 10th note. The list cycles at its own length, so it drifts through the notes. <kbd>*</kbd> bakes it.</p>
     </div>
     <div class="idea">
       <h3>Moving through keys</h3>

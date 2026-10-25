@@ -17,6 +17,7 @@ import {
 import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
 import { ScalePicker } from './ui/scalePicker';
+import { ListTyper } from './ui/listTyper';
 import { spell } from './lib/numbers';
 import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
@@ -173,7 +174,8 @@ async function main() {
     reg('narrowintervals', 'narrow intervals by one',   b => b.incrementIntervals(-1));
     reg('resetintervals', 'reset intervals (none)',     b => b.resetIntervals());
     reg('bakeintervals',  'bake intervals into notes',  b => b.bakeIntervals());
-    reg(['intervalmode', 'diatonicintervals'], 'intervals: semitones / scale steps', b => b.toggleIntervalsDiatonic());
+    reg('sparserintervals', 'intervals further apart (one more rest after each)', b => b.spaceIntervals(true));
+    reg('denserintervals', 'intervals closer together (one rest fewer after each)', b => b.spaceIntervals(false));
 
     // Patterning
     reg('stutter',   'stutter pattern',           b => b.stutter());
@@ -345,6 +347,10 @@ async function main() {
     display.setStatus('clean view — esc leaves');
   });
 
+  // ─── Typing a list (↵ in a list mode) ────────────────────────────────────────
+  const listTyper = new ListTyper(document.getElementById('viz-area') as HTMLElement);
+  keyState.typeList = (label, text, commit) => listTyper.open(label, text, commit);
+
   // ─── Scale picker: every scale and raga by name, on a chosen root ───────────
   const scalePicker = new ScalePicker({
     current: () => bloom.appliedScale,
@@ -460,7 +466,7 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open
-    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen()) return;
+    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen() || listTyper.isOpen()) return;
     // ...or while typing in a text field (the tuning editor, settings numbers)
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'TEXTAREA'

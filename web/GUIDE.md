@@ -17,7 +17,7 @@ A bloom is a set of parallel lists:
 | **time** | the time from each note to the next, in beats |
 | **velocities** | 1–127; 0 is a rest |
 | **channels** | which MIDI channel (instrument) plays each note |
-| **intervals** | notes added at playback above or below each note; 0 adds nothing (intervals mode: `5`) |
+| **intervals** | chords added at playback above or below the notes, by name: `-P5/10` is a fifth below every tenth note (intervals mode: `5`) |
 
 The lists don't have to be the same length. Each one cycles at its own length,
 so a 5-note bloom with 4 velocities drifts in and out of phase as it loops.
@@ -107,7 +107,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
-- **Intervals:** `5` enters intervals mode; at home `6` `^` widen / narrow, `7` `&` add / drop a step, `8` reset, `%` semitones ↔ scale steps, `*` bake into notes (with a raga attached, it also writes the notes as they sound).
+- **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound). See **Intervals** below.
 - **Merge and split the garden:** buttons in **garden ▾** (with save and load). **merge** joins every slot into the bloom; **curdle** splits the bloom into pieces inserted after the current slot.
 - **New:** `n` a new bloom in the same scale, `N` a new bloom on any of the twelve pitches (`t n` and `v n` give new times or dynamics for the same pitches). Lowercase stays in the key; shift opens up to all twelve, wherever that applies. For new pitches on the same rhythm, use pitch mode: `p n` (in scale) or `p N` (any).
 - **Undo:** cmd-Z steps back one change, cmd-shift-Z forward again. Every
@@ -342,7 +342,7 @@ e.g. "pitch classes 6 → 5 · scale A Minor Pentatonic". `q` snaps to the
 scale. Chords keep their shape. `(` `)` pivot (invert, keeping the highest
 or the loudest note where it is). Every pitch key from home works in pitch
 mode and means the same thing there, including `k K j J`, `E`, `[ ]` and the
-interval keys `6`–`8` `%` `*`.
+interval keys `6`–`8` `*`.
 
 To travel further, `]` steps **sharpward** and `[` **flatward** round the
 circle of fifths: one pitch class of the scale moves a semitone and the notes
@@ -353,18 +353,42 @@ the notice names each step ("sharpward: F → F# · scale G Major"). Slant
 (`K`, at home) now looks on every root and avoids the last few scales it
 visited, so repeated slants wander outward instead of circling.
 
-**Intervals mode (`5`) treats the intervals as a list like the others.** Each
-step adds notes above (+) or below (−) its note; a step of 0 adds nothing
-and, like a rest, is left alone. The palette is the steps in use. `1 2`
-move every interval a semitone (or scale step), `3 4` narrow / widen each one
-to the next size in use, `- =` narrow / widen (a stack's spacing opens too),
-`! @` an octave (so +7 becomes −5: the same note on the other side), `i`
-flips above ↔ below, `I` swaps wide ↔ close, `y` makes every step the
-commonest, `h H` one kind of step fewer / more, `n` new intervals, `a A`
-add a step (one in use / a fresh one). The order keys work as on any list,
-and `6 ^ 7 & 8 * %` mean what they mean at home. `F 5` freezes the steps in
-use. The intervals list cycles at its own length, so it phases against the
-notes in the loop and the pulsar.
+**Intervals mode (`5`) treats the intervals as a list like the others.**
+
+*What they are.* Each step of the list adds a chord to the note it falls on,
+at playback, or nothing (`·`). Intervals are written by name, the sign saying
+above (+) or below (−):
+
+| kind | names | counts |
+|---|---|---|
+| chromatic | `m2 M2 m3 M3 P4 TT P5 m6 M6 m7 M7 P8`, on to `P15` | semitones, always |
+| diatonic | `2nd 3rd 4th 5th 6th 7th 8ve`, on to `15th` | steps of the bloom's scale |
+
+A step can hold any number of them, of either kind: `-P5`, `+3rd+5th` (a
+triad above, in the scale), `-P5-P8+M3`. `/N` after a step fills the rest of
+N steps with nothing, so `-P5/10` is a fifth below every tenth note, and
+`-P5/10 +3rd+5th/7` is the one, then the other, 17 steps in all. The list
+cycles at its own length, so it drifts through the notes in the loop and the
+pulsar, like any list of another length.
+
+*Typing it.* In any list mode `↵` opens a line with that list as text; type
+over it and `↵` again sets it, or **shift-`↵`** to loop what you typed round
+until the list is as long as the notes (`1 2 3` on 7 notes sets `1 2 3 1 2 3
+1`; so it lines up with the notes instead of drifting). `esc` leaves it. For intervals that's where
+`-P5/10` goes. The console, the lanes and the notice all write the intervals
+this way too.
+
+*The keys.* `7 &` (at home and here) make them sparser / denser: one more or
+one fewer rest after each step, so `/10` becomes `/11` or `/9`. `1 2` move
+every interval one semitone or scale step (each keeps its kind), `3 4`
+narrow / widen each to the next size in use, `- =` narrow / widen (a chord's
+spacing opens too), `! @` an octave (so `+P5` becomes `-P4`: the same note on
+the other side), `i` flips above ↔ below, `I` swaps wide ↔ close, `y` makes
+every step the commonest, `h H` one kind of step fewer / more, `n` new
+intervals, `a A` add a step (one in use / a fresh one). The order keys work as
+on any list, and `6 ^ 8 *` mean what they mean at home. `F 5` freezes the
+steps in use. New intervals are of the kind most of the list has (diatonic
+when it's empty and a scale is attached).
 
 ### Vocabulary ("palette")
 A list's **palette** is the set of distinct values it uses: the bloom's

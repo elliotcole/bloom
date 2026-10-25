@@ -130,6 +130,5 @@ export function describeChange(a: Snap, z: Snap): string {
     const same = x.map(v => JSON.stringify(v)).sort().join() === y.map(v => JSON.stringify(v)).sort().join();
     parts.push(same ? 'intervals reordered' : `${changed} intervals changed`);
   }
-  if (a.ivMode !== z.ivMode) parts.push(`intervals in ${z.ivMode ? 'scale steps' : 'semitones'}`);
   return parts.slice(0, 3).join(' · ');
 }

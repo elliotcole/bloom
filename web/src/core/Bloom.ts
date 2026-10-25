@@ -2,6 +2,7 @@
 
 import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
+import { countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
@@ -44,23 +45,22 @@ export type IntervalVal = number | number[];
 /** Notes added by the intervals array sound this much quieter than their parent */
 export const ADDED_NOTE_VELOCITY = 0.85;
 
-// Pools the random interval operations draw from
+// Pools the random interval operations draw from (lib/intervals: diatonic ones are steps + 100)
 const CHROMATIC_INTERVALS = [-12, -9, -8, -7, -5, -4, -3, 3, 4, 5, 7, 8, 9, 12];
-const DIATONIC_INTERVALS = [-7, -5, -4, -3, -2, 2, 3, 4, 5, 7];
+const DIATONIC_INTERVALS = [-7, -5, -4, -3, -2, 2, 3, 4, 5, 7].map(k => makeIv(true, k));
 const MAX_BAKED_LENGTH = 256;
-const MAX_INTERVAL = 24;
 
 // An intervals step as its added intervals (0s dropped), and back: [] → 0, [x] → x
 const ivArr = (s: IntervalVal): number[] => (Array.isArray(s) ? s : [s]).filter(x => x !== 0);
 function ivVal(a: number[]): IntervalVal {
-  const u = [...new Set(a.filter(x => x !== 0).map(x => Math.max(-MAX_INTERVAL, Math.min(MAX_INTERVAL, x))))]
-    .sort((x, y) => x - y);
+  const u = [...new Set(a.filter(x => x !== 0).map(x => mapCount(x, n => n)))]
+    .sort((x, y) => widthOf(x) - widthOf(y));
   return u.length === 0 ? 0 : u.length === 1 ? u[0] : u;
 }
 const ivKey = (s: IntervalVal): string => JSON.stringify(ivVal(ivArr(s)));
 /** How far apart two steps are: per added note, plus an octave per note one has and the other lacks */
 function ivDist(a: IntervalVal, b: IntervalVal): number {
-  const x = ivArr(a).sort((p, q) => p - q), y = ivArr(b).sort((p, q) => p - q);
+  const x = ivArr(a).map(widthOf).sort((p, q) => p - q), y = ivArr(b).map(widthOf).sort((p, q) => p - q);
   let d = 12 * Math.abs(x.length - y.length);
   for (let i = 0; i < Math.min(x.length, y.length); i++) d += Math.abs(x[i] - y[i]);
   return d;
@@ -1819,7 +1819,7 @@ export class Bloom {
     }
   }
 
-  private setList(k: ListKey, arr: unknown[]): void {
+  setList(k: ListKey, arr: unknown[]): void {
     switch (k) {
       case 'notes': this.notes = arr as NoteArray; break;
       case 'time': this.timeIntervals = arr as number[]; break;
@@ -2300,7 +2300,7 @@ export class Bloom {
   intervalPalette(): IntervalVal[] {
     const seen = new Map<string, IntervalVal>();
     this.intervals.forEach(s => { const v = ivVal(ivArr(s)); if (v !== 0) seen.set(JSON.stringify(v), v); });
-    const size = (v: IntervalVal) => ivArr(v).reduce((a, x) => a + Math.abs(x), 0);
+    const size = (v: IntervalVal) => ivArr(v).reduce((a, x) => a + Math.abs(widthOf(x)), 0);
     return [...seen.values()].sort((a, b) => ivArr(a).length - ivArr(b).length || size(a) - size(b));
   }
 
@@ -2308,8 +2308,9 @@ export class Bloom {
    * Widen (k > 0) or narrow an interval k places along a ladder of sizes,
    * keeping its side; off either end it moves by the ladder's end gap.
    */
-  private stepInterval(iv: number, k: number, ladder: number[]): number {
-    const size = Math.abs(iv);
+  private stepInterval(iv: number, k: number, ladders: { c: number[]; d: number[] }): number {
+    const ladder = isDiatonic(iv) ? ladders.d : ladders.c;
+    const size = Math.abs(countOf(iv));
     let to: number;
     if (ladder.length < 2) to = size + k;
     else {
@@ -2319,35 +2320,42 @@ export class Bloom {
         : j > last ? ladder[last] + (j - last) * (ladder[last] - ladder[last - 1])
         : ladder[j];
     }
-    return Math.sign(iv) * Math.max(1, Math.min(MAX_INTERVAL, to));
+    return makeIv(isDiatonic(iv), Math.sign(iv) * Math.max(1, to));
   }
 
   /**
    * The intervals list as a list like any other. Each step adds notes above or
-   * below its parent (0 adds nothing and, like a rest, is left alone). Values
-   * count semitones, or scale steps when the intervals are diatonic. The
-   * palette is the bloom's own distinct steps; the steps along it are the
-   * single intervals in use, else the consonant pool.
+   * below its parent (0 adds nothing and, like a rest, is left alone). Each
+   * interval keeps its kind: a chromatic one moves by semitones, a diatonic
+   * one by scale steps (lib/intervals). The palette is the bloom's own distinct
+   * steps; the steps along it are the single intervals in use, else the
+   * consonant pool.
    */
   private shapeIntervals(verb: ListVerb, amount: number): boolean {
     if (this.intervals.length === 0) this.intervals = [0];
     const st = this.intervals;
     const n = st.length;
-    const pool = [...(this.intervalsDiatonic ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS)].sort((a, b) => a - b);
-    const octave = this.intervalsDiatonic ? 7 : 12;
-    const singles = [...new Set(st.flatMap(ivArr))].sort((a, b) => a - b);
-    // sizes in use, else the pool's
-    const sizesInUse = [...new Set(singles.map(Math.abs))].sort((a, b) => a - b);
-    const ladder = sizesInUse.length >= 2 ? sizesInUse : [...new Set(pool.map(Math.abs))].sort((a, b) => a - b);
+    const pool = [...(this.intervalKind() ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS)];
+    const singles = [...new Set(st.flatMap(ivArr))];
+    // sizes in use (of each kind), else the pool's
+    const sizes = (dia: boolean, from: number[]) =>
+      [...new Set(from.filter(iv => isDiatonic(iv) === dia).map(iv => Math.abs(countOf(iv))))].sort((a, b) => a - b);
+    const ladderOf = (dia: boolean) => {
+      const used = sizes(dia, singles);
+      return used.length >= 2 ? used : sizes(dia, dia ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS);
+    };
+    const ladders = { c: ladderOf(false), d: ladderOf(true) };
     const pal = this.intervalPalette();
-    // an interval that lands on 0 (unison) goes past it instead
-    const each = (fn: (iv: number, i: number) => number) => {
+    // fn gets each interval's count in its own unit (and the interval); the
+    // result keeps the kind. One that lands on 0 (unison) goes past it instead.
+    const each = (fn: (n: number, iv: number, i: number) => number) => {
       this.intervals = st.map((s, i) => ivVal(ivArr(s).map(iv => {
-        const x = Math.round(fn(iv, i));
-        return x === 0 ? -Math.sign(iv) : x;
+        const c = countOf(iv);
+        const x = Math.round(fn(c, iv, i));
+        return makeIv(isDiatonic(iv), x === 0 ? -Math.sign(c) : x);
       })));
     };
-    const mag = (iv: number, m: number) => Math.sign(iv) * Math.max(1, m);
+    const mag = (c: number, m: number) => Math.sign(c) * Math.max(1, m);
     const live = st.map((_, i) => i).filter(i => ivArr(st[i]).length > 0);
     const randomStep = (): IntervalVal => (coin(0.15) ? ivVal([this.randomInterval(), this.randomInterval()]) : this.randomInterval());
     const nearestOther = (s: IntervalVal, others: IntervalVal[]) =>
@@ -2373,18 +2381,18 @@ export class Bloom {
         });
         break;
       case 'mutateWild': this.intervals = st.map(s => (coin(0.5) ? this.randomIntervalStep() : s)); break;
-      case 'nudgeDown': each(iv => iv - 1); break;
-      case 'nudgeUp': each(iv => iv + 1); break;
+      case 'nudgeDown': each(c => c - 1); break;
+      case 'nudgeUp': each(c => c + 1); break;
       // the same pitch class, on the other side or an octave further
-      case 'octaveDown': each(iv => iv - octave); break;
-      case 'octaveUp': each(iv => iv + octave); break;
-      case 'stepDown': each(iv => this.stepInterval(iv, -1, ladder)); break;
-      case 'stepUp': each(iv => this.stepInterval(iv, 1, ladder)); break;
+      case 'octaveDown': each((c, iv) => c - octaveOf(iv)); break;
+      case 'octaveUp': each((c, iv) => c + octaveOf(iv)); break;
+      case 'stepDown': each((_, iv) => countOf(this.stepInterval(iv, -1, ladders))); break;
+      case 'stepUp': each((_, iv) => countOf(this.stepInterval(iv, 1, ladders))); break;
       case 'breezeDown': case 'breezeUp': {
         const heat = this.breezeHeatFor('iv', st);
         const moving = someIndices(n, GESTURE.breeze, heat);
         const k = verb === 'breezeUp' ? 1 : -1;
-        each((iv, i) => (moving.has(i) ? this.stepInterval(iv, k, ladder) : iv));
+        each((c, iv, i) => (moving.has(i) ? countOf(this.stepInterval(iv, k, ladders)) : c));
         this.rememberBreeze('iv', heat, moving, this.intervals);
         break;
       }
@@ -2398,24 +2406,26 @@ export class Bloom {
         break;
       }
       // above ↔ below
-      case 'invert': each(iv => -iv); break;
-      // wide ↔ close: the k-th smallest size becomes the k-th largest
+      case 'invert': each(c => -c); break;
+      // wide ↔ close: the k-th smallest size (of its kind) becomes the k-th largest
       case 'invertMid': {
-        const sizes = [...new Set(singles.map(Math.abs))].sort((a, b) => a - b);
-        each(iv => mag(iv, sizes[sizes.length - 1 - sizes.indexOf(Math.abs(iv))]));
+        each((c, iv) => {
+          const sz = sizes(isDiatonic(iv), singles);
+          return mag(c, sz[sz.length - 1 - sz.indexOf(Math.abs(c))]);
+        });
         break;
       }
       // closing in or opening out across the list
       // up: steps widen toward the end; down: they close in
-      case 'tilt': each((iv, i) => mag(iv, Math.abs(iv) + Math.round(amount * (i / Math.max(1, n - 1) - 0.5) * 2))); break;
+      case 'tilt': each((c, _, i) => mag(c, Math.abs(c) + Math.round(amount * (i / Math.max(1, n - 1) - 0.5) * 2))); break;
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-3, 3));
         const offs = resamp1(ctrl, n);
-        each((iv, i) => mag(iv, Math.abs(iv) + Math.round(offs[i])));
+        each((c, _, i) => mag(c, Math.abs(c) + Math.round(offs[i])));
         break;
       }
       case 'sortUp': case 'sortDown': {
-        const size = (s: IntervalVal) => ivArr(s).reduce((a, x) => a + Math.abs(x), 0);
+        const size = (s: IntervalVal) => ivArr(s).reduce((a, x) => a + Math.abs(widthOf(x)), 0);
         this.intervals = [...st].sort((a, b) => (verb === 'sortUp' ? size(a) - size(b) : size(b) - size(a)));
         break;
       }
@@ -2598,14 +2608,14 @@ export class Bloom {
 
     const noteVal = wrapAt(this.notes, index);
     const parents = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
-    const scale = this.intervalsDiatonic ? this.scale : null;
+    const scale = ivs.some(isDiatonic) ? this.scale : null;
 
     const added: number[] = [];
     parents.forEach(parent => {
       ivs.forEach(iv => {
-        let n = scale
+        let n = scale && isDiatonic(iv)
           ? degreeToKey(
-            Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + iv,
+            Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + countOf(iv),
             scale.degrees, scale.pitchesPerOctave,
           )
           : parent + iv;
@@ -2617,8 +2627,18 @@ export class Bloom {
     return added;
   }
 
+  /**
+   * The kind new intervals take: true for diatonic. The kind most of the
+   * list's intervals have; with none, diatonic when a scale is attached.
+   */
+  intervalKind(): boolean {
+    const all = this.intervals.flatMap(ivArr);
+    if (!all.length) return this.appliedScale !== null;
+    return all.filter(isDiatonic).length * 2 >= all.length;
+  }
+
   private randomInterval(): number {
-    const pool = this.intervalsDiatonic ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS;
+    const pool = this.intervalKind() ? DIATONIC_INTERVALS : CHROMATIC_INTERVALS;
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -2670,11 +2690,12 @@ export class Bloom {
   incrementIntervals(n = 1): this {
     const widen = (ivs: number[]): number[] => {
       const order = ivs.map((_, i) => i).filter(i => ivs[i] !== 0)
-        .sort((x, y) => Math.abs(ivs[x]) - Math.abs(ivs[y]));
+        .sort((x, y) => Math.abs(widthOf(ivs[x])) - Math.abs(widthOf(ivs[y])));
       const out = [...ivs];
       order.forEach((i, rank) => {
-        const mag = Math.max(rank + 1, Math.abs(ivs[i]) + n * (rank + 1));
-        out[i] = Math.sign(ivs[i]) * Math.min(MAX_INTERVAL, mag);
+        const c = countOf(ivs[i]);
+        const mag = Math.max(rank + 1, Math.abs(c) + n * (rank + 1));
+        out[i] = makeIv(isDiatonic(ivs[i]), Math.sign(c) * mag);
       });
       return out;
     };
@@ -2689,9 +2710,43 @@ export class Bloom {
     return this;
   }
 
-  /** Switch between semitones and steps of the scale */
-  toggleIntervalsDiatonic(): this {
-    this.intervalsDiatonic = !this.intervalsDiatonic;
+  /**
+   * Older saves counted every interval of a bloom in one unit, set by a
+   * switch; written in that unit, they become intervals that carry their own.
+   */
+  adoptLegacyIntervals(diatonic: boolean): this {
+    if (diatonic) {
+      this.intervals = this.intervals.map(s => ivVal(ivArr(s).map(x => (isDiatonic(x) ? x : makeIv(true, x)))));
+    }
+    this.intervalsDiatonic = false;
+    return this;
+  }
+
+  /** Something to hear when the list is empty: a fifth below every fourth note */
+  startIntervals(): this {
+    this.intervals = [-7, 0, 0, 0];
+    return this;
+  }
+
+  /**
+   * Further apart (sparser) or closer together (denser): each step that adds
+   * something gets one more rest after it, or one fewer if it has any.
+   */
+  spaceIntervals(more: boolean): this {
+    const out: IntervalVal[] = [];
+    const st = this.intervals;
+    for (let i = 0; i < st.length; i++) {
+      out.push(st[i]);
+      if (!ivArr(st[i]).length) continue;
+      let j = i + 1;
+      while (j < st.length && !ivArr(st[j]).length) j++;
+      const rests = j - i - 1;
+      const keep = more ? rests + 1 : Math.max(0, rests - 1);
+      for (let k = 0; k < keep; k++) out.push(0);
+      // rests before the first step that adds something stay as they are
+      i = j - 1;
+    }
+    this.intervals = out.length ? out : [0];
     return this;
   }
 

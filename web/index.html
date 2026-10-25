@@ -631,6 +631,22 @@
       .cp-status--err { color: #a55; }
       .cp-status--ok  { color: #5a9; }
 
+      /* Typing a list: ↵ in a list mode (ui/listTyper.ts) */
+      #list-typer {
+        display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+        z-index: 60; width: min(720px, calc(100% - 32px));
+        background: #0c0c18; border: 1px solid #2a2a44; padding: 6px 10px;
+        align-items: center; gap: 8px; font-size: 12px;
+      }
+      #list-typer.open { display: flex; }
+      #list-typer .lt-label { color: #667; white-space: nowrap; }
+      #list-typer input {
+        flex: 1; min-width: 0; background: #07070f; border: 1px solid #252540; color: #9ab;
+        font-family: inherit; font-size: 13px; padding: 5px 8px; outline: none;
+      }
+      #list-typer input:focus { border-color: #44588a; }
+      #list-typer .lt-err { color: #a55; font-size: 11px; white-space: nowrap; }
+
       /* Scale picker (ui/scalePicker.ts), styled as the command palette */
       #scale-picker {
         display: none; position: fixed; inset: 0; z-index: 400;
@@ -1022,9 +1038,10 @@ drag a box: select events — keys
           <div class="hf-sec">
             <div class="hf-h">Intervals (added at playback)</div>
             <div class="hf-body"><b>5</b>    intervals mode <b>8</b>  reset
-<b>7</b>    add step     <b>&amp;</b>    drop step
+<b>7</b>    sparser      <b>&amp;</b>    denser
 <b>6</b>    widen        <b>^</b>    narrow
-<b>%</b>    semitones / scale steps
+<b>5 ↵</b>  type them: <b>-P5/10</b> (a fifth below
+     every 10th note), <b>+3rd+5th</b>
 <b>*</b>    bake into notes (and a raga's
      fit: what you hear)</div>
           </div>
@@ -1057,7 +1074,9 @@ drag a box: select events — keys
 <b>q Q</b>    quantize / set grid or levels (pitch: snap to scale)
 <b>n</b>      new list
 intervals: <b>i</b> above ↔ below, <b>- =</b> narrower / wider,
-<b>! @</b> same note an octave across; <b>6 ^ 7 &amp; 8 * %</b> as at home
+<b>! @</b> same note an octave across; <b>6 ^ 7 &amp; 8 *</b> as at home
+<b>↵</b>      type the list (shift-↵ sets it
+       looped to the number of notes)
 <b>x f</b>    lace / copy from slot
 
 <b>p t v c</b> switch list

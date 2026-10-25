@@ -1,6 +1,7 @@
 // Bloom lanes — the five parallel lists, each at its own length, with a cursor
 // per list as it cycles. Each press leaves a short trace of what it changed.
 
+import { stepName } from '../lib/intervals';
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
@@ -40,7 +41,7 @@ function snapshot(b: Bloom): Snapshot {
   return {
     notes: b.notes.map(n => JSON.stringify(n)),
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
-    iv: b.intervals.map(s => JSON.stringify(s)),
+    iv: b.intervals.map(s => stepName(s)),
   };
 }
 
@@ -134,7 +135,7 @@ export class Lanes {
       ctx.textAlign = 'left';
       ctx.fillStyle = active ? MODE : frozen ? ICE : ink(0.45);
       // intervals in scale steps are marked °
-      const name = L.key === 'iv' && b.intervalsDiatonic ? `${L.name}°` : L.name;
+      const name = L.name;
       ctx.fillText(`${frozen ? '❄ ' : ''}${name}`, x0 + 8, mid);
       ctx.fillStyle = ink(0.25);
       ctx.textAlign = 'right';
@@ -182,7 +183,7 @@ export class Lanes {
           const step = b.intervals[li];
           const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
           ctx.fillStyle = ink(ivs.length ? a : 0.3);
-          ctx.fillText(ivs.length ? ivs.map(x => (x > 0 ? `+${x}` : String(x))).join(' ') : '·', cx0 + 4, mid);
+          ctx.fillText(stepName(step), cx0 + 4, mid);
         } else {
           const c = b.chans[li];
           ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;

@@ -76,7 +76,7 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   if (Array.isArray(json.intervals) && json.intervals.length > 0) {
     b.intervals = json.intervals as Bloom['intervals'];
   }
-  b.intervalsDiatonic = json.intervalsDiatonic ?? false;
+  b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);   // older saves: one unit for every interval
   b.lowestPossibleNote = json.lowestPossibleNote;
   b.highestPossibleNote = json.highestPossibleNote;
   b.lowestSeedNote = json.lowestSeedNote;
