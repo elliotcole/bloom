@@ -415,8 +415,8 @@ this way too.
 - Where: `7 &` (at home and here) sparser / denser, one more or one fewer
   rest after each chord, so `/10` becomes `/11` or `/9`. `- =` evener / more
   uneven gaps between the chords, the list's length kept (`-P5/2 +M3/12
-  -P4/2` evens out to `/5 /6 /5`). `r` ratchet: a few chords also sound on the
-  rest after them. The order keys move them about as on any list.
+  -P4/2` evens out to `/5 /6 /5`). The order keys move them about as on any
+  list. (To repeat a note in its own time, use a figure: `(1 1)`.)
 - What: `1 2` move every interval one semitone or scale step (each keeps its
   kind), `3 4` narrow / widen each to the next size in use, `! @` an octave
   (so `+P5` becomes `-P4`: the same note on the other side), `# $` breeze,

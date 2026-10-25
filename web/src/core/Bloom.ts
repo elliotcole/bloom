@@ -2427,15 +2427,6 @@ export class Bloom {
       // where the chords fall: evener gaps, or more uneven ones
       case 'converge': return this.respaceIntervals(true);
       case 'diverge': return this.respaceIntervals(false);
-      // a few chords also sound on the rest after them
-      case 'ratchet': {
-        const can = st.map((_, i) => i).filter(i => ivArr(st[i]).length && i + 1 < n && !ivArr(st[i + 1]).length);
-        if (!can.length) return false;
-        const out = [...st];
-        someIndices(can.length, 1 / 3).forEach(k => { out[can[k] + 1] = JSON.parse(JSON.stringify(st[can[k]])); });
-        this.intervals = out;
-        break;
-      }
       // every step that adds something adds the commonest step
       case 'unify': {
         if (!pal.length) break;
