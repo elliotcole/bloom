@@ -209,6 +209,39 @@ with the reason. The library stays in this browser.
   starts it; source in `mts-helper/`): it is an MTS-ESP master that takes its tuning from Bloom, so
   every MTS-ESP client plugin follows it. The browser asks once for permission
   to send it SysEx; the settings menu says whether the helper is connected.
+- **Recording the tunings with a take:** DAWs don't record SysEx, so the
+  helper also plays each tuning Bloom sends out of a second port, **Bloom
+  Tuning Cues**, as a short chord of notes that holds the whole tuning. It
+  sends one at every change, and again every 30 seconds while the same tuning
+  plays on, so a recording that starts late still learns what it's in.
+  - **To record:** in Ableton, turn on Track for the Bloom Tuning Cues input
+    and the Bloom Tuning output (Settings → Link, Tempo & MIDI). Make a MIDI
+    track with no instrument, input **Bloom Tuning Cues**, output **No
+    Output**, and arm it with the rest of the take.
+  - **To play the tunings back:** run the helper and set that track's output
+    to **Bloom Tuning**. Bloom needn't be open. As the track plays, the helper
+    reads each cue and retunes every MTS-ESP synth where the take did; it
+    prints `from a cue` for each one. Leave the track's notes, velocities and
+    groove alone (quantizing moves them, which is fine).
+  - **Without the helper:** each cue holds the exact tuning, so a script can
+    read it back for any other instrument. A cue is notes on one tick (any
+    channel, any order); the pitch says what a note holds, its velocity the
+    value:
+
+    | pitch | holds |
+    |---|---|
+    | 0 | the format: velocity 1 |
+    | 1 | the root's pitch class + 1 (C = 1) |
+    | 2–4 | the period: cents − 1200 |
+    | 5 + 3d … 7 + 3d | degree d (0–11): its cents above the root − 100·d |
+    | 64–95 | the name, one ASCII character per note (as many as it has) |
+
+    A value in cents is three notes, most significant first: n = round(value
+    × 1000) + 1 000 000, written in base 127, each velocity being its digit +
+    1; so value = ((v₁−1)·16129 + (v₂−1)·127 + (v₃−1) − 1 000 000) / 1000.
+    MIDI key m then sounds at f(60 + root) · 2^((o·period + cents[d]) / 1200),
+    where m − (60 + root) = 12·o + d (d in 0–11) and f(k) = 440 · 2^((k − 69)/12):
+    the root keeps its equal-tempered pitch from middle C up.
 
 ---
 

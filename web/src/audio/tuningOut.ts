@@ -1,9 +1,10 @@
 // Where tunings go: the bloom-mts helper (an MTS-ESP master, reached through a
-// virtual MIDI port named "Bloom Tuning"), and the built-in piano. Also keeps the
+// virtual MIDI port named "Bloom Tuning", which also plays each tuning out as a
+// cue for the DAW to record), and the built-in piano. Also keeps the
 // library of tunings loaded from .scl files.
 
 import type { Bloom } from '../core/Bloom';
-import { EQUAL, freqTable, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
+import { EQUAL, cueMessage, freqTable, mtsMessages, nameMessage, parseScala } from '../lib/tuning';
 import type { Tuning } from '../lib/tuning';
 import { setPianoTuning } from './synth';
 
@@ -139,7 +140,10 @@ export function connectHelper(): Promise<void> {
   if (_access || _asking || !navigator.requestMIDIAccess) return _asking ?? Promise.resolve();
   _asking = navigator.requestMIDIAccess({ sysex: true }).then(acc => {
     _access = acc;
+    let had = !!helperPort();
     acc.addEventListener('statechange', () => {
+      if (!!helperPort() === had) return;   // some other port
+      had = !had;
       _sentKey = '';   // a helper that has just started gets the table again
       if (_last) applyTuning(_last);
       _onStatus?.(helperStatus());
@@ -155,6 +159,10 @@ export function connectHelper(): Promise<void> {
 
 let _sentKey = '';
 let _last: Bloom | null = null;
+let _cueAt = 0;
+// while the same tuning plays on, its cue goes out again this often, so a take
+// that started recording later still learns what it's in
+const CUE_AGAIN_MS = 30_000;
 
 /** What a bloom sounds in: its tuning and where the tuning's root sits */
 export function tuningKey(bloom: Bloom): string {
@@ -167,7 +175,10 @@ export function applyTuning(bloom: Bloom): void {
   _last = bloom;
   const t = soundingTuning(bloom);
   const key = tuningKey(bloom);
-  if (key === _sentKey) return;
+  if (key === _sentKey) {
+    if (performance.now() - _cueAt > CUE_AGAIN_MS) sendCue(t, soundingRoot(bloom));
+    return;
+  }
   const freqs = freqTable(t, soundingRoot(bloom));
   setPianoTuning(t ? freqs : null);
   const port = helperPort();
@@ -177,6 +188,14 @@ export function applyTuning(bloom: Bloom): void {
       port.send(nameMessage(t ? t.name : EQUAL.name));   // first, so the tables arrive under it
       for (const msg of mtsMessages(freqs)) port.send(msg);
     } catch { /* port went away */ }
+    sendCue(t, soundingRoot(bloom));
   }
   _sentKey = port || !t ? key : '';
+}
+
+/** Have the helper play the tuning out as a cue, for the DAW to record */
+function sendCue(t: Tuning | null, root: number): void {
+  const port = helperPort();
+  if (!port) return;
+  try { port.send(cueMessage(t, root)); _cueAt = performance.now(); } catch { /* port went away */ }
 }

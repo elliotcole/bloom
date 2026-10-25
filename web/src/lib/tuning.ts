@@ -189,6 +189,62 @@ export function nameMessage(name: string): number[] {
   return [0xf0, 0x7d, 0x62, 0x6c, 0x6d, ...bytes, 0xf7];
 }
 
+// ─── Tuning cues ──────────────────────────────────────────────────────────────
+// The sounding tuning written as notes, so a DAW records it with the take
+// (Ableton records neither SysEx nor CC order faithfully, but keeps notes'
+// pitches and velocities exactly). The helper plays them out of its "Bloom
+// Tuning Cues" port and, given them back, retunes as at the time. Each cue is
+// the whole tuning, as a chord; the pitch says what a note holds and its
+// velocity the value, so the order they arrive in doesn't matter:
+//   0       format, velocity 1
+//   1       the root's pitch class + 1
+//   2–4     the period, cents − 1200
+//   5–40    degree d (0–11) at 5 + 3d: its cents from the root − 100·d
+//   64–95   the name, one ASCII character each (as many as it has, up to 32)
+// A value in cents is three notes, most significant first: n = round(value ×
+// 1000) + 1 000 000 (so ±1000 cents, to a thousandth), written in base 127,
+// each digit's velocity being the digit + 1. Key m then sounds at
+// f(60 + root) · 2^((o · period + cents[d]) / 1200), where m − (60 + root) =
+// 12o + d and f is 12-TET at A = 440 — the same table Bloom sends.
+
+export const CUE = { format: 0, root: 1, period: 2, degrees: 5, name: 64, nameLen: 32 } as const;
+
+function cueValue(at: number, cents: number): [number, number][] {
+  const n = Math.max(0, Math.min(2_000_000, Math.round(cents * 1000) + 1_000_000));
+  return [[at, Math.floor(n / 16129) + 1], [at + 1, Math.floor(n / 127) % 127 + 1], [at + 2, n % 127 + 1]];
+}
+
+/** A tuning on its root as cue notes, [pitch, velocity] */
+export function cueNotes(t: Tuning | null, root: number): [number, number][] {
+  const tun = t ?? EQUAL;
+  const out: [number, number][] = [[CUE.format, 1], [CUE.root, (((root % 12) + 12) % 12) + 1]];
+  out.push(...cueValue(CUE.period, tun.period - 1200));
+  tun.cents.forEach((c, d) => out.push(...cueValue(CUE.degrees + 3 * d, c - 100 * d)));
+  [...tun.name].map(c => c.charCodeAt(0)).filter(c => c >= 0x20 && c < 0x7f).slice(0, CUE.nameLen)
+    .forEach((c, i) => out.push([CUE.name + i, c]));
+  return out;
+}
+
+/** The cue for the helper to play out (non-commercial ID 7D, "blc"), the notes as pairs */
+export function cueMessage(t: Tuning | null, root: number): number[] {
+  return [0xf0, 0x7d, 0x62, 0x6c, 0x63, ...cueNotes(t, root).flat(), 0xf7];
+}
+
+/** Read a cue back (velocity by pitch, 0 for none): the tuning and its root, or null if incomplete */
+export function readCue(vel: number[]): { tuning: Tuning; root: number } | null {
+  if (vel[CUE.format] !== 1 || !vel[CUE.root]) return null;
+  const value = (at: number) => {
+    if (!vel[at] || !vel[at + 1] || !vel[at + 2]) return null;
+    return ((vel[at] - 1) * 16129 + (vel[at + 1] - 1) * 127 + (vel[at + 2] - 1) - 1_000_000) / 1000;
+  };
+  const period = value(CUE.period);
+  const cents = Array.from({ length: 12 }, (_, d) => value(CUE.degrees + 3 * d));
+  if (period === null || cents.some(c => c === null)) return null;
+  let name = '';
+  for (let i = 0; i < CUE.nameLen && vel[CUE.name + i]; i++) name += String.fromCharCode(vel[CUE.name + i]);
+  return { tuning: { name, cents: cents.map((c, d) => c! + 100 * d), period: period + 1200 }, root: vel[CUE.root] - 1 };
+}
+
 // ─── Editing ──────────────────────────────────────────────────────────────────
 
 // ─── Alterations ──────────────────────────────────────────────────────────────

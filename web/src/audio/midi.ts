@@ -105,6 +105,7 @@ function _refreshInputs(): void {
   if (!midiAccess) return;
   state.inputs = [];
   midiAccess.inputs.forEach(input => {
+    if (/bloom tuning/i.test(input.name ?? '')) return;   // the helper's cues, for the DAW, not for playing
     state.inputs.push({ name: input.name ?? 'Unknown', id: input.id });
     // Attach message handler (safe to re-attach — browser deduplicates)
     input.onmidimessage = (ev: MIDIMessageEvent) => {

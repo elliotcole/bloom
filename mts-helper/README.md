@@ -39,3 +39,18 @@ crash left a master registered, `./bloom-mts --reinit` clears it.
   two messages of 64 notes, after the tuning's name)
 - `F0 7E dd 08 01 …` bulk tuning dump
 - `F0 7D 62 6C 6D <name> F7` the tuning's name (Bloom's own message)
+- `F0 7D 62 6C 63 [pitch velocity]… F7` a tuning cue to play out (Bloom's own)
+- notes: a tuning cue played back into it, from a DAW
+
+## Tuning cues
+
+DAWs don't record SysEx, so each tuning Bloom sends also comes out of a second
+virtual port, **Bloom Tuning Cues**, as a chord of notes that holds it. Record
+that port on a MIDI track with the take; play the track back into **Bloom
+Tuning** and the helper retunes where the take did, without Bloom. The format
+is in Bloom's GUIDE.md (Tunings) and `web/src/lib/tuning.ts`. While a cue has
+just gone out, cues coming in are ignored for two seconds, so a track that
+monitors its input straight back can't undo a newer tuning.
+
+`./bloom-mts --decode < cue.txt` reads `pitch velocity` lines as one cue and
+prints its name and the 128 frequencies it makes.
