@@ -133,12 +133,12 @@ function drawAddedPcMarks(
   angleOf: (p: number) => number,
   ownCount: Int32Array,
 ): void {
-  if (!bloom.hasIntervals()) return;
+  if (!bloom.hasExtraNotes()) return;
   const flash = new Float32Array(12);
   const vel = new Float32Array(12);
   const present = new Uint8Array(12);
   for (let i = 0; i < bloom.notes.length; i++) {
-    bloom.addedNotesAt(i).forEach(pitch => {
+    bloom.extraNotesAt(i).forEach(pitch => {
       const p = pc(pitch);
       present[p] = 1;
       flash[p] = Math.max(flash[p], flashValues[i] ?? 0);
@@ -153,11 +153,11 @@ function drawAddedPcMarks(
   }
 }
 
-/** Every pitch the bloom sounds: its own notes plus those the intervals add */
+/** Every pitch the bloom sounds: its own notes plus those the intervals add and the figures play */
 function soundingPitches(bloom: Bloom): number[] {
   const own = flatNotes(bloom.notes) as number[];
-  if (!bloom.hasIntervals()) return own;
-  return own.concat(...bloom.notes.map((_, i) => bloom.addedNotesAt(i)));
+  if (!bloom.hasExtraNotes()) return own;
+  return own.concat(...bloom.notes.map((_, i) => bloom.extraNotesAt(i)));
 }
 
 // ─── Note label helpers ───────────────────────────────────────────────────────
@@ -276,7 +276,7 @@ export function drawRadialAt(
     });
 
     // Added notes sit where their petal's tip would be
-    bloom.addedNotesAt(i).forEach((pitch, ai) => {
+    bloom.extraNotesAt(i).forEach((pitch, ai) => {
       const angle = noteAngles[i] + (chordNotes.length + ai) * 0.05;
       const len = (pitch / 127) * radius * 0.8 + radius * 0.08;
       drawAddedMark(ctx, cx - Math.sin(angle) * len, cy + Math.cos(angle) * len, 4.5, pitch, vel, flash, theme);
@@ -460,7 +460,7 @@ export function drawPianoAt(
         ctx.stroke();
       }
     });
-    bloom.addedNotesAt(i).forEach(pitch =>
+    bloom.extraNotesAt(i).forEach(pitch =>
       drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
     const written = bloom.writtenAt(i);
     if (written !== null) drawWrittenMark(ctx, nx, noteToY(written), baseR, theme);
@@ -655,7 +655,7 @@ export function drawFieldAt(
         ctx.stroke();
       }
     });
-    bloom.addedNotesAt(i).forEach(pitch =>
+    bloom.extraNotesAt(i).forEach(pitch =>
       drawAddedMark(ctx, nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
     const written = bloom.writtenAt(i);
     if (written !== null) drawWrittenMark(ctx, nx, noteToY(written), baseR, theme);
@@ -861,7 +861,7 @@ export function drawDeepAt(
       instances.push({ pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
       hit(i, projX, noteToY(pitch) + depthToY(vel), 7 * dotScale + 4);
     });
-    bloom.addedNotesAt(i).forEach(pitch => {
+    bloom.extraNotesAt(i).forEach(pitch => {
       instances.push({ added: true, pitch, vel, flash, projX, projY: noteToY(pitch) + depthToY(vel), dotScale, depthAlpha, zNorm });
     });
     const written = bloom.writtenAt(i);
@@ -1166,7 +1166,7 @@ export function drawScoreAt(
     });
 
     // Added notes — open diamond noteheads, like harmonics.
-    bloom.addedNotesAt(i).forEach(pitch => {
+    bloom.extraNotesAt(i).forEach(pitch => {
       const { pos, acc } = midiToStaff(pitch);
       const ny = posToY(pos);
       const crowded = sortedPos.some(p => Math.abs(p - pos) <= 1);
@@ -1322,7 +1322,7 @@ export function drawOrbitAt(
     });
 
     // Added notes ride their own orbit at the same angle
-    bloom.addedNotesAt(i).forEach((pitch, ai) => {
+    bloom.extraNotesAt(i).forEach((pitch, ai) => {
       const r = minR + (pitch / 127) * (maxR - minR);
       const angle = ((i + (chordNotes.length + ai) * 0.12) / n) * Math.PI * 2 - Math.PI / 2 + orbitRotation;
       ctx.strokeStyle = theme.grid;
@@ -1787,7 +1787,7 @@ export function drawSpiralAt(
       positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi });
       hit(i, x, y, 9);
     });
-    bloom.addedNotesAt(i).forEach(midi => {
+    bloom.extraNotesAt(i).forEach(midi => {
       const { x, y, sinT } = project(midi);
       positions.push({ px: x, py: y, sinT, flash, vel, midiPitch: midi, added: true });
     });
@@ -2003,7 +2003,7 @@ export function drawHelixAt(
   for (let i = 0; i < n; i++) {
     const vel = wrapAt(bloom.velocities, i);
     const flash = flashValues[i] ?? 0;
-    bloom.addedNotesAt(i).forEach(pitch => {
+    bloom.extraNotesAt(i).forEach(pitch => {
       const pos = spiralPos(tAdded, pitch);
       drawAddedMark(ctx, pos.x, pos.y, 3 + (vel / 127) * 3, pitch, vel, flash, theme);
     });

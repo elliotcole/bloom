@@ -309,7 +309,9 @@ slot 3. `b` opens a line holding the figures; `↵` sets them, shift-`↵` loops
 what you typed to the notes' length, `esc` leaves them. `B` clears them. `*`
 bakes the subdividing figures into the notes (with the intervals); those
 from the garden stay as figures. Figures live at home only, as they change
-both the notes and the rhythm; the console shows them on the `fig:` line.
+both the notes and the rhythm. The views mark the notes a figure plays as
+they mark the intervals' added notes; the console shows the list on the
+`fig:` line and the lanes on their own.
 
 ## List modes: `p` `t` `v` `c` `5`
 
@@ -565,8 +567,8 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   lesser-known key instead. `?` in tuning mode or the freeze menu shows just
   that section of the help. ⚙ → display → **cues** turns it off; it's
   hidden in clean view and while the console is open.
-- **Lanes: opt-`\`.** A strip under the view showing the five lists (pitch, time,
-  velocity, channels, intervals), each at its own length (×n). The time lane is drawn to
+- **Lanes: opt-`\`.** A strip under the view showing the six lists (pitch, time,
+  velocity, channels, intervals, figures), each at its own length (×n). The time lane is drawn to
   scale. While playing, each lane has its own cursor, which cycles at that
   list's length, so you can watch lists of different lengths drift against
   each other. The lane for the

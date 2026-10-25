@@ -1,25 +1,27 @@
-// Bloom lanes — the five parallel lists, each at its own length, with a cursor
+// Bloom lanes — the six parallel lists, each at its own length, with a cursor
 // per list as it cycles. Each press leaves a short trace of what it changed.
 
 import { stepName } from '../lib/intervals';
+import { formatFigure, isFigure } from '../lib/figures';
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
 
-type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv';
+type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | null;
 
 const LANE_H = 24;
 const LABEL_W = 70;
 const TRACE_MS = 1400;
-export const LANES_HEIGHT = 5 * LANE_H + 10;
+export const LANES_HEIGHT = 6 * LANE_H + 10;
 
-const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze: 'pitch' | 'time' | 'vel' | 'chan' | 'iv' }[] = [
+const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze?: 'pitch' | 'time' | 'vel' | 'chan' | 'iv' }[] = [
   { key: 'notes', name: 'pitch', mode: 'pitch', freeze: 'pitch' },
   { key: 'time',  name: 'time',  mode: 'time', freeze: 'time' },
   { key: 'vel',   name: 'vel',   mode: 'vel',  freeze: 'vel' },
   { key: 'chan',  name: 'chan',  mode: 'chan', freeze: 'chan' },
   { key: 'iv',    name: 'int',   mode: 'iv',   freeze: 'iv' },
+  { key: 'fig',   name: 'fig',   mode: null },   // b types them; no list mode
 ];
 
 const MODE = '#e8a33a';
@@ -35,13 +37,14 @@ const chanHue = (c: number) => (c * 360) / 16;
 const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
 const amber = (a: number) => `rgba(232,163,58,${Math.max(0, Math.min(1, a))})`;
 
-interface Snapshot { notes: string[]; time: number[]; vel: number[]; chan: number[]; iv: string[] }
+interface Snapshot { notes: string[]; time: number[]; vel: number[]; chan: number[]; iv: string[]; fig: string[] }
 
 function snapshot(b: Bloom): Snapshot {
   return {
     notes: b.notes.map(n => JSON.stringify(n)),
     time: [...b.timeIntervals], vel: [...b.velocities], chan: [...b.chans],
     iv: b.intervals.map(s => stepName(s)),
+    fig: b.figures.map(formatFigure),
   };
 }
 
@@ -63,7 +66,7 @@ export class Lanes {
     };
     const changed = {
       notes: diff(prev.notes, now.notes), time: diff(prev.time, now.time),
-      vel: diff(prev.vel, now.vel), chan: diff(prev.chan, now.chan), iv: diff(prev.iv, now.iv),
+      vel: diff(prev.vel, now.vel), chan: diff(prev.chan, now.chan), iv: diff(prev.iv, now.iv), fig: diff(prev.fig, now.fig),
     };
     if (Object.values(changed).some(s => s.size)) {
       this.changed = changed;
@@ -85,17 +88,18 @@ export class Lanes {
     b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number,
   ): void {
     const n = b.notes.length;
-    if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length || !b.intervals.length) return;
+    if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length || !b.intervals.length || !b.figures.length) return;
     const fade = this.changed ? Math.max(0, 1 - (performance.now() - this.changedAt) / TRACE_MS) : 0;
     if (fade === 0) this.changed = null;
 
     const len: Record<LaneKey, number> = {
       notes: n, time: b.timeIntervals.length, vel: b.velocities.length, chan: b.chans.length,
-      iv: b.intervals.length,
+      iv: b.intervals.length, fig: b.figures.length,
     };
     const heat = {
       notes: null as number[] | null,
       time: b.breezeHeat('time'), vel: b.breezeHeat('vel'), chan: b.breezeHeat('chan'), iv: b.breezeHeat('iv'),
+      fig: null as number[] | null,
     };
     // pitch heat is per flat note; fold chords to their hottest tone
     const ph = b.breezeHeat('pitch');
@@ -129,8 +133,8 @@ export class Lanes {
 
     LANES.forEach((L, r) => {
       const top = y0 + 4 + r * LANE_H, mid = top + (LANE_H - 3) / 2;
-      const active = mode === L.mode;
-      const frozen = !!b.frozen[L.freeze];
+      const active = L.mode !== null && mode === L.mode;
+      const frozen = !!L.freeze && !!b.frozen[L.freeze];
       if (active) { ctx.fillStyle = amber(0.07); ctx.fillRect(x0, top, w, LANE_H - 3); }
       ctx.textAlign = 'left';
       ctx.fillStyle = active ? MODE : frozen ? ICE : ink(0.45);
@@ -184,6 +188,10 @@ export class Lanes {
           const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
           ctx.fillStyle = ink(ivs.length ? a : 0.3);
           ctx.fillText(stepName(step), cx0 + 4, mid);
+        } else if (L.key === 'fig') {
+          const f = b.figures[li];
+          ctx.fillStyle = ink(isFigure(f) ? a : 0.3);
+          ctx.fillText(isFigure(f) ? formatFigure(f) : '·', cx0 + 4, mid);
         } else {
           const c = b.chans[li];
           ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;

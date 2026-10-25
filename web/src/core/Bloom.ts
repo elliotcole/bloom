@@ -2657,6 +2657,27 @@ export class Bloom {
     return isFigure(f) ? f : null;
   }
 
+  /** The pitches the note's figure plays besides the note itself (for the views; [] with no figure) */
+  figureNotesAt(index: number, tick = index): number[] {
+    if (!this.figureAt(tick) || !this.notes.length) return [];
+    const nv = wrapAt(this.notes, index);
+    const own = Array.isArray(nv) ? flatNotes(nv as NoteArray) as number[] : [nv as number];
+    const out = new Set<number>();
+    this.soundsAt(index, tick).forEach(s => { if (s.figure) s.notes.forEach(p => { if (!own.includes(p)) out.add(p); }); });
+    return [...out];
+  }
+
+  /** What the views mark beside a note: the notes its intervals add and those its figure plays */
+  extraNotesAt(index: number, tick = index): number[] {
+    const added = this.addedNotesAt(index, tick);
+    const fig = this.figureNotesAt(index, tick).filter(p => !added.includes(p));
+    return fig.length ? added.concat(fig) : added;
+  }
+
+  hasExtraNotes(): boolean {
+    return this.hasIntervals() || this.hasFigures();
+  }
+
   /** A pitch moved by an interval (lib/intervals) as the intervals list moves it, kept in range */
   private moveBy(parent: number, iv: number): number {
     const scale = this.scale;
