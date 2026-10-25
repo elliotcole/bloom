@@ -310,7 +310,8 @@ what you typed to the notes' length, `esc` leaves them. `B` clears them. `*`
 bakes the subdividing figures into the notes (with the intervals); those
 from the garden stay as figures. Figures live at home only, as they change
 both the notes and the rhythm. The views mark the notes a figure plays as
-they mark the intervals' added notes; the console shows the list on the
+they mark the intervals' added notes, where they sound in the views laid out
+in time (radial, piano, field, deep, score, helix); the console shows the list on the
 `fig:` line and the lanes on their own.
 
 ## List modes: `p` `t` `v` `c` `5`

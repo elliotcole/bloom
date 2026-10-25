@@ -2674,6 +2674,26 @@ export class Bloom {
     return fig.length ? added.concat(fig) : added;
   }
 
+  /**
+   * The same with when each sounds, in beats from the note's onset, for views
+   * laid out in time: a figure's later steps (a ratchet's repeats too) sit
+   * where they sound.
+   */
+  extraMarksAt(index: number, tick = index): { pitch: number; at: number }[] {
+    const out = this.addedNotesAt(index, tick).map(pitch => ({ pitch, at: 0 }));
+    if (!this.figureAt(tick) || !this.notes.length) return out;
+    const nv = wrapAt(this.notes, index);
+    const own = Array.isArray(nv) ? flatNotes(nv as NoteArray) as number[] : [nv as number];
+    this.soundsAt(index, tick).forEach(s => {
+      if (!s.figure) return;
+      s.notes.forEach(pitch => {
+        if (s.at === 0 && own.includes(pitch)) return;   // the note itself
+        if (!out.some(m => m.pitch === pitch && Math.abs(m.at - s.at) < 1e-9)) out.push({ pitch, at: s.at });
+      });
+    });
+    return out;
+  }
+
   hasExtraNotes(): boolean {
     return this.hasIntervals() || this.hasFigures();
   }
