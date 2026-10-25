@@ -15,6 +15,8 @@ import {
 } from './audio/tuningOut';
 import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
+import { RAGA_SCALES } from './lib/scales';
+import { spell } from './lib/numbers';
 import { noteOn, noteOff } from './audio/midi';
 import { BloomVisualization } from './ui/visualization';
 import { GardenVisualization } from './ui/gardenVisualization';
@@ -328,6 +330,19 @@ async function main() {
     setClean(true);
     display.setStatus('clean view — esc leaves');
   });
+
+  // ─── Raga: attached by name, Sa on the bloom's key ──────────────────────────
+  const ragaSelect = document.getElementById('raga-select') as HTMLSelectElement | null;
+  if (ragaSelect) {
+    ragaSelect.append(new Option('—', ''), ...RAGA_SCALES.map(r => new Option(r.name, r.name)));
+    ragaSelect.addEventListener('change', () => {
+      const r = RAGA_SCALES.find(x => x.name === ragaSelect.value);
+      ragaSelect.blur();
+      if (!r) return;
+      bloom.applyRaga(r);
+      keysRefresh(`raga: ${r.name} on Sa ${spell(bloom.keyTuningRoot())}`);
+    });
+  }
 
   // ─── Tuning: a library of .scl files; each bloom picks one ──────────────────
   const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;

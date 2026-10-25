@@ -143,10 +143,11 @@ with the reason. The library stays in this browser.
   put it on C, A harmonic minor too, F harmonic minor on A♭, and `]` (one more
   sharp) moves it to G. A bloom with no scale attached is twelve-note
   chromatic, and puts the root on C; so does a scale no key signature fits
-  (whole tone, diminished, Bhairav). The root keeps its 12-TET pitch; the
-  other notes are tuned from it.
+  (whole tone, diminished). A raga's key is its Sa. The root keeps its 12-TET
+  pitch; the other notes are tuned from it.
 - **The scale badge** in the header shows the attached scale and its key,
-  `♮ Aeolian · key E♭`, or `no key`; it's hidden while none is attached.
+  `♮ Aeolian · key E♭`, `♮ Yaman · Sa G`, or `no key`; it's hidden while none
+  is attached.
 - **What you see:** the header shows `◊ ji-5 @ D` (`*` once edited), and the
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
@@ -242,6 +243,35 @@ with the reason. The library stays in this browser.
     MIDI key m then sounds at f(60 + root) · 2^((o·period + cents[d]) / 1200),
     where m − (60 + root) = 12·o + d (d in 0–11) and f(k) = 440 · 2^((k − 69)/12):
     the root keeps its equal-tempered pitch from middle C up.
+
+---
+
+## Ragas
+
+The 25 ragas of the Kirana archive are scales too, each with its arohana
+(rising form) and avarohana (falling form). Attach one in ⚙ settings →
+**raga**: its Sa goes on the bloom's key (C when it has none), and the notes
+move into the raga. `k` and `K` find ragas as well as scales, when they fit the
+notes best. The badge shows `♮ Yaman · Sa C`; its tooltip lists both forms.
+
+**Each note sounds in the form of the step it takes next.** A note followed
+by a higher one must be in the arohana, one followed by a lower one in the
+avarohana. So Yaman can rise to Pa, but not rise from it: E F♯ G A plays E F♯
+F♯ A, while F♯ G E plays as written. A repeated note looks on to the next
+different one; the last note, and one with only rests after it, is free.
+Chords are left as they are. A note outside its form moves to the nearest note
+of the form, the way the line is going.
+
+This happens as the bloom plays: the bloom keeps the raga's full set (both
+forms together), so every key works on it as on any scale, and a Pa that
+can't sound in this order comes back when the line is reversed. The note list
+can therefore show a Pa that sounds as Ma.
+
+Two ragas have a turn the rule can't follow: Bageshri's descent climbs m P D
+and Shudh Sarang's M P, and neither P nor M is in its arohana, so those notes
+move. The ragas' written paths (`web/src/lib/ragas.ts`) keep the turns for a
+later, fuller model. A raga whose two forms are the same (Bhairav, Bhupali …)
+behaves like any scale.
 
 ---
 

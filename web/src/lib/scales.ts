@@ -1,12 +1,20 @@
 // Scale library and operations — ported from Scale.sc and Bloom.sc's Scale extensions
 
-import { indexInBetween, allTuples } from './arrays';
+import { indexInBetween, allTuples, flatNotes } from './arrays';
+import type { NoteVal } from './arrays';
 import { keyToDegree, degreeToKey, nearestInScale } from './numbers';
+import { RAGAS } from './ragas';
 
 export interface Scale {
+  /** every pitch class it uses (a raga's: both its forms together) */
   degrees: number[];
   pitchesPerOctave: number;
   name: string;
+  /** a raga whose arohana and avarohana differ: the pitch classes it rises and falls by (see fitByDirection) */
+  up?: number[];
+  down?: number[];
+  /** a raga's Sa: the key it sets */
+  root?: number;
 }
 
 function scale(degrees: number[], name: string, ppo: number = 12): Scale {
@@ -80,7 +88,17 @@ export const SCALES: Record<string, Scale> = {
   diminished2:     scale([0, 2, 3, 5, 6, 8, 9, 11], 'Diminished 2'),
   // 12-note
   chromatic:       scale([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 'Chromatic'),
+  // ragas, on C, after the scales so a pitch set is named after a scale first
+  ...Object.fromEntries(RAGAS.map(r => [r.id, ragaScale(r.name, r.up, r.down)])),
 };
+
+function ragaScale(name: string, up: number[], down: number[]): Scale {
+  const s: Scale = { ...scale([...new Set([...up, ...down])].sort((a, b) => a - b), name), root: 0 };
+  if (up.join() !== down.join()) { s.up = up; s.down = down; }
+  return s;
+}
+
+export const RAGA_SCALES: Scale[] = RAGAS.map(r => SCALES[r.id]);
 
 export const ALL_SCALES = Object.values(SCALES);
 
@@ -127,11 +145,11 @@ function rootedScales() {
   for (const sc of ALL_SCALES) {
     if (sc.pitchesPerOctave !== 12 || sc.degrees.length > 10) continue;
     for (let root = 0; root < 12; root++) {
-      const degrees = sc.degrees.map(d => (d + root) % 12).sort((a, b) => a - b);
-      const key = degrees.join(',');
+      const moved = scaleTranspose(sc, root);
+      const key = moved.degrees.join(',');
       if (seen.has(key)) continue;
       seen.add(key);
-      _rooted.push({ scale: { degrees, pitchesPerOctave: 12, name: `${PC_NAMES[root]} ${sc.name}` }, key, set: new Set(degrees) });
+      _rooted.push({ scale: { ...moved, name: `${PC_NAMES[root]} ${sc.name}` }, key, set: new Set(moved.degrees) });
     }
   }
   return _rooted;
@@ -175,13 +193,47 @@ export function nameScaleDegrees(pcs: number[]): string {
   return '';
 }
 
-/** Transpose scale degrees by t semitones (mod 12, sorted) */
+/** Transpose scale degrees by t semitones (mod 12, sorted); a raga's forms and Sa go with them */
 export function scaleTranspose(s: Scale, t: number): Scale {
-  return {
-    degrees: s.degrees.map(d => (d + t) % 12).sort((a, b) => a - b),
-    pitchesPerOctave: s.pitchesPerOctave,
-    name: s.name,
-  };
+  const move = (pcs: number[]) => pcs.map(d => (((d + t) % 12) + 12) % 12).sort((a, b) => a - b);
+  const out: Scale = { degrees: move(s.degrees), pitchesPerOctave: s.pitchesPerOctave, name: s.name };
+  if (s.up && s.down) { out.up = move(s.up); out.down = move(s.down); }
+  if (s.root !== undefined) out.root = (((s.root + t) % 12) + 12) % 12;
+  return out;
+}
+
+/**
+ * A raga's notes as they sound: each takes the form of the step it goes on to.
+ * A note followed by a higher one must be in the arohana, one followed by a
+ * lower one in the avarohana; a repeat looks on to the next different note,
+ * and the last note (or one before only rests) is free. So Yaman can rise to
+ * Pa, but not rise from it. A note outside its form moves to the nearest note
+ * of the form, the way the line is going (down on a tie when rising, up when
+ * falling). The direction is read from the notes as written, before any move.
+ * Chords and rests are left as they are; so is a scale whose forms are one.
+ */
+export function fitByDirection(notes: NoteVal[], sounding: (i: number) => boolean, s: Scale): NoteVal[] {
+  if (!s.up || !s.down) return notes;
+  const up = new Set(s.up), down = new Set(s.down);
+  const pc = (m: number) => ((Math.round(m) % 12) + 12) % 12;
+  const height = (v: NoteVal) => Array.isArray(v) ? Math.max(...(flatNotes([v]) as number[])) : v;
+  return notes.map((v, i) => {
+    if (Array.isArray(v) || !sounding(i)) return v;
+    let next: number | null = null;
+    for (let j = i + 1; j < notes.length && next === null; j++) {
+      if (sounding(j) && height(notes[j]) !== v) next = height(notes[j]);
+    }
+    if (next === null) return v;
+    const rising = next > v;
+    const form = rising ? up : down;
+    if (form.has(pc(v))) return v;
+    for (let k = 1; k <= 6; k++) {
+      const [first, second] = rising ? [v - k, v + k] : [v + k, v - k];
+      if (form.has(pc(first))) return first;
+      if (form.has(pc(second))) return second;
+    }
+    return v;
+  });
 }
 
 /** Extract pitch class set from a set of MIDI notes */

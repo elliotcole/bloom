@@ -19,7 +19,7 @@ import {
 } from '../lib/numbers';
 import type { Scale } from '../lib/scales';
 import {
-  SCALES, mostSimilarTo, slantMatch,
+  SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
   notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr, nameScaleDegrees, pcsKey,
 } from '../lib/scales';
 
@@ -1282,7 +1282,9 @@ export class Bloom {
    * no key (whole tone): both put the root on C.
    */
   keyTuningRoot(): number {
-    return this.appliedScale ? keyRootOf(this.appliedScale.degrees) ?? 0 : 0;
+    const s = this.appliedScale;
+    if (!s) return 0;
+    return s.root ?? keyRootOf(s.degrees) ?? 0;   // a raga's Sa, else the key signature's
   }
 
   /** Move the tuning's root to the bloom's key, unless it was chosen by hand */
@@ -1327,6 +1329,11 @@ export class Bloom {
     );
     this.restoreNest();
     return this;
+  }
+
+  /** Attach a raga (or any scale written on C) with its Sa on this pitch class: the bloom's key, unless given */
+  applyRaga(raga: Scale, sa = this.keyTuningRoot()): this {
+    return this.applyScale(scaleTranspose(raga, sa));
   }
 
   private _chooseScaleObj(): Scale {
@@ -2882,7 +2889,11 @@ export class Bloom {
   /** Returns flat list of { note, velocity, time, chan } events for playback */
   /** One pass of the notes. `tick` is the running count the other lists are read at, so they keep phasing across passes. */
   toEvents(tick = 0): Array<{ note: number | number[]; added: number[]; velocity: number; time: number; chan: number }> {
-    return this.notes.map((note, i) => ({
+    // a raga sounds each note in the form of the step it takes next
+    const notes = this.appliedScale
+      ? fitByDirection(this.notes, i => wrapAt(this.velocities, tick + i) > 0, this.appliedScale)
+      : this.notes;
+    return notes.map((note, i) => ({
       note: Array.isArray(note) ? (note as number[]) : note as number,
       added: this.addedNotesAt(i, tick + i),
       velocity: wrapAt(this.velocities, tick + i),

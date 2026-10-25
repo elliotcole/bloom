@@ -473,12 +473,17 @@ export function createKeyHandler(state: KeyHandlerState) {
     const badge = document.getElementById('scale-badge');
     if (!badge) return;
     const s = state.bloom.appliedScale;
-    const notes = s ? [...s.degrees].sort((a, b) => a - b).map(spell).join(' ') : '';
-    const key = s ? keyRootOf(s.degrees) : null;
-    const keyStr = key === null ? 'no key' : `key ${spell(key)}`;
+    const names = (pcs: number[]) => [...pcs].sort((a, b) => a - b).map(spell).join(' ');
+    const notes = s ? names(s.degrees) : '';
+    const raga = s?.root !== undefined;
+    const key = s ? (s.root ?? keyRootOf(s.degrees)) : null;
+    const keyStr = key === null ? 'no key' : `${raga ? 'Sa' : 'key'} ${spell(key)}`;
+    const forms = s?.up && s.down ? ` · rising ${names(s.up)}, falling ${names(s.down)} (each note sounds in the form of the step it takes next)` : '';
     badge.textContent = s ? `♮ ${s.name || notes} · ${keyStr}` : '';
-    badge.title = s ? `scale attached: ${notes} — ${keyStr}: a tuning's root sits ${key === null ? 'on C' : 'there'} (k / K / j / J change the scale; with none attached the bloom is chromatic and the root is C)` : '';
+    badge.title = s ? `${raga ? 'raga' : 'scale'} attached: ${notes}${forms} — ${keyStr}: a tuning's root sits ${key === null ? 'on C' : 'there'} (k / K / j / J change the scale, ⚙ settings attaches a raga; with none attached the bloom is chromatic and the root is C)` : '';
     badge.classList.toggle('active', s !== null);
+    const ragaSelect = document.getElementById('raga-select') as HTMLSelectElement | null;
+    if (ragaSelect) ragaSelect.value = raga && [...ragaSelect.options].some(o => o.value === s!.name) ? s!.name : '';
   }
 
   /** The tuning follows the key; a change to it is heard (and shown) straight away */
