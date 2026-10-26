@@ -70,6 +70,7 @@ These move each note together with its time, velocity, channel and interval.
 | `h` | thin | `H` | thicken |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
+| `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | trim: every list longer than the notes cut to their length |
 
 If the lists were phasing, a whole-note move first lines them all up to the
 number of notes. It keeps what one play-through sounds like, but the drift stops.
@@ -360,6 +361,7 @@ These only move values around, so they mean exactly the same in every list.
 | `d` / `D` | braid / pyramid |
 | `o` / `O` | sort up / down (for velocity: crescendo / decrescendo) |
 | `z` / `a` / `A` | drop last / add one from the palette / add one at random |
+| `"` / `Z` | repeat this list (asks how many times) / trim it to the notes' length |
 
 Changing one list's length makes it phase against the notes. That's often the
 point: stutter only the velocities and the accent pattern drifts.
@@ -378,9 +380,10 @@ point: stutter only the velocities and the accent pattern drifts.
 | `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 
-**Divide, in time mode only: `r`.** A few of the longest durations (at least
-half the longest, the longer the likelier, about a fifth of them) each divide
-into two or three equal parts. Short durations are never divided, so a run of
+**Divide, in time mode only: `}`** (as `}` splits at home). It asks how many
+parts (it remembers), then a few of the longest durations (at least half the
+longest, the longer the likelier, about a fifth of them) each divide into that
+many equal parts. Short durations are never divided, so a run of
 presses works down from the long end. No notes are added: the time list grows
 longer than the notes, so it phases against them, a new rhythm under the same
 line. (At home, `}` split repeats the note itself in its own time.)

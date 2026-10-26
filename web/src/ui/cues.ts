@@ -26,7 +26,7 @@ export interface CueContext {
 
 const MODE_CUES: Record<CueMode, string> = {
   pitch: '9 0 rotate · q snap to the scale · ( ) pivot · esc home',
-  time: '9 0 rotate · q quantize · r divide · ! @ double / half time · esc home',
+  time: '9 0 rotate · q quantize · } divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
   fig: '↵ type them: 0 (1 2 3) @3 · n N new · ; : longer / shorter · a z add / drop · B clear',
@@ -42,6 +42,7 @@ const TIPS = [
   "' vary: a few small changes at once",
   '- = calm / intensify',
   '{ } merge / split a note (} asks into how many)',
+  '" repeat every list (how many times?) · Z trim them to the notes',
   '( ) pivot on the highest / loudest note',
   '[ ] step the scale flatward / sharpward',
   'l L tilt the line down / up',

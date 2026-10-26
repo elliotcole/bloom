@@ -115,7 +115,7 @@ export type ListVerb =
   | 'breezeDown' | 'breezeUp'
   | 'converge' | 'diverge' | 'unify' | 'invert' | 'invertMid' | 'tiltDown' | 'tiltUp' | 'tilt' | 'curve'
   | 'sortUp' | 'sortDown' | 'fewer' | 'more' | 'quantize' | 'renew' | 'renewWild'
-  | 'dropLast' | 'addFromPalette' | 'addRandom' | 'divide';
+  | 'dropLast' | 'addFromPalette' | 'addRandom';
 
 /** A note with everything that sounds with it */
 export interface NoteEvent {
@@ -138,7 +138,7 @@ export const GESTURE = {
   breeze: 0.3,       // share of notes a breeze moves per press (on average; at least one)
   breezePull: 2,     // extra likelihood for a just-moved note: 2 → three times as likely
   breezeMemory: 0.5, // how much of that pull is left after each further press
-  divide: 0.2,       // share of the durations time-mode r divides (at least one)
+  divide: 0.2,       // share of the durations time mode's } divides (at least one)
   varyVel: 6,        // largest velocity change from vary
 };
 
@@ -2082,6 +2082,53 @@ export class Bloom {
 
   // Time verbs work along the palette where they can (halves and doubles of the
   // durations already there), so the groove's vocabulary survives them
+  /**
+   * Time mode's }: a few of the long durations (at least half the longest,
+   * likelier the longer they are) each divide into `slices` equal parts, no
+   * notes added, so a run of presses works down from the long end and never
+   * starts on the short. False when none is long enough.
+   */
+  divideTimes(slices: number): boolean {
+    const ts = this.timeIntervals;
+    if (!ts.length) return false;
+    const longest = Math.max(...ts);
+    const weights = ts.map(t => (t >= longest / 2 && t / slices >= MIN_TIME ? t * t : 0));
+    if (weights.every(w => w === 0)) return false;
+    const picked = new Set<number>();
+    const want = Math.max(1, Math.round(ts.length * GESTURE.divide));
+    while (picked.size < want && weights.some(w => w > 0)) {
+      const i = weightedIndex(weights);
+      picked.add(i);
+      weights[i] = 0;
+    }
+    this.timeIntervals = ts.flatMap((t, i) => (picked.has(i) ? Array<number>(slices).fill(roundTime(t / slices)) : [t]));
+    return true;
+  }
+
+  /** The lists a bloom has, by key, for repeat and trim (intervals and figures only when in use) */
+  private listsInUse(): ListKey[] {
+    return ['notes', 'time', 'vel', 'chan', ...(this.hasIntervals() ? ['iv' as const] : []), ...(this.hasFigures() ? ['fig' as const] : [])];
+  }
+
+  /** ": each list (or just these) played `times` times over */
+  repeatLists(times: number, keys: ListKey[] = this.listsInUse()): void {
+    for (const k of keys) {
+      const arr = this.getList(k);
+      if (arr.length) this.setList(k, Array.from({ length: arr.length * times }, (_, i) => JSON.parse(JSON.stringify(arr[i % arr.length]))));
+    }
+  }
+
+  /** Z: each list (or just these) longer than the notes cut to their length; returns how many were cut */
+  trimLists(keys: ListKey[] = this.listsInUse()): number {
+    const n = this.notes.length;
+    let cut = 0;
+    for (const k of keys) {
+      const arr = this.getList(k);
+      if (k !== 'notes' && n && arr.length > n) { this.setList(k, arr.slice(0, n)); cut++; }
+    }
+    return cut;
+  }
+
   private shapeTimes(verb: ListVerb, amount: number): boolean {
     const ts = this.timeIntervals;
     const n = ts.length;
@@ -2101,26 +2148,6 @@ export class Bloom {
         return others.length ? pick(others) : t * pick([0.5, 2]);
       }); break;
       case 'mutateWild': this.mutateTime(); break;
-      case 'divide': {
-        // a few of the long durations (at least half the longest, likelier the
-        // longer they are) each split into two or three equal parts, so a run
-        // of presses works down from the long end and never starts on the short
-        const longest = Math.max(...ts);
-        const weights = ts.map(t => (t >= longest / 2 && t / 2 >= MIN_TIME ? t * t : 0));
-        const picked = new Set<number>();
-        const want = Math.max(1, Math.round(n * GESTURE.divide));
-        while (picked.size < want && weights.some(w => w > 0)) {
-          const i = weightedIndex(weights);
-          picked.add(i);
-          weights[i] = 0;
-        }
-        this.timeIntervals = ts.flatMap((t, i) => {
-          if (!picked.has(i)) return [t];
-          const parts = t / 3 >= MIN_TIME && coin(0.5) ? 3 : 2;
-          return Array<number>(parts).fill(roundTime(t / parts));
-        });
-        break;
-      }
       case 'nudgeDown': this.faster(); break;
       case 'nudgeUp': this.slower(); break;
       case 'octaveDown': this.scaleTimes(0.5); break;

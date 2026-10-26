@@ -63,7 +63,6 @@ const LIST_KEYS: Record<string, ListAction> = {
   s: { pattern: 'scramble', label: 'scramble' },
   S: { pattern: 'shuffle', label: 'shuffle' },
   R: { pattern: 'mirror', label: 'mirror' },
-  r: { verb: 'divide', label: 'divide', labels: { time: 'divide: a few long durations into 2 or 3 (no notes added)' } },
   '9': { pattern: 'rotate<', label: 'rotate <<' },
   '0': { pattern: 'rotate>', label: 'rotate >>' },
   u: { pattern: 'stutter', label: 'stutter' },
@@ -223,7 +222,23 @@ export function createKeyHandler(state: KeyHandlerState) {
   // each step remembers the pins with the bloom: a key can move them (events
   // added before a pin), and undo must put them back on the same events
   const _undo: { bloom: Bloom; pins: number[] }[] = [];
-  let _splitSlices = 2;   // what } offered last time
+  let _splitSlices = 2;   // what } offered last time (split at home, divide in time mode)
+  let _repeatTimes = 2;   // what " offered last time
+
+  /** Ask how many (2 to 16, offering the last answer), then do it; `act` returns what to say */
+  function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string): boolean {
+    if (!state.typeList) return false;
+    e.preventDefault();   // the line takes focus now: the key mustn't land in it
+    state.typeList(label, String(last), text => {
+      const n = Number(text.trim());
+      if (!Number.isInteger(n) || n < 2 || n > 16) return 'a whole number, 2 to 16';
+      const msg = act(n);
+      status(msg);
+      refresh(msg);
+      return null;
+    });
+    return true;
+  }
   const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
   let _prevBloom = snapshotOf(state.bloom);
@@ -783,6 +798,24 @@ export function createKeyHandler(state: KeyHandlerState) {
       else status(`${tag} ${more ? 'no voice left to add' : 'every chord is one interval already'}`);
       return true;
     }
+    // } divides in time mode (as it splits at home), asking how many
+    if (m === 'time' && ch === '}' && askCount(e, 'divide long durations into:', _splitSlices, n => {
+      _splitSlices = n;
+      return b.divideTimes(n) ? `${tag} divide: a few long durations into ${n} (no notes added)` : `${tag} no duration is long enough for ${n} parts`;
+    })) return true;
+    // " repeats this list, Z trims it to the notes, as they do every list at home
+    if (ch === '"' && askCount(e, `repeat the ${MODE_NAME[m]} list, times:`, _repeatTimes, n => {
+      _repeatTimes = n;
+      b.repeatLists(n, [LIST_OF_MODE[m]]);
+      return `${tag} repeated ${n} times: ${b.getList(LIST_OF_MODE[m]).length} long`;
+    })) return true;
+    if (ch === 'Z') {
+      const k = LIST_OF_MODE[m];
+      const msg = k === 'notes' ? `${tag} Z trims the other lists to the notes (at home)` : b.trimLists([k]) ? `${tag} trimmed to the ${b.notes.length} notes` : `${tag} no longer than the notes`;
+      status(msg);
+      if (k !== 'notes') refresh(msg);
+      return true;
+    }
     // figures: q puts their steps in the scale, ; : make every run a step longer / shorter
     if (m === 'fig' && (ch === 'q' || ch === 'Q')) {
       if (ch === 'Q') status(`${tag} q snaps the figures' steps to the scale (+M2 → 2)`);
@@ -1108,17 +1141,21 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     // } asks how many slices, then splits a note (one it chooses) into that many repeats
-    if (ch === '}' && state.typeList) {
-      e.preventDefault();   // the line takes focus now: the } mustn't land in it
-      state.typeList('split a note into:', String(_splitSlices), text => {
-        const n = Number(text.trim());
-        if (!Number.isInteger(n) || n < 2 || n > 16) return 'a whole number of slices, 2 to 16';
-        _splitSlices = n;
-        const msg = b.splitNote(n) ? `split a note into ${n}` : `no note is long enough for ${n} slices`;
-        status(msg);
-        refresh(msg);
-        return null;
-      });
+    if (ch === '}' && askCount(e, 'split a note into:', _splitSlices, n => {
+      _splitSlices = n;
+      return b.splitNote(n) ? `split a note into ${n}` : `no note is long enough for ${n} slices`;
+    })) return;
+    // " repeats every list, Z trims every list to the notes
+    if (ch === '"' && askCount(e, 'repeat every list, times:', _repeatTimes, n => {
+      _repeatTimes = n;
+      b.repeatLists(n);
+      return `every list repeated ${n} times: ${b.notes.length} notes`;
+    })) return;
+    if (ch === 'Z' && !alt) {
+      const cut = b.trimLists();
+      const msg = cut ? `${cut} list${cut === 1 ? '' : 's'} trimmed to the ${b.notes.length} notes` : 'no list is longer than the notes';
+      status(msg);
+      refresh(msg);
       return;
     }
 
