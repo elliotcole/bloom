@@ -353,6 +353,13 @@
       /* in tuning mode and the freeze menu, ? shows their own section */
       body.help-tuning .hf-sec:not(#hf-tuning-sec) { display: none; }
       body.help-freeze .hf-sec:not(#hf-freeze-sec) { display: none; }
+      /* their sections show only there, not at home */
+      #hf-tuning-sec, #hf-freeze-sec { display: none; }
+      body.help-tuning #hf-tuning-sec, body.help-freeze #hf-freeze-sec { display: block; }
+      /* in a list mode, the lines for that mode alone */
+      .hf-only { display: none; }
+      body[data-list-mode="pitch"] .hf-pitch, body[data-list-mode="time"] .hf-time,
+      body[data-list-mode="iv"] .hf-iv, body[data-list-mode="fig"] .hf-fig { display: inline; }
 
       /* Main canvas area — flex column: viz on top, garden on bottom */
       #canvas-area {
@@ -486,6 +493,9 @@
         white-space: pre;
       }
       .hf-body b { color: #9bc; font-weight: normal; }
+      /* a mode or menu shows one section: it gets the whole width (a list mode's, in two columns) */
+      body.list-mode #help-full-grid, body.help-tuning #help-full-grid, body.help-freeze #help-full-grid { grid-template-columns: 1fr; }
+      body.list-mode #hf-list-sec .hf-body { column-count: 2; column-gap: 4em; }
 
       /* ─── Bloom Editor ──────────────────────────────────────────────────────── */
       #bloom-editor {
@@ -940,14 +950,13 @@
 <b>N</b>      new bloom (any of 12)
 <b>cmd-z</b>  undo   <b>cmd-shift-z</b> redo
 <b>opt-p</b>  push   <b>opt-P</b> pop (save points)
-<b>cmd-s</b>  save   <b>cmd-o</b> load (or the buttons up top)</div>
+<b>cmd-s</b>  save   <b>cmd-o</b> load</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Gestures (whole bloom)</div>
             <div class="hf-body"><b>-</b>      calm         <b>=</b>    intensify
 <b>'</b>      vary
-<b>{</b>      merge two    <b>}</b>    split one
-       (asks: into how many)</div>
+<b>{ }</b>    merge / split (asks how many)</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Whole notes</div>
@@ -958,63 +967,81 @@
 <b>Y</b>      spray
 <b>h</b>      thin         <b>H</b>    thicken
 <b>g</b>      gap          <b>G</b>    unGap
-<b>z</b>      drop last    <b>a</b>    add in scale
-<b>A</b>      add one</div>
-          </div>
-          <div class="hf-sec">
-            <div class="hf-h">Pitches only</div>
-            <div class="hf-body"><b>opt +</b>  s S R u U d D
-(rotate pitches: <b>p</b> then <b>9 0</b>)</div>
+<b>z</b>      drop last
+<b>a A</b>    add one (in scale / any)
+<b>opt +</b>  these keys: the pitches alone</div>
           </div>
         </div>
 
         <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Pitch</div>
-            <div class="hf-body"><b>m</b>    mutate (diatonic)
-<b>M</b>    mutate (chromatic)
-<b>e</b>    shear (some an octave out)  <b>E</b> center range
-<b>l</b>    tilt down    <b>L</b>    tilt up (each press steeper)
-<b>i</b>    invert       <b>I</b>    invert mean
-<b>1/2</b>  −/+ semitone  <b>!/@</b>  −/+ octave
-<b>3/4</b>  −/+ scale step
-<b>#/$</b>  breeze: some notes −/+ a step
+            <div class="hf-body"><b>m M</b>  mutate (diatonic / chromatic)
+<b>1 2</b>  a semitone down / up
+<b>3 4</b>  a scale step   <b>! @</b> an octave
+<b># $</b>  breeze: some notes a step
+<b>l L</b>  tilt down / up
+<b>i I</b>  invert / invert mean
+<b>e E</b>  shear / center the range
 <b>o O</b>  sort up / down
 <b>( )</b>  pivot (highest / loudest)
 <b>[ ]</b>  step flatward / sharpward
-<b>w</b>    draw curves (diatonic)
-<b>W</b>    remove doubles
+<b>w W</b>  draw curves / remove doubles
+<b>; :</b>  clump / flatten chords
 <b>opt-w</b> wheels within wheels</div>
           </div>
-          <div class="hf-sec" id="hf-tuning-sec">
-            <div class="hf-h">Diatonicism</div>
-            <div class="hf-body"><b>k</b>    choose nearest scale
-<b>K</b>    slant scale  <b>j</b>    lift scale
-<b>J</b>    reduce scale
-<b>T</b>    tuning mode: the pie, to edit;
-     <b>] [</b> next / previous tuning,
-     <b>9 0</b> rotate alterations, <b>3 4</b> a comma,
-     <b># $</b> breeze, <b>2</b> clear, <b>1</b> off / on
-<b>opt-t</b> hold the tuning over every bloom
-     (load .scl files in ⚙ setup;
-      the tuning's root follows the key)</div>
-          </div>
           <div class="hf-sec">
-            <div class="hf-h">Chords</div>
-            <div class="hf-body"><b>;</b>    clump chords  <b>:</b>   flatten chords</div>
+            <div class="hf-h">Scale &amp; tuning</div>
+            <div class="hf-body"><b>k K</b>  choose nearest / slant scale
+<b>j J</b>  lift / reduce scale
+<b>T</b>    tuning mode (the pie)
+<b>opt-t</b> hold the tuning over every bloom</div>
           </div>
         </div>
 
         <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">One list at a time</div>
-            <div class="hf-body"><b>p</b>    pitch mode
-<b>t</b>    time mode
-<b>v</b>    velocity mode
-<b>c</b>    channel mode
-<b>5</b>    intervals mode
-same keys, same verbs, one list
-pitch mode has every pitch key from home</div>
+            <div class="hf-body"><b>p t v c 5 b</b>  pitch time velocity
+             channel intervals figures
+same keys, same verbs
+? in a mode shows its keys</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Intervals &amp; figures</div>
+            <div class="hf-body"><b>6 ^</b>  widen / narrow intervals
+<b>7 &amp;</b>  sparser / denser   <b>8</b> reset
+<b>*</b>    bake into the notes: intervals,
+     figures, a raga's fit
+<b>B</b>    clear the figures</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Freeze, pin, select</div>
+            <div class="hf-body"><b>F</b>    freeze menu (? there for more)
+click a node: pin · drag: select
+<b>esc</b>  clear  <b>shift-esc</b> invert</div>
+          </div>
+          <div class="hf-sec">
+            <div class="hf-h">Blending</div>
+            <div class="hf-body"><b>x</b>    interlace    <b>X</b>    blend
+<b>f</b>    lift shape   <b>C</b>    cast</div>
+          </div>
+        </div>
+
+        <div class="hf-col">
+          <div class="hf-sec" id="hf-tuning-sec">
+            <div class="hf-h">Tuning mode (T or esc leaves)</div>
+            <div class="hf-body"><b>] [</b>  next / previous tuning
+<b>9 0</b>  rotate the alterations
+<b>3 4</b>  a comma down / up
+<b># $</b>  breeze: a few notes a comma
+<b>2</b>    clear: back to the tuning as it came
+<b>1</b>    alterations off / on
+click a slice: select · shift-click: an interval
+the palette above chooses the comma
+<b>opt-t</b> hold the tuning over every bloom
+(load .scl files in ⚙ setup;
+ the tuning's root follows the key)</div>
           </div>
           <div class="hf-sec" id="hf-freeze-sec">
             <div class="hf-h">Freeze (F, then…)</div>
@@ -1027,78 +1054,71 @@ pitch mode has every pitch key from home</div>
 <b>e</b>    unpin all events
 menu stays open; F or esc closes
 click a node: pin / unpin its event
-<b>esc</b>  unpin all  <b>shift-esc</b> invert
 drag a box: select events — keys
   change only those; esc clears,
   shift-esc inverts (selection first)
   (deep turns: scroll or opt-drag)</div>
           </div>
-          <div class="hf-sec">
-            <div class="hf-h">Blending</div>
-            <div class="hf-body"><b>x</b>    interlace    <b>X</b>    blend
-<b>f</b>    lift shape   <b>C</b>    cast</div>
-          </div>
-          <div class="hf-sec">
-            <div class="hf-h">Intervals (added at playback)</div>
-            <div class="hf-body"><b>5</b>    intervals mode <b>8</b>  reset
-<b>7</b>    sparser      <b>&amp;</b>    denser
-<b>6</b>    widen        <b>^</b>    narrow
-<b>5 ↵</b>  type them: <b>-P5/10</b> (a fifth below
-     every 10th note), <b>+3rd+5th</b>
-<b>*</b>    bake into notes (and a raga's
-     fit: what you hear, and figures)
-<b>b</b>    figures mode: <b>↵ 0 (1 2 3) @3</b>  <b>B</b> clear
-     (do re mi in a note's time;
-     garden slot 3 from a note)</div>
-          </div>
-        </div>
-
-        <div class="hf-col">
           <div class="hf-sec" id="hf-list-sec">
             <div class="hf-h"><span id="hf-list-mode-name"></span> mode (its key or esc goes home)</div>
-            <div class="hf-body"><b>s S</b>    scramble / shuffle
+            <div class="hf-body"><b>↵</b>      type the list (← → an entry at a time;
+       shift-↵ sets it looped to the notes)
+<span class="hf-only hf-iv">         -P5/10: a fifth below every 10th note
+         +3rd+5th: a triad above, in the scale
+</span><span class="hf-only hf-fig">         0 none · (1 2 3) do re mi in the note's time
+         (1 1 1) ratchet · +P5 by name · · a rest
+         @3 garden slot 3, from the note, live
+</span>
+<b>s S</b>    scramble / shuffle
 <b>R</b>      mirror
-<b>r</b>      divide (time: a few long ones in 2 or 3)
-<b>9 0</b>    rotate &lt;&lt; &gt;&gt;
+<span class="hf-only hf-time"><b>r</b>      divide: a few long ones in 2 or 3
+</span><b>9 0</b>    rotate &lt;&lt; &gt;&gt;
 <b>u U</b>    stutter / sputter
 <b>d D</b>    braid / pyramid
 <b>o O</b>    sort up / down
 <b>z a A</b>  drop / add (palette / any)
 
-<b>1 2</b>    down / up (semitone, faster, softer, ch −1, interval −1)
+<b>1 2</b>    down / up
 <b>! @</b>    octave · double / half time · much softer / louder
 <b>3 4</b>    one palette (scale) step down / up
 <b># $</b>    breeze: some values a step
-<b>- =</b>    converge / diverge (pitch: range)
+<b>- =</b>    converge / diverge
 <b>y</b>      unify
 <b>i I</b>    invert / around the middle
 <b>l L</b>    tilt down / up, a step steeper per press
 <b>w</b>      curve
 
 <b>m M</b>    mutate (palette / wild)
-<b>h H</b>    fewer / more distinct values (pitch: classes)
-<b>q Q</b>    quantize / set grid or levels (pitch: snap to scale)
+<b>h H</b>    fewer / more distinct values
+<b>q Q</b>    quantize / set grid or levels
 <b>n</b>      new list
-intervals: <b>- =</b> evener / uneven spacing,
-<b>; :</b> thicker / thinner chords, <b>q</b> into the scale,
-<b>n N</b> new chords (same places / new places),
-<b>i</b> above ↔ below, <b>! @</b> same note an octave across; <b>6 ^ 7 &amp; 8 *</b> as at home
-figures: <b>; :</b> longer / shorter, <b>q</b> into the scale,
-<b>n N</b> new figures (same / new places), <b>i</b> up ↔ down
-<b>↵</b>      type the list (shift-↵ sets it
-       looped to the number of notes)
+<span class="hf-only hf-pitch">
+every pitch key from home works here too:
+<b>( ) [ ] k K j J e E</b>; <b>q</b> snaps to the scale
+</span><span class="hf-only hf-iv">
+<b>- =</b> evener / uneven spacing
+<b>; :</b> thicker / thinner chords
+<b>q</b> into the scale (m3 → 3rd)
+<b>n N</b> new chords (same places / new places)
+<b>i</b> above ↔ below  <b>! @</b> an octave across
+<b>6 ^ 7 &amp; 8 *</b> as at home
+</span><span class="hf-only hf-fig">
+<b>; :</b> every figure a step longer / shorter
+<b>q</b> into the scale (+M2 → 2)
+<b>n N</b> new figures (same places / new places)
+<b>i</b> up ↔ down  <b>1 2</b> every step a scale step
+<b>* B</b> bake / clear, as at home
+</span>
 <b>x f</b>    lace / copy from slot
-
-<b>p t v c</b> switch list
-<b>F</b>      freeze menu
+<b>p t v c 5 b</b> switch list · <b>F</b> freeze menu
 playback &amp; garden keys unchanged</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">Playback</div>
             <div class="hf-body"><b>space</b>     play
 <b>shift-sp</b>  play garden slot
-<b>,</b>         loop       <b>opt-,</b>  loop garden
-<b>/</b>         pulsar     <b>opt-/</b>  pulse garden
+<b>,</b>         loop    (<b>opt-,</b> the garden)
+<b>/</b>         pulsar  (<b>opt-/</b> the garden)
 <b>.</b>         stop all
 <b>&lt; &gt;</b>       slower/faster pulse
 <b>`</b>         record / stop
@@ -1108,7 +1128,8 @@ playback &amp; garden keys unchanged</div>
             <div class="hf-h">Garden</div>
             <div class="hf-body"><b>↓</b>         save here    <b>↑</b>    lift here
 <b>← →</b>       navigate     <b>↵</b>    new slot
-<b>Del</b>       clear slot   <b>opt ↓</b> insert here
+<b>Del</b>       clear slot
+<b>opt ↓</b>     insert here
 <b>shift ← →</b> navigate + play</div>
           </div>
           <div class="hf-sec">

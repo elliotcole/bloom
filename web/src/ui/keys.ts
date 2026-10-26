@@ -584,6 +584,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     state.viz?.setChanStrip(m === 'chan');
     state.viz?.setListMode(m);
     document.body.classList.toggle('list-mode', m !== null);   // swaps the help overlay view
+    if (m) document.body.dataset.listMode = m; else delete document.body.dataset.listMode;   // and its own lines
     const badge = document.getElementById('list-mode-badge');
     if (badge) {
       badge.textContent = m ? MODE_TAG[m] : '';
