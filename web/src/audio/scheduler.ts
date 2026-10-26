@@ -3,6 +3,7 @@
 import { Bloom } from '../core/Bloom';
 import { applyTuning } from './tuningOut';
 import type { IntervalVal, Sound } from '../core/Bloom';
+import type { Figure } from '../lib/figures';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
@@ -125,8 +126,8 @@ interface LoopState {
   /** Persistent counter across loop boundaries — each list wraps at its own length */
   globalTick: number;
   onNoteOn?: (index: number, tick: number) => void;
-  /** Called at the start of every notes cycle with the effective vel/time/chan arrays for that cycle */
-  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void;
+  /** Called at the start of every notes cycle with the effective vel/time/chan/intervals/figures arrays for that cycle */
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void;
   onLoop?: () => void;
   /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
   lock: { start: number; beats: number } | null;
@@ -145,7 +146,7 @@ export function startLooper(
   bloom: Bloom,
   out: MidiOutput,
   onNoteOn?: (index: number, tick: number) => void,
-  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[]) => void,
+  onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void,
   onLoop?: () => void,
 ): void {
   stopLooper();
@@ -195,6 +196,7 @@ export function startLooper(
             buildCycleSlice(b.timeIntervals, state.globalTick, N),
             buildCycleSlice(b.chans,         state.globalTick, N),
             buildCycleSlice(b.intervals.length > 0 ? b.intervals : [0], state.globalTick, N),
+            buildCycleSlice(b.figures.length > 0 ? b.figures : [0 as Figure], state.globalTick, N),
           );
         }
         if (state.globalTick > 0) state.onLoop?.();

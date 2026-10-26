@@ -29,7 +29,7 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · r divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
-  fig: '↵ type them: 0 (1 2 3) @3 · n N new · ; : longer / shorter · a z add / drop · b home',
+  fig: '↵ type them: 0 (1 2 3) @3 · n N new · ; : longer / shorter · a z add / drop · B clear',
   iv: '↵ type them: -P5/10 · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 

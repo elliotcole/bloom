@@ -324,7 +324,7 @@ typed to the notes' length, `esc` leaves them. The shared verbs mean:
   garden slot's figures.
 
 Figures from the garden (`@3`) move with the order keys but aren't reshaped.
-At home, `B` clears the figures and `*` bakes the subdividing ones into the
+`B` clears the figures (here or at home) and `*` bakes the subdividing ones into the
 notes (with the intervals); those from the garden stay as figures. The views mark the notes a figure plays as
 they mark the intervals' added notes, where they sound in the views laid out
 in time (radial, piano, field, deep, score, helix); the console shows the list on the

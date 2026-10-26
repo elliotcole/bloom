@@ -795,8 +795,8 @@ export function createKeyHandler(state: KeyHandlerState) {
       else status(`${tag} ${b.figures.some(f => Array.isArray(f)) ? (more ? 'the figures are as long as they go' : 'every figure is two steps already') : 'no figures to lengthen: n makes some'}`);
       return true;
     }
-    // * bakes, as at home
-    if (m === 'fig' && ch === '*') return false;
+    // * bakes and B clears, as at home
+    if (m === 'fig' && (ch === '*' || ch === 'B')) return false;
     if (ch === 'q') {
       const q = currentQuantize();
       apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
@@ -1461,7 +1461,7 @@ export function createKeyHandler(state: KeyHandlerState) {
           b,
           state.out!,
           (idx, tick) => state.viz?.activateNote(idx, tick),
-          (vel, time, chan, intervals) => {
+          (vel, time, chan, intervals, figures) => {
             // Reuse a single display bloom; import notes/scale from the live bloom each cycle
             if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
             _loopDisplayBloom.import(state.bloom);
@@ -1469,6 +1469,7 @@ export function createKeyHandler(state: KeyHandlerState) {
             _loopDisplayBloom.timeIntervals = time;
             _loopDisplayBloom.chans         = chan;
             _loopDisplayBloom.intervals     = intervals;
+            _loopDisplayBloom.figures       = figures;   // they drift too: the marks follow
             state.viz?.setBloom(_loopDisplayBloom, false);
           },
         );
