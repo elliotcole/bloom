@@ -190,21 +190,28 @@ with the reason. The library stays in this browser.
     | `9` `0` | rotate the alterations a semitone down / up (as `9` `0` rotate every list) |
     | `3` `4` | each note a comma down / up |
     | `#` `$` | breeze: a few notes a comma down / up |
-    | `2` | clear: back to the base |
+    | `2` | clear: back to the tuning as it came (alterations gone, and any note moved by **=** or **set** back where the library's copy has it) |
     | `1` | switch all the alterations off (the base sounds; they're kept) and on again; any change to them switches them on |
 
     `esc` first lets go of the selected slices, then leaves tuning mode.
-  - **Click a slice** to select and hear its note: its exact ratio when it
+  - **Click a slice** to select its note: its exact ratio when it
     has one (from the file, kept exact through every alteration), cents, and
-    its alterations. **− / +** move it by the palette's comma. **set** puts
-    it at a ratio (`7/4`) or cents (`968.8`): a new base for that note,
-    unaltered.
+    its alterations. **− s / + s** move it by the palette's comma (`s` is the
+    comma chosen in the alterations palette: `p` Pythagorean, `s` syntonic,
+    and so on). **set** puts it at a ratio (`7/4`) or cents (`968.8`): a new
+    base for that note, unaltered. **= D +s** (on E) makes the note the one
+    below it raised by the comma, so the step between them is exactly one
+    comma.
+  - **audition** (off to start) plays a note when you click its slice or
+    change it. Off, the pie is silent, so nothing extra sounds while you
+    perform.
   - **Shift-click a second slice** to see the interval between them, and set
     it to a ratio or cents (the second note moves, unaltered). **= Eb +s**
     makes the second note the first raised by the palette's comma: click Eb,
     shift-click E, and E becomes Eb's pitch with its alterations, plus one
     syntonic comma.
-  - **switch off / clear** in the left panel do what `1` and `2` do.
+  - **switch off / clear** in the left panel do what `1` and `2` do; clear
+    names what it will clear (the selected notes, or all).
   - **Root:** follows the key, or one chosen by hand.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
     period, or a whole .scl file. It becomes the base, unaltered.

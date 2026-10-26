@@ -21,6 +21,12 @@ function saveLibrary() {
   try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(_library)); } catch { /* best effort */ }
 }
 
+/** The tuning as it first came, before any edits: the library's copy by name (12-TET's is null); undefined when it isn't in the library */
+export function originalTuning(t: Tuning | null): Tuning | null | undefined {
+  if (!t || t.name === EQUAL.name) return null;
+  return _library.find(x => x.name === t.name);
+}
+
 /** 12-TET first, then the loaded tunings in the order they came */
 export function tuningLibrary(): Tuning[] {
   return [EQUAL, ..._library];

@@ -350,11 +350,18 @@ export function stepAlterations(t: Tuning, degs: number[], comma: CommaId, dir: 
   return withAlterations(t, alter);
 }
 
-/** 0: these degrees back to their base, unaltered */
-export function clearAlterations(t: Tuning, degs: number[]): Tuning {
+/**
+ * 2: these degrees unaltered. Given the tuning as it first came (the
+ * library's copy), their base goes back to it too, undoing "= one comma"
+ * and set values: the notes sound as the tuning has them.
+ */
+export function clearAlterations(t: Tuning, degs: number[], original?: Tuning | null): Tuning {
   const alter = alterationsOf(t);
   for (const d of degs) alter[d] = {};
-  return withAlterations(t, alter);
+  if (original === undefined) return withAlterations(t, alter);
+  const out = editable(t), from = editable(original).base!;
+  for (const d of degs) { out.base!.cents[d] = from.cents[d]; out.base!.ratios[d] = from.ratios[d]; }
+  return withAlterations(out, alter);
 }
 
 /** 1 / 2: every alteration moves to the degree a semitone down (−1) or up (1) */

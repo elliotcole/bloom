@@ -29,7 +29,7 @@ import type { VizMode } from './theme';
 import { Notice, snap, sameSnap, describeChange } from './notice';
 import { extractSelection, mergeSelection } from './selection';
 import {
-  applyTuning, tuningKey, tuningLibrary, stepTuning,
+  applyTuning, tuningKey, tuningLibrary, stepTuning, originalTuning,
   hold, heldForBloom, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
 } from '../audio/tuningOut';
 import { spell } from '../lib/numbers';
@@ -465,7 +465,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         msg = next.alterOff ? 'alterations off: the base sounds (1 brings them back)' : 'alterations on';
         break;
       case '2':
-        next = clearAlterations(t, degs);
+        next = clearAlterations(t, degs, originalTuning(soundingTuning(state.bloom)));
         msg = `${which}: back to the base (alterations cleared)`;
         break;
       case '9': case '0': {   // rotate, as 9 / 0 rotate every list

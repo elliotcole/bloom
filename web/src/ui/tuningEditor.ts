@@ -16,7 +16,7 @@ import type { CommaId, Tuning } from '../lib/tuning';
 import { PALETTE_GLYPH, loadHeji } from './heji';
 import { spell } from '../lib/numbers';
 import type { PieMarks } from './tuningPie';
-import { holdRoot, isHeld, setHoldRoot, soundingRoot, soundingTuning } from '../audio/tuningOut';
+import { holdRoot, isHeld, originalTuning, setHoldRoot, soundingRoot, soundingTuning } from '../audio/tuningOut';
 
 export interface TuningEditorHost {
   bloom: () => Bloom;
@@ -47,6 +47,7 @@ export class TuningEditor {
   private _a: number | null = null;   // selected degree
   private _b: number | null = null;   // second degree, for an interval
   private _comma: CommaId = 's';   // the alterations palette's choice
+  private _audition = false;   // clicks and edits play the note: off, so nothing extra sounds in performance
 
   private host: TuningEditorHost;
 
@@ -75,12 +76,17 @@ export class TuningEditor {
   picked(): number[] { return [this._a, this._b].filter((d): d is number => d !== null); }
   clearPick(): void { this._a = null; this._b = null; this.update(); }
 
-  /** A slice clicked: select the note and hear it; with shift, the second note of an interval */
+  /** A slice clicked: select the note (and hear it, with audition on); with shift, the second note of an interval */
   pick(d: number, shift: boolean): void {
     if (shift && this._a !== null && d !== this._a) this._b = d;
     else { this._a = d; this._b = null; }
-    this.host.audition(60 + this.root + d);
+    this.hear(d);
     this.update();
+  }
+
+  /** Play a degree, only with audition on */
+  private hear(d: number): void {
+    if (this._audition) this.host.audition(60 + this.root + d);
   }
 
   private get tuning(): Tuning { return editable(soundingTuning(this.host.bloom())); }
@@ -101,7 +107,7 @@ export class TuningEditor {
     const signed = (c: number) => `${c >= 0 ? '+' : '−'}${Math.abs(c).toFixed(1)}`;
 
     this.host.mark({ a, b: bb });
-    let sel = '<div class="te-dim">click a slice to select and hear its note · shift-click a second for the interval</div>';
+    let sel = '<div class="te-dim">click a slice to select its note · shift-click a second for the interval</div>';
     if (a !== null) {
       const r = degreeRatio(t, a);
       const alt = alterText(t.alter?.[a]);
@@ -113,6 +119,7 @@ export class TuningEditor {
           <button data-act="up" title="raise ${this.name(a)} by a ${commaOf(this._comma).name}">+ ${this._comma}</button>
           <input id="te-set" class="te-inp" placeholder="7/4 or 968.8" title="a ratio or cents above the root">
           <button data-act="set">set ${this.name(a)}</button>
+          ${a !== 0 ? `<button data-act="comma" title="${this.name(a)} becomes the note below it, ${this.name((a + 11) % 12)}, raised by one ${commaOf(this._comma).name}: the step between them is the comma">= ${this.name((a + 11) % 12)} +${this._comma}</button>` : ''}
         </div>`;
       if (bb !== null) {
         const iv = intervalBetween(t, a, bb);
@@ -132,12 +139,13 @@ export class TuningEditor {
 
     this._el.innerHTML = `
       <div class="tv-side">
-        <div class="tv-title">note</div>
+        <div class="tv-title"><span>note</span>
+          <button data-act="audition" class="${this._audition ? 'on' : ''}" title="play a note when you click its slice or change it (off: nothing extra sounds while you perform)">audition ${this._audition ? 'on' : 'off'}</button></div>
         ${sel}
         <div class="tv-title">alterations${t.alterOff ? ' — off' : ''}</div>
         <div class="te-alter${t.alterOff ? ' off' : ''}" title="each note's commas, from the root: 9 / 0 rotate them, 3 / 4 move notes, # / $ breeze, 2 clears (the selected notes, or all); 1 switches them off and on">${alterList}</div>
         ${isAltered(own) ? `<div class="te-row"><button data-act="alteroff" title="1">${t.alterOff ? 'switch on' : 'switch off'}</button>
-          <button data-act="unalter" title="2 (the selected notes, or all)">clear</button></div>` : ''}
+          <button data-act="unalter" title="2: back to the tuning as it came (the selected notes, or all)">clear ${this.picked().length ? this.picked().map(d => this.name(d)).join(' ') : 'all'}</button></div>` : ''}
       </div>
       <div class="tv-palette${t.alterOff ? ' off' : ''}"><span class="tv-pal-lbl">alterations${t.alterOff ? ' (off)' : ''}</span>${palette}</div>
       <div class="tv-side">
@@ -208,13 +216,21 @@ export class TuningEditor {
     };
     switch (act) {
       case 'close': this.close(); break;
+      case 'audition': this._audition = !this._audition; this.update(); this.host.status(`audition ${this._audition ? 'on: clicks play the note' : 'off'}`); break;
+      case 'comma': {
+        if (a === null || a === 0) return;
+        const below = (a + 11) % 12;
+        result(commaAbove(t, below, a, this._comma), `${this.name(a)} one ${commaOf(this._comma).name} above ${this.name(below)}`);
+        this.hear(a);
+        break;
+      }
       case 'hold': this.host.toggleHold(); break;
       case 'keep': this.host.keepHeld(); break;
       case 'up': case 'down': {
         if (a === null) return;
         result(shiftDegree(t, a, this._comma, act === 'up' ? 1 : -1),
           `${this.name(a)} ${act === 'up' ? '+' : '−'} ${commaOf(this._comma).name}`);
-        this.host.audition(60 + this.root + a);
+        this.hear(a);
         break;
       }
       case 'set': if (a !== null && val('te-set')) result(setDegree(t, a, val('te-set')), `${this.name(a)} = ${val('te-set')}`); break;
@@ -224,7 +240,7 @@ export class TuningEditor {
       case 'ivcomma': {
         if (a === null || b === null) return;
         result(commaAbove(t, a, b, this._comma), `${this.name(b)} one ${commaOf(this._comma).name} above ${this.name(a)}`);
-        this.host.audition(60 + this.root + b);
+        this.hear(b);
         break;
       }
       case 'paste': {
@@ -259,7 +275,7 @@ export class TuningEditor {
       case 'equal': this.host.commit(null, 'tuning: 12-TET'); break;
       case 'unalter': {
         const degs = this.picked().length ? this.picked() : Array.from({ length: 12 }, (_, i) => i);
-        result(clearAlterations(t, degs), 'back to the base (alterations cleared)');
+        result(clearAlterations(t, degs, originalTuning(soundingTuning(this.host.bloom()))), `${this.picked().length ? this.picked().map(d => this.name(d)).join(' ') : 'every note'}: back to the tuning as it came`);
         break;
       }
       case 'alteroff': result(toggleAlterations(t), t.alterOff ? 'alterations on' : 'alterations off: the base sounds'); break;
