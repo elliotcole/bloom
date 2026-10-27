@@ -298,19 +298,34 @@ A figure is what a note plays instead of itself. The figures are a list like
 the velocities, one entry per note, cycling at its own length (so a shorter
 list drifts through the notes in the loop): `0` is no figure.
 
-- **Subdivide**, in brackets: `(1 2 3)` plays do re mi in the time the note
-  had, starting on the note. The numbers count steps of the scale as
-  musicians name them: `1` the note itself, `2` a step up, `-2` a step down,
-  `5` a fifth up. Chromatic intervals go by name (`+P5`, `-m2`), and `·` is a
-  rest. `(1 1 1)` is a ratchet, `(1 -2 1)` a lower neighbour, `(1 · 1 1)` a
-  little rhythm.
-- **Superimpose**, `@3`: garden slot 3 (numbered as the console shows the
-  slots, from 0), a tiny bloom with its own times, velocities and channels,
-  played from the note on its own timeline; it can run on over the notes that
-  follow. Its first note lands on the note (moved in the scale when the bloom
-  has one), its loudest note is as loud as the note, and it plays only its
-  own notes (not its intervals or figures). It's read live: change slot 3 and
-  every `@3` changes. An empty slot plays the note as it is.
+- **A run**, in brackets: `(1 2 3)` plays do re mi, starting on the note.
+  The numbers count steps of the scale as musicians name them: `1` the note
+  itself, `2` a step up, `-2` a step down, `5` a fifth up. Chromatic
+  intervals go by name (`+P5`, `-m2`), and `·` is a rest. `(1 1 1)` is a
+  ratchet, `(1 -2 1)` a lower neighbour, `(1 · 1 1)` a little rhythm.
+- **A garden slot**, `@3`: slot 3 (numbered as the console shows the slots,
+  from 0), a tiny bloom with its own times, velocities and channels. Its
+  first note lands on the note (moved in the scale when the bloom has one),
+  and it plays only its own notes (not its intervals or figures). It's read
+  live: change slot 3 and every `@3` changes. An empty slot plays the note as
+  it is.
+
+**How they take their time.** One choice for the whole list, made on the
+line `↵` opens (tab to it; `←` `→` or `d` `i` `s` choose):
+
+- **divide**: the figure shares out the note's time. A run's steps are equal;
+  a garden slot is squeezed to fit, keeping its rhythm.
+- **insert**: the figure plays in the flow at its own times, and the notes
+  after it wait for it, so the loop grows (or shrinks) by the difference.
+- **superimpose**: the figure plays at its own times from the note, on a
+  timeline of its own; the flow goes on underneath, and the figure can run
+  over the notes that follow.
+
+For insert and superimpose a run takes its times from **durations**, a list
+of beats read from each figure's start and cycling (`0.5 0.25` on `(1 2 3)`
+gives ½ ¼ ½); a garden slot always brings its own times. **vel %** sets how
+loud a figure plays against its note: `100` as loud (a garden slot's loudest
+note as loud as the note), `70` 30% softer.
 
 `0 0 (1 2 3) 0 @3` on the notes: the third plays do re mi, the fifth plays
 slot 3.
@@ -332,8 +347,11 @@ typed to the notes' length, `esc` leaves them. The shared verbs mean:
   garden slot's figures.
 
 Figures from the garden (`@3`) move with the order keys but aren't reshaped.
-`B` clears the figures (here or at home) and `*` bakes the subdividing ones into the
-notes (with the intervals); those from the garden stay as figures. The views mark the notes a figure plays as
+`B` clears the figures (here or at home) and `*` bakes what you hear into the
+notes (with the intervals), whatever the figures' time and wherever they come
+from: superimposed ones are merged into the flow, notes that start together
+becoming chords (a long note is cut short where the figure's next note
+starts, and a tail past the end wraps round to the start). The views mark the notes a figure plays as
 they mark the intervals' added notes, where they sound in the views laid out
 in time (radial, piano, field, deep, score, helix); the console shows the list on the
 `fig:` line and the lanes on their own.
@@ -432,6 +450,9 @@ N steps with nothing, so `-P5/10` is a fifth below every tenth note, and
 `-P5/10 +3rd+5th/7` is the one, then the other, 17 steps in all. The list
 cycles at its own length, so it drifts through the notes in the loop and the
 pulsar, like any list of another length.
+
+The line `↵` opens also has **vel %**: how loud the added notes are against
+their note (`100` as loud, `85` to start, a little softer).
 
 *Typing it.* In any list mode `↵` opens a line with that list as text; type
 over it and `↵` again sets it, or **shift-`↵`** to loop what you typed round

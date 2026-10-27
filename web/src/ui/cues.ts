@@ -29,8 +29,8 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · } divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
-  fig: '↵ type them: 0 (1 2 3) @3 · n N new · ; : longer / shorter · a z add / drop · B clear',
-  iv: '↵ type them: -P5/10 · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
+  fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear',
+  iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 
 const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · esc home';
@@ -60,6 +60,8 @@ const TIPS = [
   '5 ↵ add a chord every few notes: -P5/10',
   'b ↵ figures: 0 (1 2 3) 0 — a note plays do re mi in its time',
   'b ↵ figures: @3 — a note plays garden slot 3 from itself',
+  'b ↵ tab: figures divide the note, insert into the flow, or superimpose on their own timeline',
+  'b or 5 ↵ tab: vel % — how loud figures or added notes are against their note',
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
 ];

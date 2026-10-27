@@ -10,7 +10,9 @@ import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
 import { formatIntervals, parseIntervals } from '../lib/intervals';
-import { formatFigures, parseFigures } from '../lib/figures';
+import { formatFigures, parseFigures, FIGURE_TIMES } from '../lib/figures';
+import type { FigureTime } from '../lib/figures';
+import type { TyperField } from './listTyper';
 import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
 import {
   playOnce, startLooper, stopLooper, isLooping, updateLooper,
@@ -172,6 +174,43 @@ function listAsText(b: Bloom, m: ListMode): { text: string; set: (text: string) 
   }
 }
 
+/**
+ * The fields the line carries after a list, and how to set them from what
+ * was typed (returning a problem, or null): figures say how they take their
+ * time, their durations and velocity; intervals the velocity of the notes
+ * they add.
+ */
+function listFields(b: Bloom, m: ListMode): { fields: TyperField[]; check: (values: string[]) => string | null; set: (values: string[]) => void } | null {
+  const pct = (v: string) => { const n = Number(v.trim().replace(/%$/, '')); return Number.isInteger(n) && n >= 1 && n <= 200 ? n : null; };
+  const pctProblem = 'vel %: a whole number, 1 to 200 (100 as loud as the note)';
+  if (m === 'fig') return {
+    fields: [
+      { kind: 'choice', label: 'time', options: FIGURE_TIMES, value: b.figureTime },
+      { kind: 'text', label: 'durations', value: b.figureDurs.join(' '), size: 10, when: v => v[0] !== 'divide' },
+      { kind: 'text', label: 'vel %', value: String(b.figureVel), size: 3 },
+    ],
+    check: v => {
+      if (v[0] !== 'divide') {
+        const r = parseFloatList(v[1]);
+        if (r.error) return `durations: ${r.error}`;
+        if (!r.values.length || r.values.some(x => !(x > 0))) return 'durations: beats above 0, one for each step (they cycle)';
+      }
+      return pct(v[2]) === null ? pctProblem : null;
+    },
+    set: v => {
+      b.figureTime = v[0] as FigureTime;
+      if (v[0] !== 'divide') b.figureDurs = parseFloatList(v[1]).values;
+      b.figureVel = pct(v[2])!;
+    },
+  };
+  if (m === 'iv') return {
+    fields: [{ kind: 'text', label: 'vel %', value: String(b.intervalVel), size: 3 }],
+    check: v => (pct(v[0]) === null ? pctProblem : null),
+    set: v => { b.intervalVel = pct(v[0])!; },
+  };
+  return null;
+}
+
 export interface KeyHandlerState {
   bloom: Bloom;
   garden: Garden;
@@ -195,7 +234,7 @@ export interface KeyHandlerState {
   afterRefreshFn?: () => void;
   /** The tuning view (opt-t) */
   /** ↵ in a list mode: type the list (main.ts gives it the line to type on) */
-  typeList?: (label: string, text: string, commit: (text: string, complete: boolean) => string | null) => void;
+  typeList?: (label: string, text: string, commit: (text: string, complete: boolean, values: string[]) => string | null, fields?: TyperField[]) => void;
   tuningView?: {
     toggle(): void; close(): void; isOpen(): boolean;
     /** the alterations palette's comma, and the slices selected on the pie */
@@ -734,20 +773,26 @@ export function createKeyHandler(state: KeyHandlerState) {
     // ↵ types the list: the same in every list mode
     if (e.code === 'Enter' && state.typeList) {
       const typed = listAsText(b, m);
-      state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete) => {
+      const extra = listFields(b, m);
+      state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete, values) => {
+        const wrong = extra?.check(values) ?? null;
+        if (wrong) return wrong;
         const problem = typed.set(text);
         if (problem) return problem;
+        extra?.set(values);
         // shift-↵: what was typed, round and round, as long as the notes
         if (complete) {
           const want = b.notes.length;
           const list = b.getList(LIST_OF_MODE[m]);
           if (list.length && want) b.setList(LIST_OF_MODE[m], Array.from({ length: want }, (_, i) => list[i % list.length]));
         }
-        const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}`;
+        const how = m === 'fig' ? ` · ${b.figureTime}${b.figureTime !== 'divide' ? ` ${b.figureDurs.join(' ')}` : ''} · vel ${b.figureVel}%`
+          : m === 'iv' ? ` · vel ${b.intervalVel}%` : '';
+        const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}`;
         status(msg);
         refresh(msg, false);
         return null;
-      });
+      }, extra?.fields);
       return true;
     }
 
@@ -1482,7 +1527,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         if (_previewResetId !== null) clearTimeout(_previewResetId);
         play(src, `play slot [${g.index}]`);
         state.viz?.setBloom(src, false);
-        const durationMs = beatsToMs(src.timeIntervals.reduce((a, t) => a + t, 0));
+        const durationMs = beatsToMs(src.dur());
         _previewResetId = setTimeout(() => {
           _previewResetId = null;
           state.viz?.setBloom(state.bloom);

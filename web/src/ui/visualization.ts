@@ -11,6 +11,18 @@ import type { LaneMode } from './lanes';
 import { drawTuningPie, degreeAt } from './tuningPie';
 import type { PieMarks } from './tuningPie';
 
+/**
+ * The bloom with its times as the flow plays them: an inserted figure takes
+ * its own length (Bloom.stepAt), so the views lay the notes after it later.
+ * The bloom itself when nothing is inserted.
+ */
+function inFlow(b: Bloom): Bloom {
+  if (!b.insertsFigures() || !b.notes.length) return b;
+  const view = Object.create(b) as Bloom;
+  view.timeIntervals = b.notes.map((_, i) => b.stepAt(i, i));
+  return view;
+}
+
 export type { VizMode, ThemeId, Theme };
 export { THEMES, getTheme };
 
@@ -2403,7 +2415,7 @@ export class BloomVisualization {
     const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : frame.h;
     const zoom = this._framed ? this._size : 1;
 
-    const bloom = this.bloom;
+    const bloom = this.bloom ? inFlow(this.bloom) : null;
 
     // Decay flash values (0.03/frame ≈ 0.5s at 60fps)
     const n = bloom ? bloom.notes.length : 0;

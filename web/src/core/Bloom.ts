@@ -4,7 +4,7 @@ import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
 import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
-import type { Figure, FigureStep } from '../lib/figures';
+import type { Figure, FigureStep, FigureTime } from '../lib/figures';
 import { isRunFigure, isSlotFigure, isFigure, figureSlot } from '../lib/figures';
 import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
@@ -46,6 +46,9 @@ export type IntervalVal = number | number[];
 
 /** Notes added by the intervals array sound this much quieter than their parent */
 export const ADDED_NOTE_VELOCITY = 0.85;
+
+/** A velocity at `pct` percent, kept in 1–127 */
+const scaleVel = (vel: number, pct: number): number => Math.min(127, Math.max(1, Math.round(vel * pct / 100)));
 
 /** Something that sounds for a note: its own pitches, those the intervals add, or a step of its figure */
 export interface Sound {
@@ -250,6 +253,19 @@ export class Bloom {
    * length; never alters `notes`.
    */
   figures: Figure[];
+  /**
+   * How a figure takes its time: divide shares the note's time out evenly;
+   * insert plays it in the flow, at figureDurs, the notes after it waiting;
+   * superimpose plays it at figureDurs on its own timeline, the flow going on.
+   * A garden figure brings its own times to insert and superimpose.
+   */
+  figureTime: FigureTime;
+  /** Beats per step for insert and superimpose, read from each figure's start and cycling */
+  figureDurs: number[];
+  /** Percent of the note's velocity a figure plays at (a garden figure's loudest note) */
+  figureVel: number;
+  /** Percent of the note's velocity the notes the intervals add play at */
+  intervalVel: number;
 
   lowestPossibleNote: number;
   highestPossibleNote: number;
@@ -311,6 +327,10 @@ export class Bloom {
     this.intervals = [0];
     this.intervalsDiatonic = false;
     this.figures = [0];
+    this.figureTime = 'divide';
+    this.figureDurs = [0.25];
+    this.figureVel = 100;
+    this.intervalVel = Math.round(ADDED_NOTE_VELOCITY * 100);
   }
 
   // ─── Copy / Import ─────────────────────────────────────────────────────────
@@ -324,6 +344,10 @@ export class Bloom {
     b.intervals = JSON.parse(JSON.stringify(this.intervals));
     b.intervalsDiatonic = this.intervalsDiatonic;
     b.figures = JSON.parse(JSON.stringify(this.figures));
+    b.figureTime = this.figureTime;
+    b.figureDurs = [...this.figureDurs];
+    b.figureVel = this.figureVel;
+    b.intervalVel = this.intervalVel;
     b.lowestPossibleNote = this.lowestPossibleNote;
     b.highestPossibleNote = this.highestPossibleNote;
     b.lowestSeedNote = this.lowestSeedNote;
@@ -355,6 +379,10 @@ export class Bloom {
     this.intervals = b.intervals;
     this.intervalsDiatonic = b.intervalsDiatonic;
     this.figures = b.figures;
+    this.figureTime = b.figureTime;
+    this.figureDurs = b.figureDurs;
+    this.figureVel = b.figureVel;
+    this.intervalVel = b.intervalVel;
     this.lowestPossibleNote = b.lowestPossibleNote;
     this.highestPossibleNote = b.highestPossibleNote;
     this.lowestSeedNote = b.lowestSeedNote;
@@ -2879,34 +2907,74 @@ export class Bloom {
    * Everything that sounds for the note at `index` (of this view: call it on
    * sounding()), its other lists read at `tick`: the note with the notes the
    * intervals add, or its figure in their place. Times and gates in beats,
-   * `at` from the note's onset.
+   * `at` from the note's onset. `rests` keeps silent steps (vel 0), for bake.
    */
-  soundsAt(index: number, tick = index, legato = this.legato, sustain = this.sustain): Sound[] {
+  soundsAt(index: number, tick = index, legato = this.legato, sustain = this.sustain, rests = false): Sound[] {
     const noteVal = wrapAt(this.notes, index);
     const notes = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
     const vel = wrapAt(this.velocities, tick);
     const time = wrapAt(this.timeIntervals, tick);
     const chan = wrapAt(this.chans, tick);
     const gateOf = (t: number, s = sustain, l = legato) => (s !== null ? s : t * l);
-    if (vel <= 0) return [];
+    if (vel <= 0) return rests ? [{ at: 0, notes, vel: 0, chan, gate: gateOf(time) }] : [];
     const added = this.addedNotesAt(index, tick);
     const out: Sound[] = [];
     const fig = this.figureAt(tick);
-    if (added.length) out.push({ at: 0, notes: added, vel: Math.max(1, Math.round(vel * ADDED_NOTE_VELOCITY)), chan, gate: gateOf(time), added: true });
+    if (added.length) out.push({ at: 0, notes: added, vel: scaleVel(vel, this.intervalVel), chan, gate: gateOf(time), added: true });
 
     if (!fig) { out.unshift({ at: 0, notes, vel, chan, gate: gateOf(time) }); return out; }
+    const steps = this.figureSteps(fig, notes, vel, chan, gateOf);
+    // divide: squeezed into the note's time; insert and superimpose: as they are
+    const span = steps.reduce((t, x) => t + x.dur, 0);
+    const k = this.figureTime === 'divide' && span > 0 ? time / span : 1;
+    steps.forEach(x => {
+      const gate = isRunFigure(fig) ? gateOf(x.dur * k) : x.gate * k;
+      if (x.vel > 0 || rests) out.push({ at: x.at * k, notes: x.notes, vel: x.vel, chan: x.chan, gate, figure: true });
+    });
+    return out;
+  }
 
+  /**
+   * The beats the note at `index` takes in the flow, its other lists read at
+   * `tick`: its time, or with an inserted figure the figure's length.
+   */
+  stepAt(index: number, tick = index): number {
+    const time = wrapAt(this.timeIntervals, tick);
+    if (this.figureTime !== 'insert' || wrapAt(this.velocities, tick) <= 0) return time;
+    const fig = this.figureAt(tick);
+    if (!fig) return time;
+    return this.figureSteps(fig, [0], 1, 0, t => t).reduce((t, x) => t + x.dur, 0);
+  }
+
+  /** True when an inserted figure makes the flow's steps differ from the times */
+  insertsFigures(): boolean {
+    return this.figureTime === 'insert' && this.hasFigures();
+  }
+
+  /**
+   * A figure's steps at their own times, from the note's onset, before
+   * divide squeezes them: a run at figureDurs (equal steps for divide), a
+   * garden slot at its own times, moved to land on the note. Rests at vel 0.
+   */
+  private figureSteps(fig: Figure, notes: number[], vel: number, chan: number, gateOf: (t: number, s?: number | null, l?: number) => number):
+    { at: number; dur: number; notes: number[]; vel: number; chan: number; gate: number }[] {
+    const out: { at: number; dur: number; notes: number[]; vel: number; chan: number; gate: number }[] = [];
+    let at = 0;
     if (isRunFigure(fig)) {
-      // subdivide: the steps share the note's time, each from the note itself
-      const dt = time / fig.length;
+      const durs = this.figureTime === 'divide' || !this.figureDurs.length ? [1] : this.figureDurs;
+      const v = scaleVel(vel, this.figureVel);
       fig.forEach((step, k) => {
-        if (step === null) return;
-        out.push({ at: k * dt, notes: notes.map(p => (step === 0 ? p : this.moveBy(p, step))), vel, chan, gate: gateOf(dt), figure: true });
+        const dur = Math.max(0, wrapAt(durs, k));
+        out.push({
+          at, dur, chan, gate: gateOf(dur),
+          notes: notes.map(p => (step === null || step === 0 ? p : this.moveBy(p, step))),
+          vel: step === null ? 0 : v,
+        });
+        at += dur;
       });
       return out;
     }
-
-    // superimpose: the slot's bloom from its first note, moved to land on this one
+    // a garden slot: its bloom from its first note, moved to land on this one
     const src = figureSlot((fig as { slot: number }).slot)!.sounding();
     const first = flatNotes([src.notes[0]] as NoteArray) as number[];
     const from = Math.min(...first), to = Math.min(...notes);
@@ -2920,64 +2988,71 @@ export class Bloom {
       while (n < this.lowestPossibleNote) n += 12;
       return n;
     };
-    const peak = Math.max(1, ...src.velocities);   // its loudest note as loud as this one
-    let at = 0;
+    const peak = Math.max(1, ...src.velocities);   // its loudest note at figureVel of this one
     src.notes.forEach((nv, i) => {
       const v = wrapAt(src.velocities, i);
-      const t = wrapAt(src.timeIntervals, i);
-      if (v > 0) {
-        const ps = Array.isArray(nv) ? flatNotes(nv as NoteArray) as number[] : [nv as number];
-        out.push({
-          at, notes: ps.map(move), chan: wrapAt(src.chans, i),
-          vel: Math.min(127, Math.max(1, Math.round(v * vel / peak))),
-          gate: gateOf(t, src.sustain, src.legato), figure: true,
-        });
-      }
-      at += t;
+      const dur = wrapAt(src.timeIntervals, i);
+      const ps = Array.isArray(nv) ? flatNotes(nv as NoteArray) as number[] : [nv as number];
+      out.push({
+        at, dur, notes: ps.map(move), chan: wrapAt(src.chans, i),
+        vel: v > 0 ? scaleVel(v * vel / peak, this.figureVel) : 0,
+        gate: gateOf(dur, src.sustain, src.legato),
+      });
+      at += dur;
     });
     return out;
   }
 
   /**
-   * Write the figures that divide notes into the notes (with the intervals
-   * too, which sound at each note's start). Lists that phase are first played
-   * out until they come out even. Figures from the garden run on their own
-   * timelines, so they stay. False when there was nothing to bake.
+   * Write what the figures play into the notes, whatever their time: divided
+   * and inserted figures become notes in the flow, superimposed ones are
+   * merged into it (notes that start together become chords, and a long note
+   * is cut where the next one starts; a tail past the end wraps to the start).
+   * The intervals' notes are written in too. Lists that phase are first
+   * played out until they come out even. False when there was nothing to bake.
    */
   bakeFigures(): boolean {
-    if (!this.figures.some(isRunFigure) || this.notes.length === 0) return false;
+    if (!this.hasFigures() || this.notes.length === 0) return false;
     const n = this.notes.length;
     const m = this.figures.length;
     const length = Math.min((n * m) / gcd(n, m), Math.max(n, MAX_BAKED_LENGTH));
     const view = this.sounding();
-    const notes: NoteVal[] = [], vels: number[] = [], times: number[] = [], chans: number[] = [], figs: Figure[] = [];
+    // everything that sounds, on one timeline
+    const events: { at: number; notes: number[]; vel: number; chan: number; main: boolean }[] = [];
+    let t = 0;
     for (let i = 0; i < length; i++) {
-      const fig = this.figureAt(i);
-      const vel = wrapAt(this.velocities, i), time = wrapAt(this.timeIntervals, i), chan = wrapAt(this.chans, i);
-      const own = wrapAt(view.notes, i);
-      const added = view.addedNotesAt(i % n, i);
-      const chord = (ps: number[], extra: number[]): NoteVal => {
-        const all = [...new Set([...ps, ...extra])].sort((a, b) => a - b);
-        return all.length === 1 ? all[0] : all;
-      };
-      if (!fig || !isRunFigure(fig) || vel <= 0) {
-        notes.push(added.length ? chord(Array.isArray(own) ? flatNotes(own as NoteArray) as number[] : [own as number], added) : JSON.parse(JSON.stringify(own)));
-        vels.push(vel); times.push(time); chans.push(chan);
-        const raw = wrapAt(this.figures, i);
-        figs.push(isSlotFigure(raw) ? { slot: raw.slot } : 0);   // an @slot stays, empty or not
-        continue;
-      }
-      // a rest inside the figure is a silent note
-      const steps = view.soundsAt(i % n, i).filter(x => !x.added);
-      const dt = time / fig.length;
-      fig.forEach((step, k) => {
-        const sound = steps.find(x => Math.abs(x.at - k * dt) < 1e-9);
-        notes.push(sound ? chord(sound.notes, k === 0 ? added : []) : JSON.parse(JSON.stringify(own)));
-        vels.push(step === null ? 0 : vel); times.push(dt); chans.push(chan); figs.push(0);
-      });
+      view.soundsAt(i % n, i, this.legato, this.sustain, true).forEach(s =>
+        events.push({ at: t + s.at, notes: s.notes, vel: s.vel, chan: s.chan, main: !s.added }));
+      t += view.stepAt(i % n, i);
+    }
+    const total = t;
+    if (total <= 0) return false;
+    const EPS = 1e-6;
+    events.forEach(e => { if (e.at >= total - EPS) e.at = e.at % total; if (total - e.at < EPS) e.at = 0; });
+    events.sort((a, b) => a.at - b.at);
+    const groups: (typeof events)[] = [];
+    events.forEach(e => {
+      const last = groups[groups.length - 1];
+      if (last && Math.abs(last[0].at - e.at) < EPS) last.push(e); else groups.push([e]);
+    });
+    const notes: NoteVal[] = [], vels: number[] = [], times: number[] = [], chans: number[] = [];
+    groups.forEach((g, k) => {
+      const sounding = g.filter(e => e.vel > 0);
+      const from = sounding.length ? sounding : g.slice(0, 1);   // a rest when nothing sounds here
+      const pitches = [...new Set(from.flatMap(e => e.notes))].sort((a, b) => a - b);
+      notes.push(pitches.length === 1 ? pitches[0] : pitches);
+      vels.push(sounding.length ? Math.max(...sounding.map(e => e.vel)) : 0);
+      chans.push((from.find(e => e.main) ?? from[0]).chan);
+      const next = k + 1 < groups.length ? groups[k + 1][0].at : total;
+      times.push(Math.round((next - g[0].at) * 1e9) / 1e9);
+    });
+    // a cycle that begins in silence (the first note a rest under a wrapped tail) still begins at 0
+    if (groups[0][0].at > EPS) {
+      notes.unshift(notes[notes.length - 1]); vels.unshift(0); chans.unshift(chans[0]);
+      times.unshift(Math.round(groups[0][0].at * 1e9) / 1e9);
     }
     this.notes = notes; this.velocities = vels; this.timeIntervals = times; this.chans = chans;
-    this.figures = figs.some(isFigure) ? figs : [0];
+    this.figures = [0];
     if (this.hasIntervals()) this.intervals = [0];
     return true;
   }
@@ -3284,6 +3359,7 @@ export class Bloom {
 
   dur(): number {
     if (this.timeIntervals.length === 0) return 0;
+    if (this.insertsFigures()) return this.notes.reduce((sum: number, _: NoteVal, i: number) => sum + this.stepAt(i), 0);
     return this.notes.reduce((sum: number, _: NoteVal, i: number) => sum + wrapAt(this.timeIntervals, i), 0);
   }
 

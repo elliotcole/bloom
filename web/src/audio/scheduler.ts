@@ -103,7 +103,7 @@ export function playOnce(
     const onAt = now + cursor;
     view.soundsAt(i, tick + i, legato, sustain).forEach(s => scheduleSound(out, s, onAt + beatsToMs(s.at), 0, timeouts));
     timeouts.push(setTimeout(() => onNoteOn?.(i, tick + i), cursor));
-    cursor += beatsToMs(wrapAt(bloom.timeIntervals, tick + i));
+    cursor += beatsToMs(view.stepAt(i, tick + i));   // an inserted figure takes its own length
   });
 
   return () => {
@@ -203,7 +203,7 @@ export function startLooper(
       }
 
       const view = b.sounding(state.globalTick - noteIdx);   // a raga's notes as they sound
-      const time = wrapAt(b.timeIntervals, state.globalTick);
+      const time = view.stepAt(noteIdx, state.globalTick);   // an inserted figure takes its own length
       const atMs = state.nextEventTime;
 
       // the note, the notes its intervals add, or its figure; a figure's steps follow a running clock too

@@ -352,7 +352,7 @@ async function main() {
 
   // ─── Typing a list (↵ in a list mode) ────────────────────────────────────────
   const listTyper = new ListTyper(document.getElementById('viz-area') as HTMLElement);
-  keyState.typeList = (label, text, commit) => listTyper.open(label, text, commit);
+  keyState.typeList = (label, text, commit, fields) => listTyper.open(label, text, commit, fields);
 
   // ─── Scale picker: every scale and raga by name, on a chosen root ───────────
   const scalePicker = new ScalePicker({

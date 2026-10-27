@@ -1,18 +1,20 @@
 // Figures: little tunes a note can play instead of itself. A list like the
 // velocities, one entry per note and cycling at its own length: 0 is no figure.
 //
-// Subdivide, written in brackets: (1 2 3) plays do re mi in the time the note
-// had, from the note itself. Numbers count steps of the bloom's scale as
+// A run, written in brackets: (1 2 3) plays do re mi from the note itself. Numbers count steps of the bloom's scale as
 // musicians name them (1 the note, 2 a step up, -2 a step down, 5 a fifth up);
 // chromatic intervals go by name (+P5, -m2); a dot is a rest. (1 1 1) is a
 // ratchet, (1 -2 1) a lower neighbour.
 //
-// Superimpose, written @3: garden slot 3, a tiny bloom with its own times,
-// velocities and channels, played from the note on its own timeline (it may
-// run past the notes that follow). It's read live, so changing the slot changes
-// every figure that uses it. Its first note lands on the note (moved in the
-// scale, when the bloom has one), its loudest note is as loud as the note, and
-// it plays only its own notes.
+// A garden slot, written @3: slot 3, a tiny bloom with its own times,
+// velocities and channels, played from the note. It's read live, so changing
+// the slot changes every figure that uses it. Its first note lands on the note
+// (moved in the scale, when the bloom has one), and it plays only its own notes.
+//
+// How they take their time is one choice for the bloom (Bloom.figureTime):
+// divide shares out the note's time, insert plays in the flow and the notes
+// after wait, superimpose plays on a timeline of its own. A run takes its
+// times from Bloom.figureDurs for the last two; a slot brings its own.
 //
 // Stored as plain JSON: a subdivided figure is a list of intervals (lib/
 // intervals; 0 is the note itself, null a rest), a superimposed one { slot }.
@@ -21,6 +23,8 @@ import type { Bloom } from '../core/Bloom';
 import { isDiatonic, countOf, makeIv, ivName, parseInterval } from './intervals';
 
 export type FigureStep = number | null;
+export type FigureTime = 'divide' | 'insert' | 'superimpose';
+export const FIGURE_TIMES: FigureTime[] = ['divide', 'insert', 'superimpose'];
 export type Figure = 0 | FigureStep[] | { slot: number };
 
 export const isSlotFigure = (f: Figure): f is { slot: number } => typeof f === 'object' && f !== null && !Array.isArray(f);

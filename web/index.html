@@ -646,7 +646,7 @@
       /* Typing a list: ↵ in a list mode (ui/listTyper.ts) */
       #list-typer {
         display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-        z-index: 60; width: min(720px, calc(100% - 32px));
+        z-index: 60; width: min(960px, calc(100% - 32px)); flex-wrap: wrap;
         background: #0c0c18; border: 1px solid #2a2a44; padding: 6px 10px;
         align-items: center; gap: 8px; font-size: 12px;
       }
@@ -658,6 +658,14 @@
       }
       #list-typer input:focus { border-color: #44588a; }
       #list-typer .lt-err { color: #a55; font-size: 11px; white-space: nowrap; }
+      #list-typer .lt-fields { display: contents; }
+      #list-typer .lt-field { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+      #list-typer .lt-flabel { color: #556; }
+      #list-typer .lt-field input { flex: none; width: auto; }
+      #list-typer .lt-choice { display: flex; gap: 2px; border: 1px solid #252540; padding: 3px 4px; outline: none; cursor: pointer; }
+      #list-typer .lt-choice:focus { border-color: #44588a; }
+      #list-typer .lt-choice span { color: #556; padding: 1px 5px; }
+      #list-typer .lt-choice span.on { color: #9ab; background: #1a1f36; }
 
       /* Scale picker (ui/scalePicker.ts), styled as the command palette */
       #scale-picker {
@@ -1066,9 +1074,12 @@ drag a box: select events — keys
        shift-↵ sets it looped to the notes)
 <span class="hf-only hf-iv">         -P5/10: a fifth below every 10th note
          +3rd+5th: a triad above, in the scale
-</span><span class="hf-only hf-fig">         0 none · (1 2 3) do re mi in the note's time
-         (1 1 1) ratchet · +P5 by name · · a rest
-         @3 garden slot 3, from the note, live
+         tab: vel % of the added notes
+</span><span class="hf-only hf-fig">         0 none · (1 2 3) do re mi · (1 1 1) ratchet
+         +P5 by name · · a rest · @3 garden slot 3
+         tab: time divide (in the note's time) /
+           insert (the flow waits) / superimpose
+           (its own timeline) · durations · vel %
 </span>
 <b>s S</b>    scramble / shuffle
 <b>R</b>      mirror

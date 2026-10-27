@@ -15,6 +15,10 @@ interface BloomJSON {
   intervals?: unknown;          // IntervalVal[] — absent in files saved before intervals existed
   intervalsDiatonic?: boolean;
   figures?: unknown;            // Figure[] — absent in files saved before figures existed
+  figureTime?: string;          // divide | insert | superimpose (absent: divide)
+  figureDurs?: number[];
+  figureVel?: number;
+  intervalVel?: number;
   lowestPossibleNote: number;
   highestPossibleNote: number;
   lowestSeedNote: number;
@@ -51,6 +55,10 @@ function bloomToJSON(b: Bloom): BloomJSON {
     intervals: JSON.parse(JSON.stringify(b.intervals)),
     intervalsDiatonic: b.intervalsDiatonic,
     figures: JSON.parse(JSON.stringify(b.figures)),
+    figureTime: b.figureTime,
+    figureDurs: [...b.figureDurs],
+    figureVel: b.figureVel,
+    intervalVel: b.intervalVel,
     lowestPossibleNote: b.lowestPossibleNote,
     highestPossibleNote: b.highestPossibleNote,
     lowestSeedNote: b.lowestSeedNote,
@@ -80,6 +88,12 @@ function bloomFromJSON(json: BloomJSON): Bloom {
   }
   b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);
   if (Array.isArray(json.figures) && json.figures.length > 0) b.figures = json.figures as Bloom['figures'];   // older saves: one unit for every interval
+  if (json.figureTime === 'insert' || json.figureTime === 'superimpose' || json.figureTime === 'divide') b.figureTime = json.figureTime;
+  // saved before figures chose their time: garden figures were superimposed, runs divided
+  else if (b.figures.some(f => typeof f === 'object' && f !== null && !Array.isArray(f)) && !b.figures.some(Array.isArray)) b.figureTime = 'superimpose';
+  if (Array.isArray(json.figureDurs) && json.figureDurs.length && json.figureDurs.every(x => typeof x === 'number' && x > 0)) b.figureDurs = json.figureDurs;
+  if (typeof json.figureVel === 'number') b.figureVel = json.figureVel;
+  if (typeof json.intervalVel === 'number') b.intervalVel = json.intervalVel;
   b.lowestPossibleNote = json.lowestPossibleNote;
   b.highestPossibleNote = json.highestPossibleNote;
   b.lowestSeedNote = json.lowestSeedNote;
