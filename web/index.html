@@ -229,6 +229,28 @@
       #freeze-badge.active, #freeze-badge.menu { display: inline-block; }
       #freeze-badge.menu { color: #fff; border-color: #8cf; }
 
+      /* A take (perform ▾): armed, recording, holding, playing */
+      #take-badge {
+        display: none;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        color: #e88;
+        border: 1px solid #733;
+        border-radius: 3px;
+        padding: 1px 5px;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      #take-badge.active { display: inline-block; }
+      #take-rec.active { color: #e88; border-color: #a44; }
+      #take-status { font-variant-numeric: tabular-nums; }
+      /* while a take plays, what would change the bloom is out of reach */
+      body.take-playing .menu-btn[data-menu="bloom"], body.take-playing .menu-btn[data-menu="play"],
+      body.take-playing .menu-btn[data-menu="garden"], body.take-playing #scale-badge, body.take-playing #tuning-badge {
+        opacity: 0.35;
+        pointer-events: none;
+      }
+
       /* Selected events (drag a box round nodes): keys change only these */
       #selection-badge {
         display: none;
@@ -758,8 +780,9 @@
       <button class="menu-btn" data-menu="bloom" title="this bloom: scale, tuning (and the .scl library), sound, compass">bloom ▾</button>
       <button class="menu-btn" data-menu="play" title="while you play: tempo, freezes, level, reverb">play ▾</button>
       <button class="menu-btn" data-menu="garden" title="save, load, merge and curdle the garden">garden ▾</button>
-      <button class="menu-btn" data-menu="perform" title="for video: clean view, frame, size, drift, demo keys">perform ▾</button>
+      <button class="menu-btn" data-menu="perform" title="takes (a whole performance recorded and played again the same way); for video: clean view, frame, size, drift, demo keys">perform ▾</button>
       <span id="record-dot" title="recording"></span>
+      <span id="take-badge" title="a take (perform ▾): ◌ armed, ● recording, ▶ playing back"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
       <span id="scale-badge"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
@@ -866,6 +889,14 @@
         </span>
       </div>
       <div class="s-row menu-panel" data-menu="perform">
+<span class="s-section">
+          <span class="s-section-label">take</span>
+          <button class="s-btn" id="take-rec" title="arm a take: it starts on the first note that sounds and keeps everything that sounds and shows until you stop it (asks twice); then what's sounding holds 10 s and is let go">arm take</button>
+          <button class="s-btn" id="take-play" title="play the last take from the start, exactly as it went: its notes, tunings, keyboard and picture. The view keys stay yours (opt-1 … 9, opt-c, \ | opt-\); . stops it. The session comes back after">play take</button>
+          <button class="s-btn" id="take-save" title="save the last take to a .bloomtake file">save…</button>
+          <button class="s-btn" id="take-load" title="load a .bloomtake file as the last take">load…</button>
+          <span id="take-status" class="s-note"></span>
+        </span>
 <span class="s-section">
           <span class="s-section-label">video</span>
           <button class="s-btn" id="perf-clean" title="the picture alone, framed and sized as set here, for recording (opt-c; esc leaves)">clean view</button>
@@ -1151,6 +1182,8 @@ playback &amp; garden keys unchanged</div>
 <b>|</b>        note labels
 <b>opt-\</b>    lanes (each list, own cursor)
 <b>opt-c</b>    clean view (esc leaves)
+<b>perform ▾</b> take: record a whole performance, play it again
+          (while it plays: the keys above, . stops)
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>

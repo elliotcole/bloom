@@ -130,29 +130,42 @@ export function onOutputChange(cb: (outputs: MidiOutput[]) => void): void {
   onOutputsChange = cb;
 }
 
+// ─── The tap: a take hears every message on its way out ──────────────────────
+// Returns false to hold a message back (a take that has ended lets nothing more out)
+
+type MidiTap = (data: number[], atMs: number | undefined) => boolean;
+let _tap: MidiTap | null = null;
+
+export function setMidiTap(tap: MidiTap | null): void { _tap = tap; }
+
+function emit(out: MidiOutput, data: number[], atMs?: number): void {
+  if (_tap && !_tap(data, atMs)) return;
+  out.send(data, atMs);
+}
+
 // ─── MIDI helpers ─────────────────────────────────────────────────────────────
 
 export function noteOn(out: MidiOutput, chan: number, note: number, vel: number, atMs?: number): void {
   const ch = Math.max(0, Math.min(15, chan)) & 0x0f;
   const n = Math.max(0, Math.min(127, Math.round(note)));
   const v = Math.max(0, Math.min(127, Math.round(vel)));
-  out.send([0x90 | ch, n, v], atMs);
+  emit(out, [0x90 | ch, n, v], atMs);
 }
 
 export function noteOff(out: MidiOutput, chan: number, note: number, atMs?: number): void {
   const ch = Math.max(0, Math.min(15, chan)) & 0x0f;
   const n = Math.max(0, Math.min(127, Math.round(note)));
-  out.send([0x80 | ch, n, 0], atMs);
+  emit(out, [0x80 | ch, n, 0], atMs);
 }
 
 export function controlChange(out: MidiOutput, chan: number, cc: number, value: number, atMs?: number): void {
   const ch = Math.max(0, Math.min(15, chan)) & 0x0f;
-  out.send([0xb0 | ch, cc & 0x7f, value & 0x7f], atMs);
+  emit(out, [0xb0 | ch, cc & 0x7f, value & 0x7f], atMs);
 }
 
 export function allNotesOff(out: MidiOutput | null): void {
   if (!out) return;
   for (let ch = 0; ch < 16; ch++) {
-    out.send([0xb0 | ch, 123, 0]);
+    emit(out, [0xb0 | ch, 123, 0]);
   }
 }

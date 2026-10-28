@@ -180,6 +180,7 @@ export function tuningKey(bloom: Bloom): string {
 /** Retune the helper and the piano to this bloom's tuning, if it differs from the last one sent */
 export function applyTuning(bloom: Bloom): void {
   _last = bloom;
+  if (_replaying) return;   // a take plays its own tunings
   const t = soundingTuning(bloom);
   const key = tuningKey(bloom);
   if (key === _sentKey) {
@@ -187,22 +188,67 @@ export function applyTuning(bloom: Bloom): void {
     return;
   }
   const freqs = freqTable(t, soundingRoot(bloom));
-  setPianoTuning(t ? freqs : null);
+  tunePiano(t ? freqs : null);
   const port = helperPort();
   if (t && !_access) void connectHelper();
   if (port) {
-    try {
-      port.send(nameMessage(t ? t.name : EQUAL.name));   // first, so the tables arrive under it
-      for (const msg of mtsMessages(freqs)) port.send(msg);
-    } catch { /* port went away */ }
+    toHelper(port, nameMessage(t ? t.name : EQUAL.name));   // first, so the tables arrive under it
+    for (const msg of mtsMessages(freqs)) toHelper(port, msg);
     sendCue(t, soundingRoot(bloom));
   }
   _sentKey = port || !t ? key : '';
 }
 
+// ─── Takes: what went to the helper and the piano, heard and played again ────
+
+type TuningTap = (kind: 'helper' | 'piano', data: number[] | null) => void;
+let _tuningTap: TuningTap | null = null;
+let _replaying = false;
+let _pianoFreqs: number[] | null = null;
+let _helperTables: number[][] = [];   // the name and tables last sent, so a take can start in them
+
+export function setTuningTap(tap: TuningTap | null): void { _tuningTap = tap; }
+
+function toHelper(port: MIDIOutput, msg: number[], atMs?: number): void {
+  if (msg[0] === 0xf0 && !isCue(msg)) {
+    if (_helperTables.length && isName(msg)) _helperTables = [];
+    _helperTables.push(msg);
+  }
+  _tuningTap?.('helper', msg);
+  try { port.send(msg, atMs); } catch { /* port went away */ }
+}
+
+function tunePiano(freqs: number[] | null): void {
+  _pianoFreqs = freqs;
+  _tuningTap?.('piano', freqs);
+  setPianoTuning(freqs);
+}
+
+const CUE_TAG = cueMessage(null, 0).slice(0, 5).join(',');
+const NAME_TAG = nameMessage('x').slice(0, 5).join(',');
+const isCue = (m: number[]) => m.slice(0, 5).join(',') === CUE_TAG;
+const isName = (m: number[]) => m.slice(0, 5).join(',') === NAME_TAG;
+
+/** Where the tuning stands now: the piano's table and what the helper was last sent */
+export function tuningNow(): { piano: number[] | null; helper: number[][] } {
+  return { piano: _pianoFreqs, helper: [..._helperTables] };
+}
+
+/** While a take plays, the blooms' own tunings stay quiet and the take's are sent */
+export function setReplaying(on: boolean): void {
+  _replaying = on;
+  if (!on) { _sentKey = ''; if (_last) applyTuning(_last); }   // back to the bloom's own
+}
+export function replayHelper(msg: number[], atMs?: number): void {
+  const port = helperPort();
+  if (port) toHelper(port, msg, atMs);
+}
+export function replayPiano(freqs: number[] | null): void { tunePiano(freqs); }
+
 /** Have the helper play the tuning out as a cue, for the DAW to record */
 function sendCue(t: Tuning | null, root: number): void {
   const port = helperPort();
   if (!port) return;
-  try { port.send(cueMessage(t, root)); _cueAt = performance.now(); } catch { /* port went away */ }
+  toHelper(port, cueMessage(t, root));
+  _cueAt = performance.now();
 }

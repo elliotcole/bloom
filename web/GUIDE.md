@@ -616,7 +616,8 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   coming (start Live's transport, or press play again, to tell Bloom where the
   beat is), `clk: free` with no clock. The pulsar and the garden loop follow
   the tempo but not yet the beat.
-  - **perform ▾** for video: clean view, frame, size, drift, demo keys.
+  - **perform ▾** takes (a whole performance recorded and played again), and
+    for video: clean view, frame, size, drift, demo keys.
   - **⚙** set once: display (skin, axis, note labels, cues), MIDI channels,
     and the tuning helper (the command, and whether it's connected).
 - **The cue line,** under the header, names the few keys that belong to where
@@ -656,6 +657,38 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   tilts) or opt-drag. A plain drag selects.
 - **Views:** opt-`1`…`9`. The `\` key holds the display toggles: `\`
   console, `|` note labels, opt-`\` lanes.
+
+## Takes: perform ▾ → take
+
+A take is a whole performance, from minutes to hours, kept so it can be
+played again exactly the same way, as often as you like, with nothing to do
+but watch it: change views, go to clean view, set up the recording. Prepare
+a garden, then perform through it (move among blooms, transform them, change
+tunings, play a keyboard along), and the take keeps it all.
+
+- **arm take.** Recording starts on the first note that sounds, from Bloom
+  or from a MIDI keyboard. The header shows `◌ take` while armed and
+  `● 12:03` while recording. A take keeps what went out: every MIDI note
+  with its exact timing, the sustain pedal, the notes from a keyboard, what
+  went to the tuning helper and to the piano, and what the picture showed
+  (the bloom, the garden, each note as it lit).
+- **stop take** (click twice). The take really stops: nothing more is played,
+  what's sounding holds for 10 seconds and is let go, the pedal lifted.
+- **play take** plays it from the start, exactly as it went out. The bloom ▾
+  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`1`…`9`,
+  opt-`c` (clean view), `\` `|` opt-`\`, `?`, `esc`. `.` stops it early.
+  Afterwards your session comes back as it was. To print, record the
+  playback in your DAW or screen recorder.
+- **save… / load…** write and read a `.bloomtake` file. The last take is
+  also kept in the browser and survives a reload. While you record, the take
+  is saved once a minute, so if the page closes mid-take, it comes back up
+  to that point. Arming a new take over one not saved to a file asks twice.
+
+Nothing is worked out again when a take plays, so randomness, tempo and
+timing are exactly as they were. The other side of that: a take keeps its
+tempo, tunings and notes, and the MIDI output is the one chosen when it
+plays. Keyboard notes come out of Bloom's output on the channel they were
+played on.
 
 ## Command palette: cmd-K
 

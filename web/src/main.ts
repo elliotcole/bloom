@@ -9,7 +9,11 @@ import { stopAll, setBpm, getBpm } from './audio/scheduler';
 import { ClockFollower, setTimebase } from './audio/clockSync';
 import { setFigureSlots } from './lib/figures';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
-import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave } from './io/garden-io';
+import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave, sessionNow, restoreSession, pauseAutosave } from './io/garden-io';
+import {
+  initTakes, armTake, stopTake, playTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, loadTakeFile, clock as hms,
+  takeShown, takeGarden, takeLit, takeDark, takeAnimate,
+} from './audio/take';
 import { askRestore } from './ui/restorePrompt';
 import {
   tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus, saveToLibrary,
@@ -28,7 +32,7 @@ import type { FrameAspect } from './ui/visualization';
 import { Display } from './ui/display';
 import type { KeyHandlerState } from './ui/keys';
 import { createKeyHandler } from './ui/keys';
-import { cueFor } from './ui/cues';
+import { cueFor, TAKE_CUE } from './ui/cues';
 import { setNoticeKey } from './ui/notice';
 import { BloomEditor } from './ui/bloomEditor';
 import { CommandPalette } from './ui/commandPalette';
@@ -311,7 +315,7 @@ async function main() {
     const off = !(cueToggle?.checked ?? true) || !!document.getElementById('console-overlay')?.classList.contains('visible');
     cueEl.classList.toggle('off', off);
     if (off) return;
-    const { text, tip } = cueFor(ctx);
+    const { text, tip } = takePhase() === 'playing' ? { text: TAKE_CUE, tip: false } : cueFor(ctx);
     if (cueEl.textContent !== text) cueEl.textContent = text;
     cueEl.classList.toggle('tip', tip);
   }
@@ -321,8 +325,136 @@ async function main() {
   document.getElementById('merge-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); mergeGarden(); });
   document.getElementById('curdle-bloom')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); curdle(); });
   keyRefresh = keysRefresh;
-  viz.onNodeClick = togglePin;
-  viz.onSelect = select;
+  // while a take plays, clicks on the picture don't change the bloom
+  const unlessPlaying = <A extends unknown[]>(f: (...a: A) => void) => (...a: A) => { if (takePhase() !== 'playing') f(...a); };
+  viz.onNodeClick = unlessPlaying(togglePin);
+  viz.onSelect = unlessPlaying(select);
+
+  // ─── Takes: a performance kept as it sounded and looked, played again the same way ──
+  // The view tells the take what it shows; a take playing back shows it again
+  let _shownNow: { bloom: Bloom; trace: boolean } = { bloom, trace: true };
+  {
+    const setBloom = viz.setBloom.bind(viz), light = viz.activateNote.bind(viz), dark = viz.deactivateAll.bind(viz);
+    viz.setBloom = (b, trace = true) => { _shownNow = { bloom: b, trace }; takeShown(b, trace, b === bloom); setBloom(b, trace); };
+    viz.activateNote = (i, tick = i) => { takeLit(i, tick); light(i, tick); };
+    viz.deactivateAll = () => { takeDark(); dark(); };
+    const update = gardenViz.update.bind(gardenViz), slide = gardenViz.animateSlide.bind(gardenViz);
+    const save = gardenViz.animateSave.bind(gardenViz), restore = gardenViz.animateRestore.bind(gardenViz);
+    gardenViz.update = (g) => { takeGarden(g); update(g); };
+    gardenViz.animateSlide = (dir) => { takeAnimate(dir, null); slide(dir); };
+    gardenViz.animateSave = (b, c) => { takeAnimate('save', b); save(b, c); };
+    gardenViz.animateRestore = (b, c) => { takeAnimate('restore', b); restore(b, c); };
+  }
+  let _session: string | null = null;   // the session, set aside while a take plays
+  initTakes({
+    shown: () => _shownNow,
+    session: () => ({ bloom, garden }),
+    silence: () => {
+      stopAll();
+      keyState.cancelLastPlay?.();
+      keyState.cancelLastPlay = null;
+      viz.deactivateAll();
+    },
+    out: () => midiState.selectedOutput,
+    show: (b, trace, main) => {
+      if (main) { bloom.import(b); viz.setBloom(bloom, trace); } else viz.setBloom(b, trace);
+    },
+    garden: (slots, cursor) => { garden.slots = slots; garden.cursor = cursor; gardenViz.update(garden); },
+    light: (i, tick) => viz.activateNote(i, tick),
+    dark: () => viz.deactivateAll(),
+    animate: (kind, b) => {
+      if (kind === 'left' || kind === 'right') gardenViz.animateSlide(kind);
+      else if (b) (kind === 'save' ? gardenViz.animateSave : gardenViz.animateRestore)(b, canvas);
+    },
+    changed: takeUi,
+  });
+
+  const takeRecBtn = document.getElementById('take-rec') as HTMLButtonElement | null;
+  const takePlayBtn = document.getElementById('take-play') as HTMLButtonElement | null;
+  const takeSaveBtn = document.getElementById('take-save') as HTMLButtonElement | null;
+  const takeLoadBtn = document.getElementById('take-load') as HTMLButtonElement | null;
+  const takeStatus = document.getElementById('take-status');
+  const takeBadge = document.getElementById('take-badge');
+  // what can't be undone asks twice: a second click within a few seconds
+  let _asking: { what: 'replace' | 'stop'; until: number } | null = null;
+  const asked = (what: 'replace' | 'stop') => _asking?.what === what && performance.now() < _asking.until;
+  const ask = (what: 'replace' | 'stop') => { _asking = { what, until: performance.now() + 4000 }; takeUi(); setTimeout(takeUi, 4100); };
+
+  function takeUi() {
+    const ph = takePhase(), t = lastTake();
+    if (_asking && performance.now() >= _asking.until) _asking = null;
+    if (ph !== 'playing' && _session !== null) {   // a take played out: the session comes back as it was
+      restoreSession(_session, bloom, garden);
+      _session = null;
+      pauseAutosave(false);
+      clearPins();
+      clearSelection();
+      keysRefresh('take ended', false);
+    }
+    document.body.classList.toggle('take-playing', ph === 'playing');
+    if (takeRecBtn) {
+      takeRecBtn.textContent = ph === 'armed' ? 'disarm' : ph === 'recording' ? (asked('stop') ? 'really stop?' : 'stop take')
+        : ph === 'ending' ? 'holding…' : asked('replace') ? 'replace the last take?' : 'arm take';
+      takeRecBtn.disabled = ph === 'playing' || ph === 'ending';
+      takeRecBtn.classList.toggle('active', ph === 'armed' || ph === 'recording');
+    }
+    if (takePlayBtn) {
+      takePlayBtn.textContent = ph === 'playing' ? 'stop playing' : 'play take';
+      takePlayBtn.disabled = !t || (ph !== 'idle' && ph !== 'playing');
+    }
+    if (takeSaveBtn) takeSaveBtn.disabled = !t || ph === 'recording' || ph === 'ending';
+    if (takeLoadBtn) takeLoadBtn.disabled = ph !== 'idle';
+    const el = hms(takeElapsed());
+    const text = ph === 'armed' ? 'armed: starts on the first note'
+      : ph === 'recording' ? `● ${el}`
+      : ph === 'ending' ? 'stopped: what sounds holds 10 s'
+      : ph === 'playing' && t ? `▶ ${el} / ${hms(t.length)}`
+      : t ? `last take ${hms(t.length)} · ${new Date(t.recordedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}${t.saved ? '' : ' · not saved to a file'}`
+      : 'no take yet';
+    if (takeStatus && takeStatus.textContent !== text) takeStatus.textContent = text;
+    if (takeBadge) {
+      const b = ph === 'idle' ? '' : ph === 'armed' ? '◌ take' : ph === 'recording' ? `● ${el}` : ph === 'ending' ? '● holding' : `▶ ${el}`;
+      if (takeBadge.textContent !== b) takeBadge.textContent = b;
+      takeBadge.classList.toggle('active', b !== '');
+    }
+  }
+  setInterval(takeUi, 500);
+  takeUi();
+  takeRecBtn?.addEventListener('click', () => {
+    takeRecBtn.blur();
+    const ph = takePhase(), t = lastTake();
+    if (ph === 'idle') {
+      if (t && !t.saved && !asked('replace')) { ask('replace'); return; }
+      _asking = null;
+      armTake();
+      display.setStatus('take armed: it starts on the first note that sounds');
+    } else if (ph === 'armed') {
+      stopTake();
+      display.setStatus('take disarmed');
+    } else if (ph === 'recording') {
+      if (!asked('stop')) { ask('stop'); return; }
+      _asking = null;
+      stopTake();
+      display.setStatus('take stopped: what sounds holds 10 s, then it ends');
+    }
+  });
+  takePlayBtn?.addEventListener('click', () => {
+    takePlayBtn.blur();
+    if (takePhase() === 'playing') { stopPlaying(); return; }
+    const session = sessionNow(bloom, garden);
+    leaveListMode();
+    if (playTake()) {
+      _session = session;
+      pauseAutosave(true);
+      openMenu(null);
+      display.setStatus('playing the take: the view keys are yours; . stops it');
+    }
+  });
+  takeSaveBtn?.addEventListener('click', () => { takeSaveBtn.blur(); if (saveTakeFile()) { display.setStatus('take saved'); takeUi(); } });
+  takeLoadBtn?.addEventListener('click', () => {
+    takeLoadBtn.blur();
+    loadTakeFile(err => display.setStatus(err ?? (lastTake() ? `take loaded: ${hms(lastTake()!.length)}` : '')));
+  });
 
   // ─── Performance: frame, size and drift; previewed while the perform menu is open ──
   const perfFrame = document.getElementById('perf-frame') as HTMLSelectElement | null;
@@ -469,7 +601,7 @@ async function main() {
     retune: () => keysRefresh(''),
     mark: (m) => viz.setPieMarks(m),
   });
-  viz.onTuningClick = (d, shift) => tuningEditor.pick(d, shift);
+  viz.onTuningClick = unlessPlaying((d: number, shift: boolean) => tuningEditor.pick(d, shift));
   viz.onTuningViewClosed = () => tuningEditor.closed();
   keyState.tuningView = tuningEditor;
   keyState.afterRefreshFn = () => tuningEditor.update();
@@ -479,6 +611,11 @@ async function main() {
   if (tuningStatus) tuningStatus.textContent = helperStatus();
   if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();
   syncTuning();   // a restored bloom's tuning
+
+  /** What a take playing back leaves free: the view, clean view, the display toggles, help, esc */
+  const viewKey = (e: KeyboardEvent) =>
+    (e.altKey && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && e.code === 'KeyC')
+    || e.code === 'Backslash' || e.key === '?' || (e.code === 'Escape' && !e.shiftKey);
 
   window.addEventListener('keydown', (e) => {
     // Don't send keystrokes to bloom when editor or palette is open
@@ -490,6 +627,14 @@ async function main() {
       if (e.key === 'Escape') target.blur();
       return;
     }
+    // a take playing back: the view keys are free, . stops it, the rest wait
+    if (takePhase() === 'playing') {
+      if (e.key === '.' && !e.altKey && !e.metaKey && !e.ctrlKey) { stopPlaying(); display.setStatus('take stopped'); return; }
+      if (!viewKey(e)) {
+        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-1 … 9, opt-c, \\ | opt-\\, ?, esc); . stops it');
+        return;
+      }
+    }
     keyState.out = midiState.selectedOutput;
     // demo mode: the notice also shows the key, large, for recordings
     setNoticeKey(_demoMode ? formatDemoKey(e) : '');
@@ -497,6 +642,7 @@ async function main() {
   });
 
   window.addEventListener('beforeunload', () => {
+    if (takePhase() === 'playing') stopPlaying();
     stopAll();
     allNotesOff(midiState.selectedOutput);
   });
@@ -786,6 +932,7 @@ async function main() {
   document.getElementById('load-garden')?.addEventListener('click', (e) => { (e.currentTarget as HTMLElement).blur(); doLoad(); });
 
   window.addEventListener('keydown', (e) => {
+    if (takePhase() === 'playing') return;   // the session is set aside
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); doSave(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); doLoad(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); commandPalette.open(); }

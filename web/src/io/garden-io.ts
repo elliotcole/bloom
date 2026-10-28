@@ -7,7 +7,7 @@ import type { Tuning } from '../lib/tuning';
 
 // ─── JSON types ───────────────────────────────────────────────────────────────
 
-interface BloomJSON {
+export interface BloomJSON {
   notes: unknown;           // NoteArray — may be nested
   velocities: number[];
   timeIntervals: number[];
@@ -46,7 +46,7 @@ interface GardenFile {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function bloomToJSON(b: Bloom): BloomJSON {
+export function bloomToJSON(b: Bloom): BloomJSON {
   return {
     notes: JSON.parse(JSON.stringify(b.notes)),
     velocities: [...b.velocities],
@@ -77,7 +77,7 @@ function bloomToJSON(b: Bloom): BloomJSON {
   };
 }
 
-function bloomFromJSON(json: BloomJSON): Bloom {
+export function bloomFromJSON(json: BloomJSON): Bloom {
   const b = new Bloom();
   b.notes = json.notes as Bloom['notes'];
   b.velocities = json.velocities;
@@ -128,13 +128,27 @@ function applyGardenFile(data: GardenFile, bloom: Bloom, garden: Garden): void {
   garden.cursor = Math.max(0, Math.min(data.garden.cursor, garden.slots.length - 1));
 }
 
+// ─── The session, set aside while a take plays and put back after ────────────
+
+export function sessionNow(bloom: Bloom, garden: Garden): string {
+  return JSON.stringify(toGardenFile(bloom, garden));
+}
+export function restoreSession(raw: string, bloom: Bloom, garden: Garden): void {
+  applyGardenFile(JSON.parse(raw) as GardenFile, bloom, garden);
+}
+
 // ─── Autosave (localStorage) ──────────────────────────────────────────────────
+
+let _autosavePaused = false;
+/** A take playing back moves the blooms about; autosave keeps the session as it was */
+export function pauseAutosave(on: boolean): void { _autosavePaused = on; }
 
 const AUTOSAVE_KEY = 'bloom-garden-autosave';
 let _autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Mirror the current state to localStorage, debounced. Best-effort — never throws. */
 export function autosaveGarden(bloom: Bloom, garden: Garden): void {
+  if (_autosavePaused) return;
   if (_autosaveTimer !== null) clearTimeout(_autosaveTimer);
   _autosaveTimer = setTimeout(() => {
     _autosaveTimer = null;

@@ -82,6 +82,9 @@ function situations(c: CueContext): string[] {
   return out;
 }
 
+/** While a take plays back (perform ▾ → take): only the view is yours */
+export const TAKE_CUE = 'playing the take · opt-1 … 9 view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
+
 /** What the line says now; `now` turns the tips */
 export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: boolean } {
   if (c.tuning) return { text: TUNING_CUE, tip: false };
