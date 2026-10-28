@@ -27,6 +27,8 @@ export interface TuningEditorHost {
   /** The library's copy of a tuning, by name */
   libraryTuning: (name: string) => Tuning | undefined;
   saveToLibrary: (t: Tuning) => void;
+  /** Pick .scl files for the library; the first becomes the sounding tuning */
+  loadScala: () => void;
   status: (msg: string) => void;
   /** Show or hide the pie in the main area, and mark the selected notes on it */
   show: (on: boolean) => void;
@@ -159,6 +161,7 @@ export class TuningEditor {
         <div class="te-row">
           <button data-act="save">save to library</button>
           <button data-act="export">export .scl</button>
+          <button data-act="load" title="add .scl files to the library (as ⚙ → tunings does); the first one loaded becomes this tuning">load .scl</button>
           ${lib && own?.edited ? '<button data-act="revert">revert</button>' : ''}
           <button data-act="equal">back to 12-TET</button></div>
         <div class="tv-title">hold</div>
@@ -249,6 +252,7 @@ export class TuningEditor {
         result(r, 'tuning pasted');
         break;
       }
+      case 'load': this.host.loadScala(); break;
       case 'save': {
         const name = val('te-name') || t.name;
         const saved: Tuning = { ...t, name, edited: false, root: undefined };

@@ -33,8 +33,8 @@ export function tuningLibrary(): Tuning[] {
 }
 
 /** Add .scl files; a file with the name of one already loaded replaces it. Returns what was skipped and why. */
-export async function loadScalaFiles(files: FileList | File[]): Promise<{ added: number; skipped: string[] }> {
-  const skipped: string[] = [];
+export async function loadScalaFiles(files: FileList | File[]): Promise<{ added: number; skipped: string[]; names: string[] }> {
+  const skipped: string[] = [], names: string[] = [];
   let added = 0;
   for (const f of [...files]) {
     if (!/\.scl$/i.test(f.name)) continue;
@@ -42,12 +42,13 @@ export async function loadScalaFiles(files: FileList | File[]): Promise<{ added:
     if (typeof t === 'string') { skipped.push(`${f.name}: ${t}`); continue; }
     const at = _library.findIndex(x => x.name === t.name);
     if (at >= 0) _library[at] = t; else _library.push(t);
+    names.push(t.name);
     added++;
   }
   _library.sort((a, b) => a.name.localeCompare(b.name));
   saveLibrary();
   if (added) void connectHelper();
-  return { added, skipped };
+  return { added, skipped, names };
 }
 
 /** Add a tuning to the library, replacing one of the same name */

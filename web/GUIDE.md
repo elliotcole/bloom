@@ -120,7 +120,9 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Tunings: `T` (tuning mode), opt-`t` (hold)
 
-Load Scala (`.scl`) files in ⚙ → **tunings**: pick several at once.
+Load Scala (`.scl`) files in ⚙ → **tunings**, or with **load .scl** in the
+tuning view (`T`), where the first one loaded becomes the bloom's tuning: pick
+several at once.
 Scales of up to twelve notes to the period are taken; larger ones are listed
 as skipped, with the reason. A scale of fewer than twelve (a raga's seven) is
 folded onto the keys: each key sounds the scale's note nearest its 12-TET
@@ -225,7 +227,8 @@ library stays in this browser.
     value past 1150¢ is taken as the period).
   - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
     **save to library** keeps it, alterations and all, under a name for `]` / `[`; **export .scl**
-    downloads it; **revert** goes back to the library's copy.
+    downloads it; **load .scl** adds files to the library and plays the first;
+    **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ →
   tunings → **copy helper command** copies a Terminal line that downloads and

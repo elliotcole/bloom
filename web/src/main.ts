@@ -390,22 +390,34 @@ async function main() {
     tuningSelect.blur();
     keysRefresh(`tuning: ${tuningSelect.value}`);
   });
-  document.getElementById('tuning-load')?.addEventListener('click', (e) => {
-    (e.currentTarget as HTMLElement).blur();
+  /** Pick .scl files to add to the library; `use`: the first one loaded becomes the sounding tuning */
+  const pickScala = (use: boolean) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
     input.accept = '.scl';
     input.onchange = async () => {
       if (!input.files) return;
-      const { added, skipped } = await loadScalaFiles(input.files);
+      const { added, skipped, names } = await loadScalaFiles(input.files);
       fillTuningSelect();
-      const note = `${added} tuning${added === 1 ? '' : 's'} loaded`
+      let note = `${added} tuning${added === 1 ? '' : 's'} loaded`
         + (skipped.length ? ` · ${skipped.length} skipped (${skipped.slice(0, 3).join('; ')}${skipped.length > 3 ? ' …' : ''})` : '');
+      const first = use ? tuningLibrary().find(x => x.name === names[0]) : undefined;
+      if (first) {
+        const next = rebase(soundingTuning(bloom), { ...first, cents: [...first.cents] });   // a new base, the same alterations
+        if (isHeld()) setHeldTuning(next); else bloom.tuning = next;
+        fillTuningSelect();
+        note += ` · now ${first.name}`;
+        keysRefresh(note);
+      }
       display.setStatus(note);
       if (tuningStatus) tuningStatus.textContent = helperStatus();
     };
     input.click();
+  };
+  document.getElementById('tuning-load')?.addEventListener('click', (e) => {
+    (e.currentTarget as HTMLElement).blur();
+    pickScala(false);
   });
   document.getElementById('tuning-clear')?.addEventListener('click', (e) => {
     (e.currentTarget as HTMLElement).blur();
@@ -440,6 +452,7 @@ async function main() {
     },
     libraryTuning: (name) => tuningLibrary().find(t => t.name === name && t.name !== '12-TET'),
     saveToLibrary: (t) => { saveToLibrary(t); fillTuningSelect(); },
+    loadScala: () => pickScala(true),
     status: (msg) => display.setStatus(msg),
     show: (on) => {
       if (on) leaveListMode();
