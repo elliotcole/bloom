@@ -481,7 +481,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** The next (1) or previous (−1) loaded tuning: the held one's while held, else the bloom's */
   function stepTuningBy(dir: 1 | -1) {
     const lib = tuningLibrary();
-    if (lib.length < 2) { status('no tunings loaded — ⚙ → tunings → load .scl files'); return; }
+    if (lib.length < 2) { status('no tunings loaded — load .scl (here, or bloom ▾ → tuning)'); return; }
     // a new base under the same alterations
     const cur = soundingTuning(state.bloom);
     const next = rebase(cur, stepTuning(cur, dir));

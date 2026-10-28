@@ -120,7 +120,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Tunings: `T` (tuning mode), opt-`t` (hold)
 
-Load Scala (`.scl`) files in ⚙ → **tunings**, or with **load .scl** in the
+Load Scala (`.scl`) files in **bloom ▾** → tuning → **load .scl files**, or with **load .scl** in the
 tuning view (`T`), where the first one loaded becomes the bloom's tuning: pick
 several at once.
 Scales of up to twelve notes to the period are taken; larger ones are listed
@@ -231,10 +231,10 @@ library stays in this browser.
     **revert** goes back to the library's copy.
 - **What you hear:** the Built-in Piano plays in the tuning. For synths in
   Ableton (or any host), run the **bloom-mts** helper (macOS; ⚙ →
-  tunings → **copy helper command** copies a Terminal line that downloads and
+  tuning helper → **copy helper command** copies a Terminal line that downloads and
   starts it; source in `mts-helper/`): it is an MTS-ESP master that takes its tuning from Bloom, so
   every MTS-ESP client plugin follows it. The browser asks once for permission
-  to send it SysEx; ⚙ → tunings says whether the helper is connected.
+  to send it SysEx; ⚙ → tuning helper says whether it's connected.
 - **Recording the tunings with a take:** DAWs don't record SysEx, so the
   helper also plays each tuning Bloom sends out of a second port, **Bloom
   Tuning Cues**, as a short chord of notes that holds the whole tuning. It
@@ -600,7 +600,9 @@ nodes sit on a soft disc and the header shows `▣ 4`.
 - **The header menus** open a strip under the header, one at a time; a key
   played on the bloom closes it (typing in its fields doesn't).
   - **bloom ▾** this bloom, saved with it: scale (**choose scale…**), tuning
-    (pick, **edit tuning**), legato, sustain.
+    (pick, **edit tuning**, and the library: **load .scl files**, **forget
+    all**), the compass (lo / hi, presets bloom, drums, full), legato,
+    sustain.
   - **play ▾** while you play: bpm, tap, clock sync; the freezes (duration,
     grid, palette); level (vel max) and reverb.
   - **garden ▾** save, load, merge, curdle.
@@ -616,8 +618,7 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   the tempo but not yet the beat.
   - **perform ▾** for video: clean view, frame, size, drift, demo keys.
   - **⚙** set once: display (skin, axis, note labels, cues), MIDI channels,
-    the compass, and the tuning library (load .scl files, forget them, the
-    helper command).
+    and the tuning helper (the command, and whether it's connected).
 - **The cue line,** under the header, names the few keys that belong to where
   you are: a mode's own keys (tuning mode, the freeze menu, a list mode), or
   at home the situations that open keys up, two at most — a selection, pins, a

@@ -755,7 +755,7 @@
       </select>
       <button id="reset-camera" title="reset camera view" style="display:none">⊹ reset view</button>
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
-      <button class="menu-btn" data-menu="bloom" title="this bloom: scale, tuning, legato, sustain">bloom ▾</button>
+      <button class="menu-btn" data-menu="bloom" title="this bloom: scale, tuning (and the .scl library), sound, compass">bloom ▾</button>
       <button class="menu-btn" data-menu="play" title="while you play: tempo, freezes, level, reverb">play ▾</button>
       <button class="menu-btn" data-menu="garden" title="save, load, merge and curdle the garden">garden ▾</button>
       <button class="menu-btn" data-menu="perform" title="for video: clean view, frame, size, drift, demo keys">perform ▾</button>
@@ -765,7 +765,7 @@
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
-      <button class="menu-btn hdr-right" data-menu="setup" title="set once: display, MIDI, compass, the tuning library">⚙</button>
+      <button class="menu-btn hdr-right" data-menu="setup" title="set once: display, MIDI, the tuning helper">⚙</button>
       <button id="help-toggle" class="hdr-btn">? help</button>
     </header>
 
@@ -779,6 +779,16 @@
           <span class="s-section-label">tuning</span>
           <select id="tuning-select" title="this bloom's tuning (] / [ step through them in tuning mode, T)"></select>
           <button class="s-btn" id="tuning-edit" title="tuning mode (T): the bloom's tuning as a pie that plays along; move notes by commas, set ratios and intervals, paste a scale, choose the root">edit tuning</button>
+          <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of up to twelve notes (fewer are folded onto the keys) to the tunings; pick several, or a whole folder">load .scl files</button>
+          <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">forget all</button>
+        </span>
+<span class="s-section">
+          <span class="s-section-label">compass</span>
+          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
+          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
+          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
+          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
+          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
         </span>
 <span class="s-section">
           <span class="s-section-label">sound</span>
@@ -911,17 +921,7 @@
           </label>
         </span>
 <span class="s-section">
-          <span class="s-section-label">compass</span>
-          <label>lo <input type="number" id="compass-lo" min="0" max="127" step="1" value="40"></label>
-          <label>hi <input type="number" id="compass-hi" min="0" max="127" step="1" value="108"></label>
-          <button class="s-btn preset-btn" data-lo="40" data-hi="108">bloom</button>
-          <button class="s-btn preset-btn" data-lo="36" data-hi="51">drums</button>
-          <button class="s-btn preset-btn" data-lo="0" data-hi="127">full</button>
-        </span>
-<span class="s-section">
-          <span class="s-section-label">tunings</span>
-          <button class="s-btn" id="tuning-load" title="add Scala (.scl) files of up to twelve notes (fewer are folded onto the keys); pick several, or a whole folder">load .scl files</button>
-          <button class="s-btn" id="tuning-clear" title="forget the loaded tunings (blooms keep theirs)">forget all</button>
+          <span class="s-section-label">tuning helper</span>
           <button class="s-btn" id="tuning-helper" title="copies a Terminal command that downloads the bloom-mts helper (an MTS-ESP master for synths in Ableton, macOS) and starts it; it also plays each tuning out of Bloom Tuning Cues, for a MIDI track to record (see the guide)">copy helper command</button>
           <span id="tuning-status" class="s-note"></span>
         </span>
@@ -1049,7 +1049,7 @@ click a node: pin · drag: select
 click a slice: select · shift-click: an interval
 the palette above chooses the comma
 <b>opt-t</b> hold the tuning over every bloom
-(load .scl files in ⚙ setup;
+(load .scl files in bloom ▾ or here;
  the tuning's root follows the key)</div>
           </div>
           <div class="hf-sec" id="hf-freeze-sec">

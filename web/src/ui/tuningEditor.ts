@@ -161,7 +161,7 @@ export class TuningEditor {
         <div class="te-row">
           <button data-act="save">save to library</button>
           <button data-act="export">export .scl</button>
-          <button data-act="load" title="add .scl files to the library (as ⚙ → tunings does); the first one loaded becomes this tuning">load .scl</button>
+          <button data-act="load" title="add .scl files to the library (as bloom ▾ → load .scl files does); the first one loaded becomes this tuning">load .scl</button>
           ${lib && own?.edited ? '<button data-act="revert">revert</button>' : ''}
           <button data-act="equal">back to 12-TET</button></div>
         <div class="tv-title">hold</div>
