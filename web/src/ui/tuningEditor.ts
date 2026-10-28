@@ -149,10 +149,10 @@ export class TuningEditor {
       </div>
       <div class="tv-palette${t.alterOff ? ' off' : ''}"><span class="tv-pal-lbl">alterations${t.alterOff ? ' (off)' : ''}</span>${palette}</div>
       <div class="tv-side">
-        <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b></span>
+        <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b>${t.notes ? ` <span class="te-dim" title="each key sounds the scale's nearest note">${t.notes} notes on 12 keys</span>` : ''}</span>
           <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
         <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
-        <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, or a .scl</span></span>
+        <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, fewer (each key takes the nearest), or a .scl</span></span>
           <textarea id="te-paste" class="te-inp" rows="3" spellcheck="false" placeholder="16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 9/5 15/8"></textarea>
           <button data-act="paste">use these</button></div>
         <div class="te-row"><input id="te-name" class="te-inp" value="${escapeHtml(t.name)}" title="the name to save it under"></div>

@@ -23,14 +23,30 @@ function angles(bloom: Bloom): number[] {
   return t.cents.map(c => ((off + c) / t.period) * Math.PI * 2 - Math.PI / 2);
 }
 
+/**
+ * Each degree's owner: itself, or in a scale of fewer than twelve notes
+ * folded onto the keys, the key nearest the note it shares (the pie shows
+ * that note once, under that key's name, and lights it for all of them).
+ */
+function owners(t: { cents: number[]; period: number; notes?: number }): number[] {
+  const at = (d: number) => ((t.cents[d] % t.period) + t.period) % t.period;
+  const near = (d: number) => Math.abs(t.cents[d] - (d * t.period) / 12);
+  return t.cents.map((_, d) => {
+    if (!t.notes) return d;
+    const same = t.cents.map((__, e) => e).filter(e => Math.abs(at(e) - at(d)) < 1e-6);
+    return same.reduce((best, e) => (near(e) < near(best) ? e : best));
+  });
+}
+
 /** The slice edges: halfway between each degree and its neighbours, in angle order */
 function slices(bloom: Bloom): { deg: number; mid: number; from: number; to: number }[] {
   const ang = angles(bloom);
-  const order = ang.map((a, deg) => ({ deg, a })).sort((x, y) => x.a - y.a);
-  const TAU = Math.PI * 2;
+  const own = owners(editable(soundingTuning(bloom)));   // a folded scale: one slice per note
+  const order = ang.map((a, deg) => ({ deg, a })).filter(o => own[o.deg] === o.deg).sort((x, y) => x.a - y.a);
+  const TAU = Math.PI * 2, n = order.length;
   return order.map((o, k) => {
-    const prev = order[(k + 11) % 12].a - (k === 0 ? TAU : 0);
-    const next = order[(k + 1) % 12].a + (k === 11 ? TAU : 0);
+    const prev = order[(k + n - 1) % n].a - (k === 0 ? TAU : 0);
+    const next = order[(k + 1) % n].a + (k === n - 1 ? TAU : 0);
     return { deg: o.deg, mid: o.a, from: (prev + o.a) / 2, to: (o.a + next) / 2 };
   });
 }
@@ -41,9 +57,10 @@ export function degreeAt(bloom: Bloom, cx: number, cy: number, R: number, x: num
   if (d > R * 1.3 || d < R * 0.12) return -1;
   const TAU = Math.PI * 2;
   const a = Math.atan2(y - cy, x - cx);
+  const own = owners(editable(soundingTuning(bloom)));
   for (const s of slices(bloom)) {
     const rel = ((a - s.from) % TAU + TAU) % TAU;
-    if (rel <= s.to - s.from) return s.deg;
+    if (rel <= s.to - s.from) return own[s.deg];
   }
   return -1;
 }
@@ -56,7 +73,8 @@ export function drawTuningPie(
   const t = editable(soundingTuning(bloom));
   const root = soundingRoot(bloom);
   const dev = deviations(soundingTuning(bloom), root);
-  const degOf = (p: number) => ((p - root) % 12 + 12) % 12;
+  const own = owners(t);
+  const degOf = (p: number) => own[((p - root) % 12 + 12) % 12];   // a key sharing a note lights its owner
 
   // each degree's flash, loudness and use in the bloom
   const flash = new Float32Array(12), vel = new Float32Array(12), count = new Int32Array(12);
@@ -117,6 +135,7 @@ export function drawTuningPie(
   const ang = angles(bloom);
   const alter = alterationsOf(t);
   for (let d = 0; d < 12; d++) {
+    if (own[d] !== d) continue;
     const a = ang[d], f = flash[d], pc = (root + d) % 12;
     const [h, sat, l] = theme.noteHsla(pc, 100, f);
     const at = (k: number) => [cx + Math.cos(a) * R * k, cy + Math.sin(a) * R * k] as const;

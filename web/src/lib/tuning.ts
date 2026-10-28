@@ -1,5 +1,9 @@
 // Tunings: twelve notes to the period, read from Scala (.scl) files, laid on a
 // key root, and turned into a frequency for each of the 128 MIDI notes.
+//
+// A scale of fewer than twelve notes (a raga's seven) is folded onto the
+// twelve keys: each key sounds the scale's note nearest its 12-TET place, so
+// whatever is played falls into that one tonality.
 
 export interface Tuning {
   name: string;
@@ -23,6 +27,8 @@ export interface Tuning {
   root?: number | null;
   /** changed since it came from the library */
   edited?: boolean;
+  /** how many notes the scale has, when fewer than twelve: the keys share them (see fold) */
+  notes?: number;
 }
 
 /** 12-TET: the tuning a bloom has when it has none */
@@ -71,8 +77,25 @@ function parseValue(tok: string): { cents: number; ratio: string | null } | null
 }
 
 /**
- * Read a .scl file. Returns the tuning, or a reason it can't be used: only
- * scales of exactly twelve notes to the period fit Bloom for now.
+ * A scale of fewer than twelve notes (the root first, the period apart) as
+ * twelve keys: each key takes the note nearest its 12-TET place, the root a
+ * period up included (a tie goes to the lower note), so keys share notes.
+ */
+export function fold(pitches: { cents: number; ratio: string | null }[], period: { cents: number; ratio: string | null }):
+  { cents: number[]; ratios: (string | null)[] } {
+  const all = [...pitches].sort((a, b) => a.cents - b.cents);
+  all.push({ cents: period.cents, ratio: period.ratio });
+  const keys = Array.from({ length: 12 }, (_, k) => {
+    const want = (k * period.cents) / 12;
+    return all.reduce((best, p) => (Math.abs(p.cents - want) < Math.abs(best.cents - want) - 1e-9 ? p : best));
+  });
+  return { cents: keys.map(p => p.cents), ratios: keys.map(p => p.ratio) };
+}
+
+/**
+ * Read a .scl file. Returns the tuning, or a reason it can't be used: scales
+ * of more than twelve notes to the period don't fit Bloom for now; fewer are
+ * folded onto the twelve keys.
  */
 export function parseScala(text: string, fileName: string): Tuning | string {
   const lines = text.split(/\r?\n/).filter(l => !l.startsWith('!'));
@@ -89,8 +112,13 @@ export function parseScala(text: string, fileName: string): Tuning | string {
     pitches.push(v);
   }
   if (pitches.length < count) return `${pitches.length} of ${count} notes`;
-  if (count !== 12) return `${count} notes to the period (12 for now)`;
+  if (count > 12) return `${count} notes to the period (12 at most for now)`;
+  if (count < 1) return 'no notes';
   const name = fileName.replace(/\.scl$/i, '');
+  if (count < 12) {
+    const period = pitches[count - 1];
+    return { name, description, ...fold([{ cents: 0, ratio: '1/1' }, ...pitches.slice(0, -1)], period), period: period.cents, notes: count };
+  }
   return {
     name, description,
     cents: [0, ...pitches.slice(0, 11).map(p => p.cents)],
@@ -438,7 +466,8 @@ export function setInterval(t: Tuning, a: number, b: number, value: string): Tun
  * A whole scale pasted in: ratios or cents (a dot, or a whole number above
  * 8), separated by spaces, commas or lines. 11 values are degrees 1–11 (1/1 implied); 12 starting with 1/1 or 0
  * are degrees 0–11; 12 otherwise, or 13 starting with 1/1, end with the period,
- * as in a .scl file. A whole .scl file can be pasted too.
+ * as in a .scl file. Fewer than 11 are a smaller scale, folded onto the keys
+ * (a last value past 1150¢ its period). A whole .scl file can be pasted too.
  */
 export function fromList(text: string, name: string): Tuning | string {
   if (/^\s*!/m.test(text)) return parseScala(text, name);
@@ -453,7 +482,15 @@ export function fromList(text: string, name: string): Tuning | string {
   if (v.length === 13 && startsAtRoot) { period = v[12]; v = v.slice(0, 12); }
   else if (v.length === 12 && !startsAtRoot) { period = v[11]; v = [{ cents: 0, ratio: '1/1' }, ...v.slice(0, 11)]; }
   else if (v.length === 11) v = [{ cents: 0, ratio: '1/1' }, ...v];
-  if (v.length !== 12) return `${toks.length} values: give 11 (1/1 implied), 12, or 12 and the period`;
+  else if (v.length > 0 && v.length < 11) {
+    // fewer: a scale to fold onto the keys, from 1/1 (implied); a last value past 1150¢ is its period
+    if (startsAtRoot) v = v.slice(1);
+    const last = v[v.length - 1];
+    if (last && last.cents > 1150) { period = last; v = v.slice(0, -1); }
+    const notes = [{ cents: 0, ratio: '1/1' as string | null }, ...v];
+    return { name, ...fold(notes, period), period: period.cents, notes: notes.length, edited: true };
+  }
+  if (v.length !== 12) return `${toks.length} values: give up to 11 (1/1 implied), 12, or 12 and the period`;
   return {
     name, cents: v.map(x => x.cents), ratios: v.map(x => x.ratio), period: period.cents, edited: true,
   };
@@ -463,6 +500,13 @@ export function fromList(text: string, name: string): Tuning | string {
 export function toScala(t: Tuning): string {
   const val = (d: number) => (t.ratios?.[d] ?? null) || t.cents[d].toFixed(5);
   const period = isOctave(t) ? '2/1' : t.period.toFixed(5);
+  if (t.notes) {
+    // a folded scale: its own notes, once each, not the keys that share them
+    const own = t.cents.map((c, d) => ({ c, d })).filter(({ c }, i, a) => c > 1e-9 && c < t.period - 1e-9 && a.findIndex(x => Math.abs(x.c - c) < 1e-9) === i)
+      .sort((x, y) => x.c - y.c);
+    return [`! ${t.name}.scl`, '!', t.description || t.name, ` ${own.length + 1}`, '!',
+      ...own.map(({ d }) => ` ${val(d)}`), ` ${period}`, ''].join('\n');
+  }
   return [`! ${t.name}.scl`, '!', t.description || t.name, ' 12', '!',
     ...Array.from({ length: 11 }, (_, i) => ` ${val(i + 1)}`), ` ${period}`, ''].join('\n');
 }

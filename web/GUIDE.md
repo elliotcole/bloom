@@ -121,8 +121,13 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 ## Tunings: `T` (tuning mode), opt-`t` (hold)
 
 Load Scala (`.scl`) files in ⚙ → **tunings**: pick several at once.
-Scales of twelve notes to the period are taken; others are listed as skipped,
-with the reason. The library stays in this browser.
+Scales of up to twelve notes to the period are taken; larger ones are listed
+as skipped, with the reason. A scale of fewer than twelve (a raga's seven) is
+folded onto the keys: each key sounds the scale's note nearest its 12-TET
+place, so whatever plays falls into that one tonality (in a 7-note Darbari, E
+F F♯ all sound its 4/3, and B the C above). The tuning view shows each of its
+notes once and says how many it has; **export .scl** writes just those. The
+library stays in this browser.
 
 - **Each bloom has its own tuning.** In tuning mode (`T`), `]` steps to the
   next loaded tuning and `[` to the one before; 12-TET comes first. The
@@ -215,7 +220,9 @@ with the reason. The library stays in this browser.
     names what it will clear (the selected notes, or all).
   - **Root:** follows the key, or one chosen by hand.
   - **Paste a scale:** 11 ratios or cents (1/1 implied), 12, 12 and the
-    period, or a whole .scl file. It becomes the base, unaltered.
+    period, or a whole .scl file. It becomes the base, unaltered. Fewer
+    than 11 are a smaller scale, folded onto the keys as above (a last
+    value past 1150¢ is taken as the period).
   - Edits change this bloom's own copy, saved with it; cmd-Z undoes them.
     **save to library** keeps it, alterations and all, under a name for `]` / `[`; **export .scl**
     downloads it; **revert** goes back to the library's copy.
