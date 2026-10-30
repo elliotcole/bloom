@@ -832,12 +832,20 @@ export function createKeyHandler(state: KeyHandlerState) {
       else status(`${tag} ${more ? 'no voice left to add' : 'every chord is one interval already'}`);
       return true;
     }
+    // { merges two neighbours in any list (as it merges two notes at home)
+    if (ch === '{') {
+      const k = LIST_OF_MODE[m];
+      const msg = b.mergeList(k) ? `${tag} merge: two become one, ${b.getList(k).length} long` : `${tag} nothing to merge`;
+      status(msg);
+      refresh(msg);
+      return true;
+    }
     // } divides in time mode (as it splits at home), asking how many
     if (m === 'time' && ch === '}' && askCount(e, 'divide long durations into:', _memo.splitSlices, n => {
       _memo.splitSlices = n;
       return b.divideTimes(n) ? `${tag} divide: a few long durations into ${n} (no notes added)` : `${tag} no duration is long enough for ${n} parts`;
     })) return true;
-    // " repeats this list, Z trims it to the notes, as they do every list at home
+    // " repeats this list, Z fits it to the notes, as they do every list at home
     if (ch === '"' && askCount(e, `repeat the ${MODE_NAME[m]} list, times:`, _memo.repeatTimes, n => {
       _memo.repeatTimes = n;
       b.repeatLists(n, [LIST_OF_MODE[m]]);
@@ -845,7 +853,8 @@ export function createKeyHandler(state: KeyHandlerState) {
     })) return true;
     if (ch === 'Z') {
       const k = LIST_OF_MODE[m];
-      const msg = k === 'notes' ? `${tag} Z trims the other lists to the notes (at home)` : b.trimLists([k]) ? `${tag} trimmed to the ${b.notes.length} notes` : `${tag} no longer than the notes`;
+      const fit = k === 'notes' ? null : b.fitLists([k]);
+      const msg = !fit ? `${tag} Z fits the other lists to the notes (at home)` : fit.cut ? `${tag} cut to the ${b.notes.length} notes` : fit.looped ? `${tag} looped round to the ${b.notes.length} notes` : `${tag} already the notes' length`;
       status(msg);
       if (k !== 'notes') refresh(msg);
       return true;

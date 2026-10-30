@@ -194,10 +194,11 @@ export const HOME_KEYS: HomeKey[] = [
     }),
   },
   {
-    key: 'Z', label: 'trim every list to the notes',
+    key: 'Z', label: 'fit every list to the notes',
     act: c => {
-      const cut = c.b.trimLists();
-      const msg = cut ? `${cut} list${cut === 1 ? '' : 's'} trimmed to the ${c.b.notes.length} notes` : 'no list is longer than the notes';
+      const { cut, looped } = c.b.fitLists();
+      const did = [cut && `${cut} cut`, looped && `${looped} looped`].filter(Boolean).join(', ');
+      const msg = did ? `fit to the ${c.b.notes.length} notes: ${did}` : 'every list is already the notes\' length';
       c.status(msg);
       c.refresh(msg);
     },

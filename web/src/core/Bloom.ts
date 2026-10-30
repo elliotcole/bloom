@@ -1965,7 +1965,28 @@ export class Bloom {
     return true;
   }
 
-  /** The lists a bloom has, by key, for repeat and trim (intervals and figures only when in use) */
+  /**
+   * A list mode's {: the list one entry shorter, two neighbours become one.
+   * Durations add (pairs whose sum is already in the palette likelier, as at
+   * home); in the other lists the first of the pair stays (equal neighbours
+   * likelier, so the least is lost). False when the list has fewer than two.
+   */
+  mergeList(k: ListKey): boolean {
+    const arr = this.getList(k);
+    if (arr.length < 2) return false;
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const pal = k === 'time' ? new Set(this.paletteOf('time')) : null;
+    const weights = arr.slice(0, -1).map((a, i) => {
+      const b = arr[i + 1];
+      return (pal ? pal.has(roundTime((a as number) + (b as number))) : same(a, b)) ? 4 : 1;
+    });
+    const i = weightedIndex(weights);
+    const merged = k === 'time' ? roundTime((arr[i] as number) + (arr[i + 1] as number)) : arr[i];
+    this.setList(k, [...arr.slice(0, i), merged, ...arr.slice(i + 2)]);
+    return true;
+  }
+
+  /** The lists a bloom has, by key, for repeat and fit (intervals and figures only when in use) */
   private listsInUse(): ListKey[] {
     return ['notes', 'time', 'vel', 'chan', ...(this.hasIntervals() ? ['iv' as const] : []), ...(this.hasFigures() ? ['fig' as const] : [])];
   }
@@ -1978,15 +1999,21 @@ export class Bloom {
     }
   }
 
-  /** Z: each list (or just these) longer than the notes cut to their length; returns how many were cut */
-  trimLists(keys: ListKey[] = this.listsInUse()): number {
+  /**
+   * Z: each list (or just these) made the notes' length, so every loop comes
+   * round together: a longer one is cut, a shorter one looped round until it's
+   * as long. Returns how many were cut and how many looped.
+   */
+  fitLists(keys: ListKey[] = this.listsInUse()): { cut: number; looped: number } {
     const n = this.notes.length;
-    let cut = 0;
+    let cut = 0, looped = 0;
     for (const k of keys) {
       const arr = this.getList(k);
-      if (k !== 'notes' && n && arr.length > n) { this.setList(k, arr.slice(0, n)); cut++; }
+      if (k === 'notes' || !n || !arr.length || arr.length === n) continue;
+      if (arr.length > n) cut++; else looped++;
+      this.setList(k, Array.from({ length: n }, (_, i) => JSON.parse(JSON.stringify(arr[i % arr.length]))));
     }
-    return cut;
+    return { cut, looped };
   }
 
   private shapeTimes(verb: ListVerb, amount: number): boolean {

@@ -25,10 +25,10 @@ export interface CueContext {
 }
 
 const MODE_CUES: Record<CueMode, string> = {
-  pitch: '9 0 rotate · q snap to the scale · ( ) pivot · esc home',
-  time: '9 0 rotate · q quantize · } divide · ! @ double / half time · esc home',
-  vel: '9 0 rotate · y unify · q fewer levels · l L tilt · esc home',
-  chan: '9 0 rotate · y unify · q fewer channels · l L tilt · esc home',
+  pitch: '9 0 rotate · q snap to the scale · ( ) pivot · { merge · esc home',
+  time: '9 0 rotate · q quantize · { } merge / divide · ! @ double / half time · esc home',
+  vel: '9 0 rotate · y unify · q fewer levels · l L tilt · { merge · esc home',
+  chan: '9 0 rotate · y unify · q fewer channels · l L tilt · { merge · esc home',
   fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear',
   iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
@@ -43,7 +43,7 @@ const TIPS = [
   'S scramble in chunks: phrases survive (asks how many)',
   '- = calm / intensify',
   '{ } merge / split a note (} asks into how many)',
-  '" repeat every list (how many times?) · Z trim them to the notes',
+  '" repeat every list (how many times?) · Z fit them to the notes',
   '( ) pivot on the highest / loudest note',
   '[ ] step the scale flatward / sharpward',
   'l L tilt the line down / up',

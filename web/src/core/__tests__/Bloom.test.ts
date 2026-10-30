@@ -219,3 +219,34 @@ describe('thicken', () => {
     expect(tiny.notes.length).toBe(2);
   });
 });
+
+describe('fitLists', () => {
+  it('cuts the longer lists and loops the shorter ones round to the notes', () => {
+    const b = bloom([60, 62, 64, 65, 67], [80, 40], [0.25, 0.25, 0.5, 0.5, 0.25, 0.25, 1]);
+    b.chans = [1];
+    expect(b.fitLists()).toEqual({ cut: 1, looped: 2 });
+    expect(b.velocities).toEqual([80, 40, 80, 40, 80]);
+    expect(b.timeIntervals).toEqual([0.25, 0.25, 0.5, 0.5, 0.25]);
+    expect(b.chans).toEqual([1, 1, 1, 1, 1]);
+    expect(b.fitLists()).toEqual({ cut: 0, looped: 0 });
+  });
+});
+
+describe('mergeList', () => {
+  it('adds two durations, keeps the first of two velocities, and the lists get one shorter', () => {
+    const b = bloom([60, 62, 64], [80, 40, 60], [0.25, 0.25, 0.5]);
+    expect(b.mergeList('time')).toBe(true);
+    expect(b.timeIntervals.length).toBe(2);
+    expect(b.timeIntervals.reduce((a, x) => a + x, 0)).toBeCloseTo(1, 6);
+    expect(b.mergeList('vel')).toBe(true);
+    expect(b.velocities.length).toBe(2);
+    expect(b.velocities.every(v => [80, 40, 60].includes(v))).toBe(true);
+    expect(b.notes.length).toBe(3);                      // the notes weren't touched
+  });
+  it('merges a chord list and refuses a list of one', () => {
+    const b = bloom([[60, 64], 67], [80], [0.25]);
+    expect(b.mergeList('notes')).toBe(true);
+    expect(b.notes).toEqual([[60, 64]]);
+    expect(b.mergeList('vel')).toBe(false);
+  });
+});
