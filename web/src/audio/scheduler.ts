@@ -9,6 +9,14 @@ import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
 import { timebase } from './clockSync';
 
+type Timer = ReturnType<typeof setTimeout>;
+
+// A page that's covered or in a background tab gets its timers once a second
+// at best, so everything is handed to the output further ahead, stamped with
+// its time (Web MIDI and the piano both honour a timestamp)
+const LOOKAHEAD_HIDDEN_MS = 1500;
+const hidden = (): boolean => typeof document !== 'undefined' && document.hidden;
+
 // ─── BPM state ────────────────────────────────────────────────────────────────
 
 let _bpm = 60;
@@ -58,22 +66,54 @@ function endVoice(out: MidiOutput, chan: number, note: number, id: number, atMs:
 function clearVoices(out: MidiOutput): void { _voices.delete(out); }
 
 /**
+ * Everything off, now: a note-off for every voice the scheduler knows it
+ * holds (some synths and hosts ignore all-notes-off), then all-notes-off on
+ * every channel for anything else, the pedal lifted
+ */
+export function silence(out: MidiOutput | null): void {
+  if (!out) return;
+  const held = _voices.get(out);
+  held?.forEach((_, key) => noteOff(out, key >> 7, key & 127));
+  allNotesOff(out);
+  clearVoices(out);
+}
+
+/**
  * Sound one Sound at `atMs` (performance.now's clock). The note-on is handed
  * to the output `lead` ms ahead, not when it's worked out: a figure's later
  * steps may be beats away, and the voices should know what's sounding when it
- * sounds. Its timers go into `timers` so they can be cancelled (with no lead,
- * a cancelled play leaves nothing pending at the output).
+ * sounds. The note-off goes `offLead` ahead (0 while the page is visible, so a
+ * repeat of the pitch before then can still take the voice over). The timers
+ * go into `pending`, so a stop can let go of what hasn't started while what
+ * sounds still ends on time.
  */
-function scheduleSound(out: MidiOutput, s: Sound, atMs: number, lead: number, timers?: ReturnType<typeof setTimeout>[]): void {
+function scheduleSound(out: MidiOutput, s: Sound, atMs: number, lead: number, pending?: Pending, offLead = 0): void {
   const gateMs = Math.max(10, beatsToMs(s.gate));
   const ids: [number, number][] = [];
-  const on = setTimeout(() => {
+  const on: Timer = setTimeout(() => {
+    pending?.on.delete(on);
     s.notes.forEach(n => { if (n >= 0 && n <= 127) ids.push([n, startVoice(out, s.chan, n, s.vel, atMs)]); });
   }, Math.max(0, atMs - performance.now() - lead));
-  const off = setTimeout(() => {
+  const off: Timer = setTimeout(() => {
+    pending?.off.delete(off);
     ids.forEach(([n, id]) => endVoice(out, s.chan, n, id, atMs + gateMs));
-  }, Math.max(0, atMs + gateMs - performance.now()));
-  timers?.push(on, off);
+  }, Math.max(0, atMs + gateMs - performance.now() - offLead));
+  pending?.on.add(on);
+  pending?.off.add(off);
+}
+
+/** Timers of sounds not yet started (on), of their releases (off), and of the picture (visual) */
+interface Pending { on: Set<Timer>; off: Set<Timer>; visual: Set<Timer> }
+const newPending = (): Pending => ({ on: new Set(), off: new Set(), visual: new Set() });
+/** Nothing more starts and the picture stops; what sounds is released on time */
+function letGo(p: Pending): void {
+  p.on.forEach(clearTimeout); p.on.clear();
+  p.visual.forEach(clearTimeout); p.visual.clear();
+}
+/** Everything, releases too (after a silence, or when nothing was sent) */
+function cancelAll(p: Pending): void {
+  letGo(p);
+  p.off.forEach(clearTimeout); p.off.clear();
 }
 
 // ─── One-shot playback ────────────────────────────────────────────────────────
@@ -97,19 +137,20 @@ export function playOnce(
   const view = bloom.sounding(tick);   // a raga's notes as they sound
   const now = performance.now() + 5;
   let cursor = 0; // ms offset from now
-  const timeouts: ReturnType<typeof setTimeout>[] = [];
+  const pending = newPending();
+  const lead = hidden() ? LOOKAHEAD_HIDDEN_MS : 0;
 
   bloom.notes.forEach((_, i) => {
     const onAt = now + cursor;
-    view.soundsAt(i, tick + i, legato, sustain).forEach(s => scheduleSound(out, s, onAt + beatsToMs(s.at), 0, timeouts));
-    timeouts.push(setTimeout(() => onNoteOn?.(i, tick + i), cursor));
+    view.soundsAt(i, tick + i, legato, sustain).forEach(s => scheduleSound(out, s, onAt + beatsToMs(s.at), lead, pending, lead));
+    const v = setTimeout(() => { pending.visual.delete(v); onNoteOn?.(i, tick + i); }, cursor);
+    pending.visual.add(v);
     cursor += beatsToMs(view.stepAt(i, tick + i));   // an inserted figure takes its own length
   });
 
   return () => {
-    timeouts.forEach(clearTimeout);
-    allNotesOff(out);
-    clearVoices(out);
+    cancelAll(pending);
+    silence(out);
   };
 }
 
@@ -131,6 +172,7 @@ interface LoopState {
   onLoop?: () => void;
   /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
   lock: { start: number; beats: number } | null;
+  pending: Pending;
 }
 
 let _loop: LoopState | null = null;
@@ -163,11 +205,13 @@ export function startLooper(
     onCycleUpdate,
     onLoop,
     lock: null,
+    pending: newPending(),
   };
 
   state.intervalId = setInterval(() => {
     const now = performance.now();
-    const horizon = now + LOOKAHEAD_MS;
+    const lookahead = hidden() ? LOOKAHEAD_HIDDEN_MS : LOOKAHEAD_MS;
+    const horizon = now + lookahead;
 
     while (state.nextEventTime < horizon) {
       const b = state.bloom;
@@ -210,13 +254,13 @@ export function startLooper(
       const lock = state.lock;
       view.soundsAt(noteIdx, state.globalTick).forEach(s => {
         const t = lock && s.at ? timebase()?.timeAtBeat(lock.start + lock.beats + s.at) ?? null : null;
-        scheduleSound(out, s, t ?? atMs + beatsToMs(s.at), LOOKAHEAD_MS);
+        scheduleSound(out, s, t ?? atMs + beatsToMs(s.at), lookahead, state.pending, lookahead - LOOKAHEAD_MS);
       });
 
       // Fire visual callback at actual note-on time
       const idxSnap = noteIdx, tickSnap = state.globalTick;
-      const visualDelay = Math.max(0, atMs - now);
-      setTimeout(() => state.onNoteOn?.(idxSnap, tickSnap), visualDelay);
+      const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap); }, Math.max(0, atMs - now));
+      state.pending.visual.add(v);
 
       state.globalTick++;
       if (state.lock) {
@@ -236,9 +280,11 @@ export function updateLooper(bloom: Bloom): void {
   if (_loop) _loop.bloom = bloom;
 }
 
+/** Stop the loop: nothing more starts (a figure's later steps included); what sounds is released on time */
 export function stopLooper(): void {
   if (_loop) {
     clearInterval(_loop.intervalId);
+    letGo(_loop.pending);
     _loop = null;
   }
 }
@@ -253,7 +299,9 @@ interface PulsarState {
   bloom: Bloom;
   out: MidiOutput;
   rateBeats: number;
-  intervalId: ReturnType<typeof setInterval>;
+  /** the next fire, set afresh each time at the tempo of the moment */
+  timeoutId: Timer | null;
+  nextAt: number;
   onNoteOn?: (index: number, tick: number) => void;
   onFire?: () => void;
   cancelLastPlay?: () => void;
@@ -273,22 +321,27 @@ export function startPulsar(
 ): void {
   stopPulsar();
 
-  const fire = () => {
-    const p = _pulsar!;
-    p.cancelLastPlay?.();
-    p.cancelLastPlay = playOnce(p.bloom, out, p.bloom.legato, p.bloom.sustain, p.onNoteOn, p.tick);
-    p.tick += p.bloom.notes.length;
-    onFire?.();
-  };
-
   const state: PulsarState = {
     bloom,
     out,
     rateBeats,
-    intervalId: setInterval(fire, beatsToMs(rateBeats)),
+    timeoutId: null,
+    nextAt: performance.now(),
     onNoteOn,
     onFire,
     tick: startTick,
+  };
+
+  const fire = () => {
+    const p = _pulsar;
+    if (p !== state) return;
+    p.cancelLastPlay?.();
+    p.cancelLastPlay = playOnce(p.bloom, out, p.bloom.legato, p.bloom.sustain, p.onNoteOn, p.tick);
+    p.tick += p.bloom.notes.length;
+    onFire?.();
+    // from the time it was due, not the time it ran, so the pulse doesn't drift
+    p.nextAt += beatsToMs(p.rateBeats);
+    p.timeoutId = setTimeout(fire, Math.max(0, p.nextAt - performance.now()));
   };
 
   _pulsar = state;
@@ -311,7 +364,7 @@ export function getPulsarRate(): number {
 
 export function stopPulsar(): void {
   if (_pulsar) {
-    clearInterval(_pulsar.intervalId);
+    if (_pulsar.timeoutId !== null) clearTimeout(_pulsar.timeoutId);
     _pulsar.cancelLastPlay?.();
     _pulsar = null;
   }
@@ -336,7 +389,8 @@ interface GardenLoopState {
   slots: (Bloom | null)[];  // live reference — changes take effect next cycle
   out: MidiOutput;
   slotIndex: number;
-  timeoutId: ReturnType<typeof setTimeout> | null;
+  timeoutId: Timer | null;
+  nextAt: number;
   cancelCurrent: (() => void) | null;
   onNoteOn?: (index: number) => void;
 }
@@ -356,13 +410,14 @@ export function startGardenLooper(
     out,
     slotIndex: 0,
     timeoutId: null,
+    nextAt: performance.now(),
     cancelCurrent: null,
     onNoteOn,
   };
   _gardenLoop = state;
 
   const scheduleNext = () => {
-    if (!_gardenLoop) return;
+    if (_gardenLoop !== state) return;
     const slot = state.slots[state.slotIndex];
     let durMs: number;
 
@@ -375,7 +430,9 @@ export function startGardenLooper(
     }
 
     state.slotIndex = (state.slotIndex + 1) % Math.max(1, state.slots.length);
-    state.timeoutId = setTimeout(scheduleNext, durMs);
+    // from when this slot was due, not when it ran, so the garden doesn't drift
+    state.nextAt += durMs;
+    state.timeoutId = setTimeout(scheduleNext, Math.max(0, state.nextAt - performance.now()));
   };
 
   scheduleNext();
@@ -437,7 +494,7 @@ export function startGardenPulsar(
     state.slotIndex = (state.slotIndex + 1) % Math.max(1, state.slots.length);
   };
 
-  state.intervalId = setInterval(fire, beatsToMs(rateBeats));
+  state.intervalId = setInterval(fire, beatsToMs(rateBeats));   // a fixed pulse: setPulsarRate restarts it
   fire(); // fire immediately
 }
 

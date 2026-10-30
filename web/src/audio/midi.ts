@@ -28,6 +28,17 @@ const state: MidiState = {
 
 let midiAccess: MIDIAccess | null = null;
 
+// Outputs that aren't MIDI ports (the built-in piano): always offered, first,
+// and kept selected when a port comes or goes
+const _virtual: MidiOutput[] = [];
+
+/** Offer an output of the page's own beside the MIDI ports (before initMidi) */
+export function registerVirtualOutput(out: MidiOutput): void {
+  if (_virtual.includes(out)) return;
+  _virtual.push(out);
+  if (!state.outputs.includes(out)) state.outputs = [..._virtual, ...state.outputs.filter(o => !_virtual.includes(o))];
+}
+
 // ─── MIDI message routing ─────────────────────────────────────────────────────
 
 type MidiMsgHandler = (data: Uint8Array, receivedAtMs: number) => void;
@@ -75,7 +86,7 @@ export async function initMidi(): Promise<MidiState> {
 
 function _refreshOutputs(): void {
   if (!midiAccess) return;
-  state.outputs = [];
+  state.outputs = [..._virtual];
   midiAccess.outputs.forEach(output => {
     state.outputs.push({
       name: output.name ?? 'Unknown',
@@ -105,9 +116,12 @@ function _refreshInputs(): void {
   state.inputs = [];
   midiAccess.inputs.forEach(input => {
     if (/bloom tuning/i.test(input.name ?? '')) return;   // the helper's cues, for the DAW, not for playing
-    state.inputs.push({ name: input.name ?? 'Unknown', id: input.id });
+    const name = input.name ?? 'Unknown';
+    state.inputs.push({ name, id: input.id });
     // Attach message handler (safe to re-attach — browser deduplicates)
     input.onmidimessage = (ev: MIDIMessageEvent) => {
+      // a bus Bloom sends on (an IAC driver) comes back as an input: that's our own playing, not a keyboard's
+      if (state.selectedOutput && name === state.selectedOutput.name) return;
       // the event's own timestamp is when it arrived, before the page got round to it
       if (ev.data) _dispatchMsg(ev.data as Uint8Array, ev.timeStamp || performance.now());
     };

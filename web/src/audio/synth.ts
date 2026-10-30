@@ -16,7 +16,10 @@ const SAMPLE_URLS: Record<string, string> = {
   C8: 'C8.mp3',
 };
 
-const BASE_URL = 'https://tonejs.github.io/audio/salamander/';
+// Shipped with the page (public/salamander), so a venue without wifi still has
+// a piano; the set they came from is the fallback if the local copies fail
+const LOCAL_URL = `${import.meta.env.BASE_URL}salamander/`;
+const CDN_URL = 'https://tonejs.github.io/audio/salamander/';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -48,18 +51,19 @@ export function loadSynth(): Promise<void> {
     _reverb = new Tone.Reverb({ decay: 4, preDelay: 0.01 });
     await _reverb.generate();
 
-    await new Promise<void>((resolve, reject) => {
-      _sampler = new Tone.Sampler({
+    const load = (baseUrl: string) => new Promise<Tone.Sampler>((resolve, reject) => {
+      const sampler = new Tone.Sampler({
         urls: SAMPLE_URLS,
-        baseUrl: BASE_URL,
+        baseUrl,
         release: 4,
-        onload: resolve,
-        onerror: reject,
+        onload: () => resolve(sampler),
+        onerror: err => { sampler.dispose(); reject(err); },
       });
-      _sampler.connect(_dry!);
-      _sampler.connect(_reverb!);
-      _reverb!.connect(_wet!);
     });
+    _sampler = await load(LOCAL_URL).catch(() => load(CDN_URL));
+    _sampler.connect(_dry!);
+    _sampler.connect(_reverb!);
+    _reverb!.connect(_wet!);
 
     _loaded = true;
   })();

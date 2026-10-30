@@ -20,6 +20,8 @@ import { setTuningTap, tuningNow, setReplaying, replayHelper, replayPiano } from
 
 const HOLD_MS = 10_000;        // what's sounding at the stop rings this long
 const DELAY_MS = 40;           // a replay sends each message this far ahead of its time
+const AHEAD_MS = 10;           // how far ahead of its time a message is handed to the output
+const AHEAD_HIDDEN_MS = 1500;  // in a covered or background tab, whose timers run once a second
 const SAVE_EVERY_MS = 60_000;  // a take being recorded is kept this often, in case the page goes
 
 /** Times are ms from the start of the take, when the message was sent (or arrived) */
@@ -295,7 +297,8 @@ export function playTake(): boolean {
   const tick = () => {
     const now = performance.now() - T0;
     const out = host.out();
-    while (i < ev.length && ev[i][0] <= now + 10) {
+    const ahead = document.hidden ? AHEAD_HIDDEN_MS : AHEAD_MS;
+    while (i < ev.length && ev[i][0] <= now + ahead) {
       const e = ev[i++];
       const at = T0 + DELAY_MS + e[0];
       switch (e[1]) {
