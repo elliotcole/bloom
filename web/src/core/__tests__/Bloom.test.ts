@@ -134,7 +134,7 @@ describe('blend / thicken', () => {
     expect(b.timeIntervals.every(t => t > 0)).toBe(true);
     for (let i = 0; i < 20; i++) {
       const c = bloom([60, 62, 64, 65], [80, 80, 80, 80], [0.25, 0.25, 0.25, 0.25]);
-      c.thicken(0.5);
+      c.thicken();
       expect(c.timeIntervals.every(t => t > 0)).toBe(true);
     }
   });
@@ -188,5 +188,34 @@ describe('velocities', () => {
     for (let i = 0; i < 20; i++) b.mutateVelocities();
     expect(b.velocities[1]).toBe(0);
     expect(b.velocities[0]).toBeGreaterThan(0);
+  });
+});
+
+describe('thicken', () => {
+  it('adds a few notes inside the longest durations and keeps the total time', () => {
+    for (let i = 0; i < 30; i++) {
+      const b = bloom([60, 62, 64, 65, 67, 69], [80, 80, 80, 80, 80, 80], [1, 0.25, 0.25, 0.25, 0.25, 0.25]);
+      b.thicken();
+      expect(b.notes.length).toBe(7);                    // the 1 is the only note ≥ half the longest
+      expect(b.timeIntervals.reduce((a, x) => a + x, 0)).toBeCloseTo(2.25, 6);
+      expect(b.timeIntervals[0]).toBeCloseTo(0.5, 6);
+      expect(b.timeIntervals[1]).toBeCloseTo(0.5, 6);
+      expect(b.notes[1]).not.toBe(60);                   // a scale neighbour, never the same note
+      expect(b.velocities[1]).toBeLessThan(80);
+    }
+  });
+  it('adds at most three notes however long the bloom', () => {
+    const b = bloom(Array.from({ length: 40 }, (_, i) => 60 + (i % 7)), [80], [0.5]);
+    b.thicken();
+    expect(b.notes.length).toBe(43);
+  });
+  it('leaves rests alone and says so when nothing is long enough', () => {
+    const r = bloom([60, 62, 64], [0, 80, 80], [1, 0.25, 0.25]);
+    r.thicken();
+    expect(r.velocities[0]).toBe(0);
+    expect(r.timeIntervals[0]).toBeCloseTo(1, 6);       // the rest wasn't halved: the 0.25s were
+    const tiny = bloom([60, 62], [80, 80], [0.03, 0.03]);
+    expect(tiny.thicken()).toBe(false);
+    expect(tiny.notes.length).toBe(2);
   });
 });

@@ -165,7 +165,10 @@ export const HOME_KEYS: HomeKey[] = [
       return c.b.scrambleChunks(n) ? `scramble in ${n} chunks` : 'nothing to reorder';
     }, c.b.notes.length),
   },
-  v('H', 'thicken', b => b.thicken(0.3)),
+  {
+    key: 'H', label: 'thicken',
+    act: c => { c.status('thicken'); c.refresh(c.b.thicken() ? 'thicken' : 'nothing long enough to thicken'); },
+  },
   v('h', 'thin', b => b.thin()),
   v('g', 'gap', b => b.gap()),
   v('G', 'unGap', b => b.unGap()),

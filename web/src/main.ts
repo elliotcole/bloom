@@ -148,7 +148,7 @@ async function main() {
     reg('chunks',    'scramble in 3 chunks (whole notes; S asks how many)', b => { b.scrambleChunks(3); });
 
     // Density
-    reg('thicken',   'add similar notes',         b => b.thicken(0.3));
+    reg('thicken',   'new notes in the longest gaps', b => { b.thicken(); });
     reg('thin',      'remove random notes',       b => b.thin());
     reg(['gap', 'addgap'],    'insert time gap',  b => b.gap());
     reg('ungap',     'remove time gap',           b => b.unGap());

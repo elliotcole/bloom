@@ -67,7 +67,7 @@ These move each note together with its time, velocity, channel and interval.
 | `u` | stutter | `U` | sputter |
 | `d` | braid | `D` | pyramid |
 | `Y` | spray | | |
-| `h` | thin | `H` | thicken |
+| `h` | thin: drops some notes, each giving its time to the note before | `H` | thicken: a few of the longest notes (3 at most) each give half their time to a new, softer note a scale step or three away, so new notes land in the gaps and the phrase stays |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | trim: every list longer than the notes cut to their length |

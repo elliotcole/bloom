@@ -140,6 +140,7 @@ export const GESTURE = {
   breezePull: 2,     // extra likelihood for a just-moved note: 2 → three times as likely
   breezeMemory: 0.5, // how much of that pull is left after each further press
   divide: 0.2,       // share of the durations time mode's } divides (at least one)
+  thickenMax: 3,     // most notes H adds in one press
   varyVel: 6,        // largest velocity change from vary
 };
 
@@ -779,23 +780,40 @@ export class Bloom {
     return this;
   }
 
-  thicken(percentNew = 0.5): this {
-    const scale = this.appliedScale ?? this.asScale();
-    const thickener = new Bloom().seed(Math.round(this.notes.length * percentNew));
-    thickener.applyScale(scale);
-    thickener.softer();
-    this.blend(thickener);
+  /**
+   * H: a few of the longest notes (at least half the longest, likelier the
+   * longer they are) each give half their time to a new note after them, a
+   * scale step or three away and softer, so the thickening lands in the gaps
+   * and the phrase stays. At most GESTURE.thickenMax per press; false when no
+   * note is long enough to halve.
+   */
+  thicken(): boolean {
+    const evs = this.events();
+    if (!evs.length) return false;
+    const longest = Math.max(...evs.map(e => e.time));
+    const weights = evs.map(e => (e.vel > 0 && e.time >= longest / 2 && e.time / 2 >= MIN_TIME ? e.time * e.time : 0));   // rests stay rests
+    if (weights.every(w => w === 0)) return false;
+    const picked = new Set<number>();
+    const want = Math.max(1, Math.min(GESTURE.thickenMax, Math.round(evs.length * GESTURE.divide)));
+    while (picked.size < want && weights.some(w => w > 0)) {
+      const i = weightedIndex(weights);
+      picked.add(i);
+      weights[i] = 0;
+    }
+    const s = this.scale;
+    const out: NoteEvent[] = [];
+    evs.forEach((e, i) => {
+      if (!picked.has(i)) { out.push(e); return; }
+      const half = roundTime(e.time / 2);
+      const flat = Array.isArray(e.note) ? (e.note as number[])[(e.note as number[]).length - 1] : (e.note as number);
+      const steps = pick([-3, -2, -1, 1, 2, 3]);
+      const note = stepInScale(flat, s.degrees, steps, s.pitchesPerOctave);
+      out.push({ ...e, time: roundTime(e.time - half) });
+      out.push({ ...e, note, time: half, vel: Math.max(20, Math.round(e.vel / 1.2)) });
+    });
+    this.setEvents(out);
     this.enforceRange();
-    return this;
-  }
-
-  thickenLengthen(percentNew = 0.5): this {
-    const scale = this.appliedScale ?? this.asScale();
-    const thickener = new Bloom().seed(Math.round(this.notes.length * percentNew));
-    thickener.applyScale(scale);
-    this.interlace(thickener);
-    this.enforceRange();
-    return this;
+    return true;
   }
 
   gap(probability = 0.3): this {

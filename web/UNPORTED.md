@@ -14,7 +14,7 @@ Reached by no key or palette command, and some wrong with chords. In git
 history if wanted: `chord`, `chords`, `chordsShorten`, `chordsRand`,
 `extractChords`, `replaceChords`, `permute`, `flatten` (a scale degree
 flattened at random), `avgTime`, `lower`, `negHarmony` (the function stays in
-`lib/numbers`), `mutate`, `mutateD`, `mutateShape`.
+`lib/numbers`), `mutate`, `mutateD`, `mutateShape`, `thickenLengthen`.
 
 ## Part 1 — Missing Bloom.ts Methods
 
@@ -174,7 +174,7 @@ Representative palette items (abbreviated):
 - **scale:** `chooseScale`, `slantScale`, `reduceScale`, `applyScale(Dorian/Ionian/…)`
 - **time:** `newShape`, `mutateShape`, `wrapTime(0.25)`, `slower`, `faster`, `quantize`
 - **pattern:** `scramble`, `deepScramble`, `sputter`, `spray`, `mirror`, `pyramid`, `slide`
-- **density:** `thicken`, `thickenLengthen`, `thin`, `thinShorten`, `trimTo`, `rotate`
+- **density:** `thicken`, `thin`, `thinShorten`, `trimTo`, `rotate`
 - **dynamics:** `softer`, `louder`, `fan`, `avgTime`, `chordsRand`, `chords`, `chordsShorten`
 
 **Port notes:** Pure dispatch — no new logic required. Skip unported methods from the
