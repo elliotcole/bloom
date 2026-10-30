@@ -26,12 +26,13 @@ export class Garden {
     return s ? s.clone() : null;
   }
 
+  /** Delete the slot: the rest close up (the only slot is emptied instead) */
   clear(): void {
-    this.slots[this.cursor] = null;
-    // If slot was last and is now empty, remove it (if not the only slot)
-    if (this.slots[this.cursor] === null && this.slots.length > 1) {
+    if (this.slots.length > 1) {
       this.slots.splice(this.cursor, 1);
       this.cursor = Math.max(0, this.cursor - 1);
+    } else {
+      this.slots[this.cursor] = null;
     }
   }
 

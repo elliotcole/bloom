@@ -62,7 +62,7 @@ These move each note together with its time, velocity, channel and interval.
 
 | key | | key | |
 |---|---|---|---|
-| `s` | scramble | `S` | perfect shuffle |
+| `s` | scramble | `S` | scramble in chunks: asks how many (2 up to the notes), cuts the notes into that many runs and reorders the runs, so phrases survive (3 to start; it remembers) |
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
 | `d` | braid | `D` | pyramid |
@@ -107,7 +107,9 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
 ## Other home keys
 
-- **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead.
+- **Stopping:** `.` stops the loop, the pulsar and the garden's: nothing more starts (a figure's later steps included) and what sounds ends in its own time. With nothing running, `.` is a panic: every note off, now.
+
+- **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. `del` deletes the slot and the rest close up.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
 - **Figures:** `b` enters figures mode (`↵` there types them), `B` clears them. See **Figures** below.
@@ -201,7 +203,8 @@ library stays in this browser.
     | `2` | clear: back to the tuning as it came (alterations gone, and any note moved by **=** or **set** back where the library's copy has it) |
     | `1` | switch all the alterations off (the base sounds; they're kept) and on again; any change to them switches them on |
 
-    `esc` first lets go of the selected slices, then leaves tuning mode.
+    `esc` first lets go of the selected slices, then leaves tuning mode; `T` leaves
+    too, and a list-mode key (`p` `t` `v` `c` `5` `b`) leaves straight into that mode.
   - **Click a slice** to select its note: its exact ratio when it
     has one (from the file, kept exact through every alteration), cents, and
     its alterations. **− s / + s** move it by the palette's comma (`s` is the
@@ -382,7 +385,7 @@ These only move values around, so they mean exactly the same in every list.
 
 | key | verb |
 |---|---|
-| `s` / `S` | scramble / shuffle |
+| `s` / `S` | scramble / scramble in chunks (asks how many) |
 | `R` | mirror |
 | `9` `0` | rotate ← → |
 | `u` / `U` | stutter / sputter |

@@ -204,7 +204,7 @@ export class BloomEditor {
     // Keyboard shortcuts inside modal
     ov.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
-      if (e.shiftKey && e.key === 'Enter') { e.stopPropagation(); this._apply(); }
+      if (e.shiftKey && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); this._apply(); }
     });
 
     return ov;
@@ -227,6 +227,7 @@ export class BloomEditor {
 
   close(): void {
     this._overlay.classList.remove('open');
+    (document.activeElement as HTMLElement | null)?.blur?.();   // keys go back to the bloom
   }
 
   isOpen(): boolean {

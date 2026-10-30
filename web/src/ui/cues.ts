@@ -40,6 +40,7 @@ const IDLE_CUE = 'space play · n new · ? all keys';
 /** Lesser-known home keys, one at a time while nothing else needs saying */
 const TIPS = [
   "' vary: a few small changes at once",
+  'S scramble in chunks: phrases survive (asks how many)',
   '- = calm / intensify',
   '{ } merge / split a note (} asks into how many)',
   '" repeat every list (how many times?) · Z trim them to the notes',

@@ -2302,6 +2302,7 @@ export class BloomVisualization {
     });
     el.addEventListener('click', (e) => {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return;
+      if (turns() && e.altKey) return;   // opt-click turns the camera; it doesn't pin
       if (this._tuningView) {
         const d = this._degreeAt(...local(e));
         if (d >= 0) this.onTuningClick?.(d, e.shiftKey);
@@ -2653,11 +2654,13 @@ export class BloomVisualization {
     }
   }
 
-  private _drawEmpty(ctx: CanvasRenderingContext2D, cx: number, cy: number, _theme: Theme): void {
+  private _drawEmpty(ctx: CanvasRenderingContext2D, cx: number, cy: number, theme: Theme): void {
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = theme.text;
     ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
 }

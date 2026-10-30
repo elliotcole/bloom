@@ -320,6 +320,11 @@ export class GardenVisualization {
           drawDeepAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], -1, 0, theme, false);
           break;
         }
+        case 'score': {
+          const uh = minDim * 0.5, uw = w * 0.9;
+          drawScoreAt(actx, (w - uw) / 2, (h - uh) / 2, uw, uh, bloom, [], theme, false, true);
+          break;
+        }
       }
     };
 

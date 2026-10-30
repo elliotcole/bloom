@@ -42,6 +42,7 @@ export class ListTyper {
     // closes when the focus leaves the line, not when it moves between its fields
     this.el.addEventListener('focusout', (e: FocusEvent) => {
       const to = e.relatedTarget as Node | null;
+      if (!document.hasFocus()) return;   // the window lost focus (cmd-tab): what's typed waits
       if (!to || !this.el.contains(to)) this.close();
     });
     parent.appendChild(this.el);

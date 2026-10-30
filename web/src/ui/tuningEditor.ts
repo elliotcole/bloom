@@ -92,12 +92,22 @@ export class TuningEditor {
   }
 
   private get tuning(): Tuning { return editable(soundingTuning(this.host.bloom())); }
+  private _pending = false;   // an update put off while a field has focus
   private get root(): number { return soundingRoot(this.host.bloom()); }
   private name(d: number): string { return spell((this.root + d) % 12); }
 
-  /** Redraw from the bloom (after any change, from here or from keys) */
+  /** Redraw from the bloom (after any change, from here or from keys). Not while something is being typed into: that waits for the field to be left. */
   update(): void {
     if (!this._open) return;
+    const ae = document.activeElement;
+    if (ae && this._el.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) {
+      if (!this._pending) {
+        this._pending = true;
+        ae.addEventListener('blur', () => { this._pending = false; this.update(); }, { once: true });
+      }
+      return;
+    }
+    this._pending = false;
     const b = this.host.bloom();
     const t = this.tuning;
     const own = soundingTuning(b);

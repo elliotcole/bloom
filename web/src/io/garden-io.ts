@@ -77,12 +77,19 @@ export function bloomToJSON(b: Bloom): BloomJSON {
   };
 }
 
+const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+const isNoteVal = (x: unknown): boolean => isNum(x) || (Array.isArray(x) && x.length > 0 && x.every(isNoteVal));
+/** The list if it's a non-empty list of what it should be; else the fallback */
+function listOf<T>(x: unknown, ok: (v: unknown) => boolean, fallback: T[]): T[] {
+  return Array.isArray(x) && x.length > 0 && x.every(ok) ? (x as T[]) : fallback;
+}
+
 export function bloomFromJSON(json: BloomJSON): Bloom {
   const b = new Bloom();
-  b.notes = json.notes as Bloom['notes'];
-  b.velocities = json.velocities;
-  b.timeIntervals = json.timeIntervals;
-  b.chans = json.chans;
+  b.notes = listOf(json.notes, isNoteVal, [60]) as Bloom['notes'];
+  b.velocities = listOf(json.velocities, isNum, [60]);
+  b.timeIntervals = listOf(json.timeIntervals, v => isNum(v) && (v as number) > 0, [0.25]);
+  b.chans = listOf(json.chans, isNum, [0]);
   if (Array.isArray(json.intervals) && json.intervals.length > 0) {
     b.intervals = json.intervals as Bloom['intervals'];
   }
@@ -94,16 +101,17 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   if (Array.isArray(json.figureDurs) && json.figureDurs.length && json.figureDurs.every(x => typeof x === 'number' && x > 0)) b.figureDurs = json.figureDurs;
   if (typeof json.figureVel === 'number') b.figureVel = json.figureVel;
   if (typeof json.intervalVel === 'number') b.intervalVel = json.intervalVel;
-  b.lowestPossibleNote = json.lowestPossibleNote;
-  b.highestPossibleNote = json.highestPossibleNote;
-  b.lowestSeedNote = json.lowestSeedNote;
-  b.highestSeedNote = json.highestSeedNote;
-  b.timeRangeLow = json.timeRangeLow;
-  b.timeRangeHi = json.timeRangeHi;
-  b.legato = json.legato;
-  b.sustain = json.sustain;
-  b.appliedScale = json.appliedScale;
-  b.keyRoot = json.keyRoot;
+  const num = (x: unknown, d: number) => (isNum(x) ? x : d);
+  b.lowestPossibleNote = num(json.lowestPossibleNote, b.lowestPossibleNote);
+  b.highestPossibleNote = num(json.highestPossibleNote, b.highestPossibleNote);
+  b.lowestSeedNote = num(json.lowestSeedNote, b.lowestSeedNote);
+  b.highestSeedNote = num(json.highestSeedNote, b.highestSeedNote);
+  b.timeRangeLow = num(json.timeRangeLow, b.timeRangeLow);
+  b.timeRangeHi = num(json.timeRangeHi, b.timeRangeHi);
+  b.legato = num(json.legato, b.legato);
+  b.sustain = json.sustain === null ? null : num(json.sustain, b.sustain ?? 4);
+  b.appliedScale = json.appliedScale && Array.isArray(json.appliedScale.degrees) ? json.appliedScale : null;
+  b.keyRoot = num(json.keyRoot, 0);
   b.name = json.name ?? '';
   b.tuning = json.tuning ?? null;
   b.tuningRoot = json.tuningRoot ?? 0;

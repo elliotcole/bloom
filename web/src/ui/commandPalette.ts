@@ -164,8 +164,9 @@ export class CommandPalette {
     this._input.value = '';
     this._suggestEl.innerHTML = '';
 
-    // Close briefly after success
-    setTimeout(() => this.close(), 700);
+    // Close briefly after success (unless it's been reopened meanwhile)
+    if (this._closeTimer !== null) clearTimeout(this._closeTimer);
+    this._closeTimer = setTimeout(() => { this._closeTimer = null; this.close(); }, 700);
   }
 
   private _showStatus(msg: string, type: 'ok' | 'err' | ''): void {
@@ -175,7 +176,10 @@ export class CommandPalette {
 
   // ─── Open / close ───────────────────────────────────────────────────────────
 
+  private _closeTimer: ReturnType<typeof setTimeout> | null = null;
+
   open(): void {
+    if (this._closeTimer !== null) { clearTimeout(this._closeTimer); this._closeTimer = null; }
     this._input.value = '';
     this._suggestEl.innerHTML = '';
     this._statusEl.textContent = '';
@@ -187,6 +191,7 @@ export class CommandPalette {
 
   close(): void {
     this._overlay.classList.remove('open');
+    this._input.blur();   // keys go back to the bloom
   }
 
   isOpen(): boolean {

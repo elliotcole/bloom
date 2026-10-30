@@ -17,7 +17,7 @@ import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bl
 import {
   playOnce, startLooper, stopLooper, isLooping, updateLooper,
   startPulsar, stopPulsar, isPulsing, updatePulsar,
-  setPulsarRate, getPulsarRate, beatsToMs,
+  setPulsarRate, getPulsarRate, beatsToMs, silence,
   startGardenLooper, stopGardenLooper, isGardenLooping,
   startGardenPulsar, stopGardenPulsar, isGardenPulsing,
 } from '../audio/scheduler';
@@ -63,7 +63,6 @@ type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } 
 const LIST_KEYS: Record<string, ListAction> = {
   // order and length
   s: { pattern: 'scramble', label: 'scramble' },
-  S: { pattern: 'shuffle', label: 'shuffle' },
   R: { pattern: 'mirror', label: 'mirror' },
   '9': { pattern: 'rotate<', label: 'rotate <<' },
   '0': { pattern: 'rotate>', label: 'rotate >>' },
@@ -263,14 +262,26 @@ export function createKeyHandler(state: KeyHandlerState) {
   const _undo: { bloom: Bloom; pins: number[] }[] = [];
   let _splitSlices = 2;   // what } offered last time (split at home, divide in time mode)
   let _repeatTimes = 2;   // what " offered last time
+  let _chunks = 3;        // what S offered last time
 
-  /** Ask how many (2 to 16, offering the last answer), then do it; `act` returns what to say */
-  function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string): boolean {
+  /**
+   * Ask how many (2 to `max`, offering the last answer), then do it; `act`
+   * returns what to say. A selection the key was working on is lifted out
+   * again when the answer comes, so the count applies to those events alone.
+   */
+  function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string, max = 16): boolean {
     if (!state.typeList) return false;
     e.preventDefault();   // the line takes focus now: the key mustn't land in it
-    state.typeList(label, String(last), text => {
+    const hi = Math.max(2, Math.floor(max));
+    const w = _working;
+    state.typeList(label, String(Math.min(last, hi)), text => {
       const n = Number(text.trim());
-      if (!Number.isInteger(n) || n < 2 || n > 16) return 'a whole number, 2 to 16';
+      if (!Number.isInteger(n) || n < 2 || n > hi) return `a whole number, 2 to ${hi}`;
+      if (w && !_working && w.sel.every(i => i < state.bloom.notes.length)) {
+        const full = snapshotOf(state.bloom);
+        _working = { ...w, full, extracted: extractSelection(full, w.sel) };
+        state.bloom.import(_working.extracted);
+      }
       const msg = act(n);
       status(msg);
       refresh(msg);
@@ -278,6 +289,17 @@ export function createKeyHandler(state: KeyHandlerState) {
     });
     return true;
   }
+
+  /** The key as typed, caps lock seen through: a letter's case follows shift alone */
+  function keyChar(e: KeyboardEvent): string {
+    const k = e.key;
+    if (k.length === 1 && /[a-z]/i.test(k) && e.getModifierState?.('CapsLock')) return e.shiftKey ? k.toUpperCase() : k.toLowerCase();
+    return k;
+  }
+
+  // every opt combination with a meaning (by code); any other opt key does nothing,
+  // rather than acting as the plain key (as it would on Windows and Linux)
+  const ALT_CODES = new Set(['KeyT', 'KeyC', 'KeyE', 'KeyP', 'KeyW', 'Comma', 'Slash', 'Backslash', 'ArrowDown']);
   const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
   let _prevBloom = snapshotOf(state.bloom);
@@ -747,7 +769,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** Handle a key in a list mode. Returns true if the key was consumed. */
   function onListKey(e: KeyboardEvent, m: ListMode): boolean {
-    const ch = e.key;
+    const ch = keyChar(e);
     const b = state.bloom;
     const g = state.garden;
     const tag = `[${MODE_TAG[m].toLowerCase()}]`;
@@ -895,6 +917,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
 
+    // S scrambles this list in chunks, as it does the notes at home
+    if (ch === 'S' && askCount(e, `scramble the ${MODE_NAME[m]} list in chunks, how many:`, _chunks, n => {
+      _chunks = n;
+      return b.scrambleChunksList(LIST_OF_MODE[m], n) ? `${tag} scrambled in ${n} chunks` : `${tag} nothing to reorder`;
+    }, b.getList(LIST_OF_MODE[m]).length)) return true;
+
     const action = own(LIST_KEYS, ch) ? LIST_KEYS[ch] : undefined;
     if (action) {
       const label = action.labels?.[m] ?? action.label;
@@ -919,7 +947,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** Handle a key in tuning mode (the tuning view). Returns true if the key was consumed. */
   function onTuningKey(e: KeyboardEvent): boolean {
-    const ch = e.key;
+    const ch = keyChar(e);
     if (e.altKey) return false;   // opt-t holds; views, push / pop as at home
     const helpOpen = document.getElementById('help-full')?.style.display === 'block';
     const leaving = e.code === 'Escape' && !e.shiftKey && !helpOpen && !document.body.classList.contains('clean');
@@ -980,11 +1008,12 @@ export function createKeyHandler(state: KeyHandlerState) {
     // A modifier pressed on its own is only the start of a chord (shift for F)
     if (['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) return;
 
-    const ch = e.key;
+    const ch = keyChar(e);
     const shift = e.shiftKey;
     const alt = e.altKey;
     const b = state.bloom;
     const g = state.garden;
+    if (alt && !ALT_CODES.has(e.code) && !own(PITCH_ONLY, e.code) && !/^Digit/.test(e.code)) { e.preventDefault(); return; }
 
     // ─── Freeze menu: F, then the key for what to freeze ──────────────────────
     if (_freezeMenu && onFreezeKey(e)) return;
@@ -1130,12 +1159,11 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh('scramble');
       return;
     }
-    if (ch === 'S' && shift) {
-      status('shuffle');
-      b.shuffle();
-      refresh('shuffle');
-      return;
-    }
+    // S asks how many chunks, cuts the notes into that many runs and reorders the runs: a variation that keeps phrases
+    if (ch === 'S' && shift && askCount(e, 'scramble in chunks, how many:', _chunks, n => {
+      _chunks = n;
+      return b.scrambleChunks(n) ? `scramble in ${n} chunks` : 'nothing to reorder';
+    }, b.notes.length)) return;
     if (ch === 'H' && shift) {
       status('thicken');
       b.thicken(0.3);
@@ -1573,11 +1601,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       }
       return;
     }
+    // . stops what runs: nothing more starts, what sounds ends in its own time. With nothing running, it's a panic: everything off now
     if (ch === '.') {
       const wasActive = isLooping() || isPulsing() || isGardenLooping() || isGardenPulsing();
       stopLooper(); stopPulsar(); stopGardenLooper(); stopGardenPulsar();
+      if (!wasActive) { state.cancelLastPlay?.(); state.cancelLastPlay = null; silence(state.out); }
       state.viz?.deactivateAll();
-      status(wasActive ? 'stopped' : 'stopped');
+      status(wasActive ? 'stopped' : 'all notes off');
       return;
     }
     if (ch === '/' && !alt) {
@@ -1666,7 +1696,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (e.code === 'ArrowLeft') {
       e.preventDefault();
-      state.gardenViz?.animateSlide('left');
+      if (g.cursor > 0) state.gardenViz?.animateSlide('left');
       const had = g.back();
       if (shift && had) play(g.current!, `play [${g.index}]`);
       else refresh(`[${g.index}]`);

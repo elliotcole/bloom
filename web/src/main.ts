@@ -4,8 +4,8 @@ import './style.css';
 import { Bloom, BloomDefaults } from './core/Bloom';
 import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
 import { Garden } from './garden';
-import { initMidi, allNotesOff, onMidiMessage } from './audio/midi';
-import { stopAll, setBpm, getBpm } from './audio/scheduler';
+import { initMidi, onMidiMessage, onOutputChange, registerVirtualOutput } from './audio/midi';
+import { stopAll, setBpm, getBpm, silence } from './audio/scheduler';
 import { ClockFollower, setTimebase } from './audio/clockSync';
 import { setFigureSlots } from './lib/figures';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
@@ -73,20 +73,14 @@ async function main() {
     display.setStatus(`piano failed to load: ${err instanceof Error ? err.message : err}`);
   });
 
+  // The built-in piano is offered first, beside the MIDI ports, and stays chosen when a port comes or goes
+  registerVirtualOutput(pianoOutput);
   const midiState = await initMidi();
-
-  // Insert the built-in piano as the first available output
-  midiState.outputs.unshift(pianoOutput);
-  // Default to built-in piano if no output was auto-selected, or always on first load
-  if (!midiState.selectedOutput || midiState.selectedOutput !== pianoOutput) {
-    midiState.selectedOutput = pianoOutput;
-  }
+  midiState.selectedOutput = pianoOutput;   // always the piano on load
 
   function updateMidiUi() {
     midiSelectEl.innerHTML = '';
-    // Always include the built-in piano + any hardware MIDI outputs
-    const allOutputs = [pianoOutput, ...midiState.outputs.filter(o => o !== pianoOutput)];
-    allOutputs.forEach(out => {
+    midiState.outputs.forEach(out => {
       const opt = document.createElement('option');
       opt.value = out.name;
       opt.textContent = out.name;
@@ -100,15 +94,13 @@ async function main() {
   }
 
   updateMidiUi();
+  // a port plugged in or pulled out: the list follows, and so does where the keys play
+  onOutputChange(() => { updateMidiUi(); keyState.out = midiState.selectedOutput; });
 
   midiSelectEl.addEventListener('change', () => {
-    const name = midiSelectEl.value;
-    if (name === pianoOutput.name) {
-      midiState.selectedOutput = pianoOutput;
-    } else {
-      const found = midiState.outputs.find(o => o.name === name);
-      if (found) midiState.selectedOutput = found;
-    }
+    const found = midiState.outputs.find(o => o.name === midiSelectEl.value);
+    if (found) midiState.selectedOutput = found;
+    midiSelectEl.blur();   // keystrokes go back to the bloom
     updateMidiUi();
   });
 
@@ -149,6 +141,7 @@ async function main() {
     // Randomize
     reg('scramble',  'scramble whole notes',      b => b.scramble());
     reg('shuffle',   'perfect shuffle (whole notes)', b => b.shuffle());
+    reg('chunks',    'scramble in 3 chunks (whole notes; S asks how many)', b => { b.scrambleChunks(3); });
 
     // Density
     reg('thicken',   'add similar notes',         b => b.thicken(0.3));
@@ -644,7 +637,7 @@ async function main() {
   window.addEventListener('beforeunload', () => {
     if (takePhase() === 'playing') stopPlaying();
     stopAll();
-    allNotesOff(midiState.selectedOutput);
+    silence(midiState.selectedOutput);
   });
 
   // ─── Viz mode + theme selects ─────────────────────────────────────────────
@@ -933,6 +926,11 @@ async function main() {
 
   window.addEventListener('keydown', (e) => {
     if (takePhase() === 'playing') return;   // the session is set aside
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+    // not from inside an overlay or a text field: the editor's own cmd-s is the browser's
+    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen() || listTyper.isOpen()) return;
+    const t = e.target as HTMLElement | null;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && (t as HTMLInputElement).type !== 'checkbox') return;
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); doSave(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); doLoad(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); commandPalette.open(); }
