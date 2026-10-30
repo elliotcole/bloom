@@ -1,6 +1,6 @@
 // Number utility functions — ported from SuperCollider's SimpleNumber extensions in Bloom.sc
 
-import { indexInBetween, nearestInList, wrapAt } from './arrays';
+import { nearestInList, wrapAt } from './arrays';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const OCTAVE_OFFSET = -1; // SC: note 0 = C-1
@@ -65,30 +65,56 @@ export function linlin(value: number, inMin: number, inMax: number, outMin: numb
 }
 
 // ─── Scale degree conversions ─────────────────────────────────────────────────
+// One way of reading a pitch against a scale, used by every snap and step: the
+// scale's degrees wrap round the octave, so the note above the top degree is
+// as near to the next octave's first as to the top.
 
-/** Convert MIDI note to fractional scale degree */
-export function keyToDegree(note: number, scaleDegrees: number[], stepsPerOctave: number = 12): number {
-  const n = Math.floor(note / stepsPerOctave) * scaleDegrees.length;
-  const k = note % stepsPerOctave;
-  return indexInBetween(scaleDegrees, k) + n;
+/** The degrees with the top one repeated below and the bottom one above, so neighbours across the octave line count */
+function aroundOctave(scaleDegrees: number[], stepsPerOctave: number): number[] {
+  const n = scaleDegrees.length;
+  return [scaleDegrees[n - 1] - stepsPerOctave, ...scaleDegrees, scaleDegrees[0] + stepsPerOctave];
 }
 
-/** Convert scale degree to MIDI note */
-export function degreeToKey(degree: number, scaleDegrees: number[], stepsPerOctave: number = 12): number {
-  const scaleDeg = Math.round(degree);
-  const accidental = (degree - scaleDeg) * 10;
+/**
+ * MIDI note to scale degree, fractional between degrees: in C major 60 → 35,
+ * 61 → 35.5, 71 → 41; in C pentatonic 71 (B) → 29.67, nearer the C above.
+ */
+export function keyToDegree(note: number, scaleDegrees: number[], stepsPerOctave: number = 12): number {
   const size = scaleDegrees.length;
+  if (size === 0) return note;
+  const octave = Math.floor(note / stepsPerOctave);
+  const k = note - octave * stepsPerOctave;
+  const ext = aroundOctave(scaleDegrees, stepsPerOctave);   // ext[i] is degree i - 1
+  let i = 0;
+  while (i < ext.length - 2 && ext[i + 1] <= k) i++;
+  const a = ext[i], b = ext[i + 1];
+  const frac = b === a ? 0 : (k - a) / (b - a);
+  return octave * size + (i - 1) + frac;
+}
+
+/** Scale degree to MIDI note. A fractional degree is read as SuperCollider does: .1 is a semitone sharp */
+export function degreeToKey(degree: number, scaleDegrees: number[], stepsPerOctave: number = 12): number {
+  const size = scaleDegrees.length;
+  if (size === 0) return degree;
+  const scaleDeg = Math.round(degree);
+  const accidental = Math.round((degree - scaleDeg) * 10 * 1e6) / 1e6;
   const octaveShift = Math.floor(scaleDeg / size) * stepsPerOctave;
   const idx = ((scaleDeg % size) + size) % size;
   const base = scaleDegrees[idx];
   return octaveShift + base + (accidental !== 0 ? accidental * (stepsPerOctave / 12) : 0);
 }
 
-/** Snap a single note to nearest scale degree */
+/** The nearest note of the scale (a tie goes up), across the octave line: B in C pentatonic → the C above */
 export function nearestInScale(note: number, scaleDegrees: number[], stepsPerOctave: number = 12): number {
-  const octave = Math.floor(note / stepsPerOctave) * stepsPerOctave;
-  const pc = note % stepsPerOctave;
-  return nearestInList(pc, scaleDegrees) + octave;
+  if (scaleDegrees.length === 0) return note;
+  return degreeToKey(Math.round(keyToDegree(note, scaleDegrees, stepsPerOctave)), scaleDegrees, stepsPerOctave);
+}
+
+/** `k` steps of the scale from the note (snapped to the scale first), carrying across octaves */
+export function stepInScale(note: number, scaleDegrees: number[], k: number, stepsPerOctave: number = 12): number {
+  if (scaleDegrees.length === 0) return note + k;
+  const degree = Math.round(keyToDegree(note, scaleDegrees, stepsPerOctave)) + k;
+  return degreeToKey(degree, scaleDegrees, stepsPerOctave);
 }
 
 // ─── Harmony ──────────────────────────────────────────────────────────────────

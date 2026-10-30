@@ -1,6 +1,6 @@
 // Scale library and operations — ported from Scale.sc and Bloom.sc's Scale extensions
 
-import { indexInBetween, allTuples, flatNotes } from './arrays';
+import { allTuples, flatNotes } from './arrays';
 import type { NoteVal } from './arrays';
 import { keyToDegree, degreeToKey, nearestInScale } from './numbers';
 import { RAGAS } from './ragas';
@@ -260,44 +260,35 @@ export function degreeToKeyArr(degrees: number[], scaleDegrees: number[], stepsP
   return degrees.map(d => degreeToKey(d, scaleDegrees, stepsPerOctave));
 }
 
-/** Snap array of notes to scale, preferring unique pitch classes */
+/**
+ * Snap notes to the scale. A note midway between two degrees takes whichever
+ * leaves the most distinct pitch classes, so a cluster snaps to a chord rather
+ * than a unison. Nearness wraps round the octave (lib/numbers keyToDegree).
+ */
 export function nearestInScaleUniqueArr(
   notes: number[],
   scaleDegrees: number[],
   stepsPerOctave: number = 12
 ): number[] {
-  // For each note, get nearest scale tone options (possibly 2 if equidistant)
-  const octaves = notes.map(n => Math.floor(n / stepsPerOctave) * stepsPerOctave);
-  const pcs = notes.map(n => n % stepsPerOctave);
-
-  const options = pcs.map(pc => {
-    const idx = indexInBetween(scaleDegrees, pc);
-    const frac = idx % 1;
-    if (Math.abs(frac - 0.5) < 0.001 && Math.floor(idx) < scaleDegrees.length - 1) {
-      return [scaleDegrees[Math.floor(idx)], scaleDegrees[Math.ceil(idx)]];
+  if (scaleDegrees.length === 0) return [...notes];
+  const options = notes.map(n => {
+    const d = keyToDegree(n, scaleDegrees, stepsPerOctave);
+    const lo = Math.floor(d);
+    if (Math.abs(d - lo - 0.5) < 0.001) {
+      return [degreeToKey(lo, scaleDegrees, stepsPerOctave), degreeToKey(lo + 1, scaleDegrees, stepsPerOctave)];
     }
-    return [scaleDegrees[Math.round(idx) % scaleDegrees.length]];
+    return [degreeToKey(Math.round(d), scaleDegrees, stepsPerOctave)];
   });
 
   // If only 1 option per note, skip allTuples (performance)
-  const hasTies = options.some(o => o.length > 1);
-  if (!hasTies) {
-    return options.map((opt, i) => opt[0] + octaves[i]);
-  }
+  if (!options.some(o => o.length > 1)) return options.map(o => o[0]);
 
   // Cap at 12 notes to avoid exponential blowup
-  const capped = options.slice(0, 12);
-  const combos = allTuples(capped);
-  const withOctaves = combos.map(combo => combo.map((pc, i) => pc + octaves[i]));
-
-  // Sort by most unique pitch classes
-  withOctaves.sort((a, b) => new Set(b).size - new Set(a).size);
-  const best = withOctaves[0];
-
-  // If notes were capped, append remaining with simple nearest
+  const combos = allTuples(options.slice(0, 12));
+  combos.sort((a, b) => new Set(b).size - new Set(a).size);
+  const best = combos[0];
   if (notes.length > 12) {
-    const tail = notes.slice(12).map(n => nearestInScale(n, scaleDegrees, stepsPerOctave));
-    return [...best, ...tail];
+    return [...best, ...notes.slice(12).map(n => nearestInScale(n, scaleDegrees, stepsPerOctave))];
   }
   return best;
 }

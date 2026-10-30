@@ -115,17 +115,30 @@ export function scramble<T>(arr: T[]): T[] {
   return result;
 }
 
-/** Riffle / dovetail shuffle. Interleaves first and second halves. */
+/**
+ * Cut the array into `chunks` runs of neighbours (as even as they can be) and
+ * put the runs in a new order, never the old one if another is possible.
+ */
+export function scrambleChunks<T>(arr: T[], chunks: number): T[] {
+  const n = Math.max(1, Math.min(Math.round(chunks), arr.length));
+  if (n < 2) return [...arr];
+  const bounds = Array.from({ length: n + 1 }, (_, i) => Math.round((i * arr.length) / n));
+  const parts = Array.from({ length: n }, (_, i) => arr.slice(bounds[i], bounds[i + 1]));
+  let order = scramble(parts);
+  for (let t = 0; t < 8 && order.every((part, i) => part === parts[i]); t++) order = scramble(parts);
+  return order.flat() as T[];
+}
+
+/** Riffle / dovetail shuffle: the first half interleaved with the second. An odd length keeps its middle element (it ends the first half). */
 export function perfectShuffle<T>(arr: T[]): T[] {
   if (arr.length < 2) return [...arr];
-  const half = Math.floor(arr.length / 2);
-  const offset = Math.floor((arr.length + 1) / 2);
-  const indices: number[] = [];
-  for (let i = 0; i < half; i++) {
-    indices.push(i);
-    indices.push(i + offset);
+  const first = Math.ceil(arr.length / 2);
+  const out: T[] = [];
+  for (let i = 0; i < first; i++) {
+    out.push(arr[i]);
+    if (i + first < arr.length) out.push(arr[i + first]);
   }
-  return indices.map(i => arr[i]);
+  return out;
 }
 
 /** Palindrome: [a,b,c,d] → [a,b,c,d,c,b,a] */
@@ -270,13 +283,6 @@ export function flattenSingletons(arr: any[]): any[] {
     if (item.length === 1) return item[0];
     return item;
   }).filter(x => x !== undefined);
-}
-
-/** Flatten only below a certain depth */
-export function flatBelow(arr: any[], depth: number): any[] {
-  if (depth <= 0) return arr;
-  return arr.map(item => Array.isArray(item) && depth === 1 ? item : item);
-  // Used in chords: flatBelow(1) means keep outer array, flatten one level of inner
 }
 
 // ─── Doubles ─────────────────────────────────────────────────────────────────

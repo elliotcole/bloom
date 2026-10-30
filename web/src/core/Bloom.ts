@@ -6,24 +6,23 @@ import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } 
 import type { Tuning } from '../lib/tuning';
 import type { Figure, FigureStep, FigureTime } from '../lib/figures';
 import { isRunFigure, isSlotFigure, isFigure, figureSlot } from '../lib/figures';
-import { keyToDegree, degreeToKey } from '../lib/numbers';
 import {
   wrapAt, wrapExtend, flatNotes, coin, exprand, rrand,
-  scramble, perfectShuffle, mirror as mirrorArr, stutter as stutterArr,
+  scramble, scrambleChunks as scrambleChunksArr, perfectShuffle, mirror as mirrorArr, stutter as stutterArr,
   sputter as sputterArr, curdle as curdleArr, lace, slide as slideArr,
-  pyramid as pyramidArr, permute as permuteArr, rotate as rotateArr,
-  matchNesting, resamp1, normalizeSum, indexOfDoubles,
+  pyramid as pyramidArr, rotate as rotateArr,
+  matchNesting, resamp1, normalizeSum,
   moveDoublesUpOctave as moveDoublesUpOctaveArr,
 } from '../lib/arrays';
 import {
   spell, spellToPC, justAbove, justBelow,
   softRound, invertChord, invertMean as invertMeanArr,
-  negHarmony as negHarmonyFn,
+  nearestInScale, stepInScale, keyToDegree, degreeToKey,
 } from '../lib/numbers';
 import type { Scale } from '../lib/scales';
 import {
   SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
-  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, degreeToKeyArr, nameScaleDegrees, pcsKey,
+  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, nameScaleDegrees, pcsKey,
 } from '../lib/scales';
 
 // ─── Class-level defaults ──────────────────────────────────────────────────────
@@ -100,8 +99,7 @@ export type PatternOp =
 
 const PATTERNS: Record<PatternOp, <T>(arr: T[]) => T[]> = {
   scramble: arr => scramble(arr),
-  // a perfect shuffle of an odd length would drop the middle element
-  shuffle: arr => perfectShuffle(arr.length % 2 ? [...arr, arr[0]] : arr),
+  shuffle: arr => perfectShuffle(arr),
   mirror: arr => mirrorArr(arr),
   'rotate<': arr => rotateArr(arr, -1),
   'rotate>': arr => rotateArr(arr, 1),
@@ -287,7 +285,6 @@ export class Bloom {
 
   stack: Bloom[];
   private saved: Bloom | null = null;
-  private savedTimeIntervals: number[] | null = null;
   private nest: NoteArray | null = null;
 
   static maxChan = BloomDefaults.maxChan;
@@ -365,7 +362,6 @@ export class Bloom {
     b.tuningRoot = this.tuningRoot;
     b.stack = this.stack.map(s => s.clone());
     b.saved = this.saved ? this.saved.clone() : null;
-    b.savedTimeIntervals = this.savedTimeIntervals ? [...this.savedTimeIntervals] : null;
     b.nest = this.nest ? JSON.parse(JSON.stringify(this.nest)) : null;
     return b;
   }
@@ -413,6 +409,13 @@ export class Bloom {
       // velocities/chans stay at their original lengths — wrapAt handles cycling at playback
       this.nest = null;
     }
+  }
+
+  /** Change every pitch, chords kept as chords: `fn` sees the pitches flat, in order */
+  private mapPitches(fn: (note: number, i: number) => number): void {
+    this.saveNest();
+    this.notes = (flatNotes(this.notes) as number[]).map(fn);
+    this.restoreNest();
   }
 
   // ─── Seeding ───────────────────────────────────────────────────────────────
@@ -466,35 +469,27 @@ export class Bloom {
   // ─── Mutation ──────────────────────────────────────────────────────────────
 
   mutateNotes(probability = 0.3): this {
-    this.saveNest();
-    const flat = flatNotes(this.notes) as number[];
-    this.notes = flat.map(note => {
+    this.mapPitches(note => {
       const r = Math.random();
       if (r <= probability / 2) return note - 1;
       if (r >= 1 - probability) return note + 1;
       return note;
     });
-    this.restoreNest();
     this.enforceRange();
     return this;
   }
 
+  /** Some notes move a step of the scale (an off-scale note is read as its nearest scale note first) */
   mutateNotesD(probability = 0.3): this {
-    this.saveNest();
-    const flat = flatNotes(this.notes) as number[];
-    const scale = this.scale;
-    const degrees = keyToDegreeArr(flat, scale.degrees, scale.pitchesPerOctave);
-    const newDegrees = degrees.map(deg =>
-      coin(probability) ? (coin(0.5) ? deg + 1 : deg - 1) : deg,
-    );
-    this.notes = degreeToKeyArr(newDegrees, scale.degrees, scale.pitchesPerOctave);
-    this.restoreNest();
+    const s = this.scale;
+    this.mapPitches(note => (coin(probability) ? stepInScale(note, s.degrees, coin(0.5) ? 1 : -1, s.pitchesPerOctave) : note));
     this.enforceRange();
     return this;
   }
 
   mutateVelocities(maxChange = 30): this {
     this.velocities = this.velocities.map(vel => {
+      if (vel === 0) return 0;   // a rest stays a rest
       const change = Math.round(Math.random() * maxChange * (Math.random() < 0.5 ? 1 : -1));
       // Clamp to 1..127: mutation should never silence a note (vel 0 = skip at playback)
       return Math.max(1, Math.min(127, vel + change));
@@ -515,24 +510,6 @@ export class Bloom {
     return this;
   }
 
-  mutateShape(): this {
-    this.mutateTime();
-    this.mutateVelocities();
-    return this;
-  }
-
-  mutate(): this {
-    this.mutateNotes();
-    this.mutateShape();
-    return this;
-  }
-
-  mutateD(): this {
-    this.mutateNotesD();
-    this.mutateShape();
-    return this;
-  }
-
   // ─── Ordering ──────────────────────────────────────────────────────────────
 
   /** Scramble whole notes: each keeps its own time, velocity and channel */
@@ -547,13 +524,28 @@ export class Bloom {
     return this;
   }
 
-  permute(n: number): this {
-    this.notes = permuteArr(this.notes, n) as NoteArray;
-    return this;
-  }
-
   shuffle(): this {
     return this.patternEvents('shuffle');
+  }
+
+  /**
+   * Cut the notes into `chunks` runs of neighbours and put the runs in a new
+   * order. Phrases survive where a scramble would lose them: a variation.
+   * False when there's nothing to reorder.
+   */
+  scrambleChunks(chunks: number): boolean {
+    const evs = this.events();
+    if (evs.length < 2 || chunks < 2) return false;
+    this.setEvents(scrambleChunksArr(evs, chunks));
+    return true;
+  }
+
+  /** The same on one list alone; false when there's nothing to reorder */
+  scrambleChunksList(k: ListKey, chunks: number): boolean {
+    const arr = this.getList(k);
+    if (arr.length < 2 || chunks < 2) return false;
+    this.setList(k, scrambleChunksArr(arr, chunks));
+    return true;
   }
 
   deepShuffle(): this {
@@ -623,12 +615,6 @@ export class Bloom {
     return this;
   }
 
-  avgTime(): this {
-    const avg = this.timeIntervals.reduce((a, b) => a + b, 0) / this.timeIntervals.length;
-    this.timeIntervals = this.timeIntervals.map(() => avg);
-    return this;
-  }
-
   crescendo(): this {
     this.velocities = [...this.velocities].sort((a, b) => a - b);
     return this;
@@ -666,22 +652,9 @@ export class Bloom {
       this.addOne();
     } else {
       const newNote = Math.round(rrand(this.lowestPossibleNote, this.highestPossibleNote));
-      const snapped = this._nearestInScale(newNote, scale);
-      this.addOne(snapped);
+      this.addOne(nearestInScale(newNote, scale.degrees, scale.pitchesPerOctave));
     }
     return this;
-  }
-
-  private _nearestInScale(note: number, scale: Scale): number {
-    const octave = Math.floor(note / scale.pitchesPerOctave) * scale.pitchesPerOctave;
-    const pc = note % scale.pitchesPerOctave;
-    let nearest = scale.degrees[0];
-    let minDist = Math.abs(pc - scale.degrees[0]);
-    for (const d of scale.degrees) {
-      const dist = Math.abs(pc - d);
-      if (dist < minDist) { minDist = dist; nearest = d; }
-    }
-    return octave + nearest;
   }
 
   dropLast(): this {
@@ -748,9 +721,12 @@ export class Bloom {
     return this;
   }
 
+  /** Stretch one pass of the notes to `dur` beats. A time list of another length is first written out to the notes, since it's the pass that must fit. */
   scaleToDur(dur = 4): this {
-    const norm = normalizeSum(this.timeIntervals);
-    this.timeIntervals = norm.map(t => t * dur);
+    if (this.timeIntervals.length === 0 || this.notes.length === 0) return this;
+    const times = this.timeIntervals.length === this.notes.length
+      ? this.timeIntervals : this.notes.map((_, i) => wrapAt(this.timeIntervals, i));
+    this.timeIntervals = normalizeSum(times).map(t => Math.max(MIN_TIME, roundTime(t * dur)));
     return this;
   }
 
@@ -771,35 +747,15 @@ export class Bloom {
 
   // ─── Thinning ──────────────────────────────────────────────────────────────
 
+  /** Drop some notes (whole events, a chord as one), each giving its time to the note before it. Never thins to a single note. */
   thin(probability = 0.3): this {
-    this.saveNest();
-    const flat = flatNotes(this.notes) as number[];
-
-    const newNotes: number[] = [];
-    const newVels: number[] = [];
-    const newTimes: number[] = [];
-    const newChans: number[] = [];
-
-    flat.forEach((note, count) => {
-      if (Math.random() > probability) {
-        newNotes.push(note);
-        newVels.push(wrapAt(this.velocities, count));
-        newTimes.push(wrapAt(this.timeIntervals, count));
-        newChans.push(wrapAt(this.chans, count));
-      } else {
-        // Add time to previous note's duration
-        if (newTimes.length > 0) newTimes[newTimes.length - 1] += wrapAt(this.timeIntervals, count);
-      }
+    const evs = this.events();
+    const kept: NoteEvent[] = [];
+    evs.forEach(ev => {
+      if (Math.random() > probability) kept.push(ev);
+      else if (kept.length) kept[kept.length - 1] = { ...kept[kept.length - 1], time: roundTime(kept[kept.length - 1].time + ev.time) };
     });
-
-    if (newNotes.length > 1) {
-      this.notes = newNotes;
-      this.velocities = newVels;
-      this.timeIntervals = newTimes;
-      this.chans = newChans;
-    }
-    this.restoreNest();
-    this.trimTo(newNotes.length);
+    if (kept.length > 1 && kept.length < evs.length) this.setEvents(kept);
     return this;
   }
 
@@ -855,14 +811,16 @@ export class Bloom {
     return this;
   }
 
+  /** A pitch (or chord) that comes round again is dropped: the first of each stays, with its time, vel and chan */
   removeDoubles(): this {
-    const groups = indexOfDoubles(flatNotes(this.notes) as number[]);
-    const toRemove = new Set<number>();
-    groups.forEach(group => group.slice(1).forEach(i => toRemove.add(i)));
-    this.notes = this.notes.filter((_, i) => !toRemove.has(i));
-    this.timeIntervals = this.timeIntervals.filter((_, i) => !toRemove.has(i));
-    this.velocities = this.velocities.filter((_, i) => !toRemove.has(i));
-    this.chans = this.chans.filter((_, i) => !toRemove.has(i));
+    const seen = new Set<string>();
+    const kept = this.events().filter(ev => {
+      const key = JSON.stringify(ev.note);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (kept.length && kept.length < this.notes.length) this.setEvents(kept);
     return this;
   }
 
@@ -994,13 +952,15 @@ export class Bloom {
     this.timeIntervals = lace([this.timeIntervals, softerBloom.timeIntervals], this.notes.length);
     this.chans = lace([this.chans, softerBloom.chans], this.notes.length);
 
-    // Adjust time intervals: split each orig-new pair
+    // Each new note sounds inside the time of the note before it: that note
+    // keeps what's left, or the two halve it when the new one's time is as long
     const newTime: number[] = [];
     for (let i = 0; i < this.timeIntervals.length - 1; i += 2) {
       const orig = this.timeIntervals[i];
       const next = this.timeIntervals[i + 1] ?? 0;
-      newTime.push(Math.abs(orig - next));
-      newTime.push(next);
+      const inner = next < orig - MIN_TIME ? next : orig / 2;
+      newTime.push(Math.max(MIN_TIME, roundTime(orig - inner)));
+      newTime.push(Math.max(MIN_TIME, roundTime(inner)));
     }
     if (this.timeIntervals.length % 2 !== 0) newTime.push(this.timeIntervals[this.timeIntervals.length - 1]);
     this.timeIntervals = newTime;
@@ -1082,22 +1042,19 @@ export class Bloom {
 
   // ─── Pitch ─────────────────────────────────────────────────────────────────
 
+  /** Every note by semitones; the scale and key go with them, so C major up one is Db major */
   transpose(semitones = 0): this {
-    this.saveNest();
-    this.notes = (flatNotes(this.notes) as number[]).map(n => n + semitones);
-    this.appliedScale = null;
-    this.restoreNest();
+    this.mapPitches(n => n + semitones);
+    if (this.appliedScale) this.appliedScale = scaleTranspose(this.appliedScale, semitones);
+    this.keyRoot = (((this.keyRoot + semitones) % 12) + 12) % 12;
     this.enforceRange();
     return this;
   }
 
+  /** Every note by steps of the scale (an off-scale note from its nearest scale note); chords stay chords */
   dTranspose(steps = 0): this {
-    const scale = this.appliedScale ?? this.asScale();
-    const degrees = (flatNotes(this.notes) as number[]).map(n =>
-      keyToDegreeArr([n], scale.degrees, scale.pitchesPerOctave)[0],
-    );
-    const newDegrees = degrees.map(d => d + steps);
-    this.notes = degreeToKeyArr(newDegrees, scale.degrees, scale.pitchesPerOctave);
+    const s = this.scale;
+    this.mapPitches(n => stepInScale(n, s.degrees, steps, s.pitchesPerOctave));
     this.enforceRange();
     return this;
   }
@@ -1212,98 +1169,44 @@ export class Bloom {
     return this;
   }
 
-  negHarmony(root?: number): this {
-    const r = root ?? this.keyRoot;
-    this.notes = (flatNotes(this.notes) as number[]).map(n => negHarmonyFn(n, r));
+  /**
+   * Invert the chord of all the notes `i` times (lib/numbers invertChord) and
+   * move the result so one note stays put: the highest (pivot), the lowest
+   * (pivotBass) or the one at the loudest event (pivotLoudest). Chords stay chords.
+   */
+  private pivotOn(i: number, diffOf: (orig: number[], inverted: number[]) => number): this {
+    const flat = flatNotes(this.notes) as number[];
+    if (flat.length === 0) return this;
+    let inverted = flat;
+    for (let k = 0; k < Math.max(1, i); k++) inverted = invertChord(inverted);
+    const diff = diffOf(flat, inverted);
+    this.mapPitches((_, j) => inverted[j] - diff);
+    this.enforceRange();
     this.appliedScale = this.asScale();
-    return this;
-  }
-
-  lower(): this {
-    const i = Math.floor(Math.random() * this.notes.length);
-    (this.notes as number[])[i] -= 1;
     return this;
   }
 
   pivot(i = 1): this {
-    this.saveNest();
-    this.notes = flatNotes(this.notes) as number[];
-
-    let newBloom: Bloom = this;
-    for (let k = 0; k < i; k++) {
-      newBloom = this.clone();
-      newBloom.invert();
-    }
-
-    const highestIdx = this._highestNoteIdx(newBloom.notes as number[]);
-    const origHighestIdx = this._highestNoteIdx(this.notes as number[]);
-    const diff = (newBloom.notes as number[])[highestIdx] - (this.notes as number[])[origHighestIdx];
-    newBloom.notes = (newBloom.notes as number[]).map(n => n - diff);
-
-    this.notes = newBloom.notes;
-    this.enforceRange();
-    this.restoreNest();
-    this.appliedScale = this.asScale();
-    return this;
+    return this.pivotOn(i, (o, n) => Math.max(...n) - Math.max(...o));
   }
 
   pivotBass(i = 1): this {
-    this.saveNest();
-    this.notes = flatNotes(this.notes) as number[];
-
-    let newBloom: Bloom = this;
-    for (let k = 0; k < i; k++) {
-      newBloom = this.clone();
-      newBloom.invert();
-    }
-
-    const lowestIdx = this._lowestNoteIdx(newBloom.notes as number[]);
-    const origLowestIdx = this._lowestNoteIdx(this.notes as number[]);
-    const diff = (newBloom.notes as number[])[lowestIdx] - (this.notes as number[])[origLowestIdx];
-    newBloom.notes = (newBloom.notes as number[]).map(n => n - diff);
-
-    this.notes = newBloom.notes;
-    this.enforceRange();
-    this.restoreNest();
-    this.appliedScale = this.asScale();
-    return this;
+    return this.pivotOn(i, (o, n) => Math.min(...n) - Math.min(...o));
   }
 
   pivotLoudest(i = 1): this {
-    this.saveNest();
-    this.notes = flatNotes(this.notes) as number[];
-
-    let newBloom: Bloom = this;
-    for (let k = 0; k < i; k++) {
-      newBloom = this.clone();
-      newBloom.invert();
-    }
-
-    const loudestIdx = this._loudestNoteIdx();
-    const origNote = (this.notes as number[])[loudestIdx];
-    const newNote = (newBloom.notes as number[])[loudestIdx];
-    const diff = newNote - origNote;
-    newBloom.notes = (newBloom.notes as number[]).map(n => n - diff);
-
-    this.notes = newBloom.notes;
-    this.enforceRange();
-    this.restoreNest();
-    this.appliedScale = this.asScale();
-    return this;
+    const j = this.loudestFlatIdx();
+    return this.pivotOn(i, (o, n) => n[j] - o[j]);
   }
 
-  flatten(howMany = 1): this {
-    const currentScale = this.asScale();
-    const size = currentScale.degrees.length;
-    const changes = scramble([
-      ...Array(howMany).fill(-1),
-      ...Array(Math.max(0, size - howMany)).fill(0),
-    ].slice(0, size));
-    const newDegrees = currentScale.degrees
-      .map((d, i) => ((d + changes[i]) % 12 + 12) % 12)
-      .sort((a, b) => a - b);
-    this.applyScale({ degrees: newDegrees, pitchesPerOctave: 12, name: 'Flattened' });
-    return this;
+  /** Where the loudest event's first pitch sits among the pitches flat (the first such event on a tie) */
+  private loudestFlatIdx(): number {
+    if (this.velocities.length === 0 || this.notes.length === 0) return 0;
+    const vel = this.notes.map((_, i) => wrapAt(this.velocities, i));
+    const e = vel.indexOf(Math.max(...vel));
+    let j = 0;
+    for (let i = 0; i < e; i++) j += Array.isArray(this.notes[i]) ? (flatNotes([this.notes[i]]) as number[]).length : 1;
+    return j;
   }
 
   // ─── Scale / Diatonicism ───────────────────────────────────────────────────
@@ -1350,16 +1253,11 @@ export class Bloom {
     }
 
     if (typeof root === 'string') root = spellToPC(root);
-    if (root !== undefined) this.keyRoot = root % 12;
+    if (root !== undefined) this.keyRoot = ((root % 12) + 12) % 12;
 
-    const rootZeroDegrees = newScale.degrees.map(d => ((d - this.keyRoot) % 12 + 12) % 12).sort((a, b) => a - b);
-    const rootShiftedDegrees = rootZeroDegrees.map(d => (d + this.keyRoot) % 12).sort((a, b) => a - b);
-
-    this.appliedScale = { ...newScale, degrees: rootShiftedDegrees };
-    this.notes = nearestInScaleUniqueArr(
-      flatNotes(this.notes) as number[],
-      rootShiftedDegrees,
-    );
+    const degrees = [...new Set(newScale.degrees.map(this.pcOf))].sort((a, b) => a - b);
+    this.appliedScale = { ...newScale, degrees };
+    if (degrees.length) this.notes = nearestInScaleUniqueArr(flatNotes(this.notes) as number[], degrees);
     this.restoreNest();
     return this;
   }
@@ -1453,8 +1351,7 @@ export class Bloom {
 
   setRoot(root: number | string): this {
     if (typeof root === 'string') root = spellToPC(root);
-    const scale = this.appliedScale ?? this.asScale();
-    this.applyScale(scale, root % 12);
+    this.applyScale(this.scale, ((root % 12) + 12) % 12);
     return this;
   }
 
@@ -1466,8 +1363,10 @@ export class Bloom {
     return this.setRoot(this.keyRoot - 7);
   }
 
+  /** The scale loses one of its notes (never the last); notes on it move to the nearest left */
   reduceScale(): this {
-    const degrees = [...this.asScale().degrees];
+    const degrees = [...this.scale.degrees];
+    if (degrees.length < 2) return this;
     degrees.splice(Math.floor(Math.random() * degrees.length), 1);
     const newName = this.appliedScale ? `Reduced ${this.appliedScale.name}` : 'Reduced';
     this.applyScale({ degrees, pitchesPerOctave: 12, name: newName });
@@ -1475,67 +1374,6 @@ export class Bloom {
   }
 
   // ─── Chords ────────────────────────────────────────────────────────────────
-
-  private saveTimeIntervals(): void {
-    this.savedTimeIntervals = [...this.timeIntervals];
-  }
-
-  private restoreTimeIntervals(): void {
-    if (this.savedTimeIntervals) this.timeIntervals = [...this.savedTimeIntervals];
-  }
-
-  chord(): this {
-    this.saveTimeIntervals();
-    this.notes = [this.notes as NoteVal[]];
-    this.timeIntervals = [this.timeIntervals.reduce((a, b) => a + b, 0)];
-    this.velocities = [this.velocities[0]];
-    this.chans = [this.chans[0]];
-    return this;
-  }
-
-  chords(notesPerChord = 3): this {
-    this.saveTimeIntervals();
-    this.flattenChords();
-    const flat = this.notes as number[];
-    const groups: NoteArray = [];
-    for (let i = 0; i < flat.length; i += notesPerChord) {
-      const chunk = flat.slice(i, i + notesPerChord);
-      groups.push(chunk.length === 1 ? chunk[0] : chunk);
-    }
-    this.notes = groups;
-    this.timeIntervals = groups.map((_, i) =>
-      wrapAt(this.savedTimeIntervals ?? this.timeIntervals, i),
-    );
-    this.velocities = groups.map((_, i) => wrapAt(this.velocities, i));
-    return this;
-  }
-
-  chordsShorten(notesPerChord = 3): this {
-    this.saveTimeIntervals();
-    this.flattenChords();
-    const flat = this.notes as number[];
-    const groups: NoteArray = [];
-    for (let i = 0; i < flat.length; i += notesPerChord) {
-      const chunk = flat.slice(i, i + notesPerChord);
-      groups.push(chunk.length === 1 ? chunk[0] : chunk);
-    }
-    this.notes = groups;
-    this.velocities = groups.map((_, i) => wrapAt(this.velocities, i));
-    return this;
-  }
-
-  chordsRand(probability = 1 / 3): this {
-    this.saveTimeIntervals();
-    this.flattenChords();
-    const groups = curdleArr(this.notes as NoteVal[], probability);
-    this.notes = groups.map(g => (g.length === 1 ? g[0] : g)) as NoteArray;
-    this.timeIntervals = this.notes.map((item, i) => {
-      const base = wrapAt(this.savedTimeIntervals ?? this.timeIntervals, i);
-      return Array.isArray(item) ? base : base;
-    });
-    this.velocities = this.notes.map((_, i) => wrapAt(this.velocities, i));
-    return this;
-  }
 
   chordsRandShorten(probability = 1 / 3): this {
     this.flattenChords();
@@ -1546,9 +1384,6 @@ export class Bloom {
 
   flattenChords(): this {
     this.notes = flatNotes(this.notes) as NoteArray;
-    this.velocities = flatNotes(this.velocities as unknown as NoteArray) as number[];
-    this.chans = flatNotes(this.chans as unknown as NoteArray) as number[];
-    this.restoreTimeIntervals();
     return this;
   }
 
@@ -1556,27 +1391,6 @@ export class Bloom {
     this.notes = this.notes.map(note =>
       Array.isArray(note) ? (note as NoteVal[])[0] : note,
     ) as NoteArray;
-    return this;
-  }
-
-  extractChords(): number[][] {
-    const result: number[][] = [];
-    this.notes.forEach(item => {
-      if (Array.isArray(item) && (item as NoteVal[]).length > 1) {
-        result.push(item as number[]);
-      }
-    });
-    return result;
-  }
-
-  replaceChords(chords: number[][]): this {
-    const queue = [...chords].reverse();
-    this.notes = this.notes.map(item => {
-      if (Array.isArray(item) && (item as NoteVal[]).length > 1) {
-        return queue.pop() ?? item;
-      }
-      return item;
-    }) as NoteArray;
     return this;
   }
 
@@ -1965,7 +1779,7 @@ export class Bloom {
     if (n === 0) return true;
     const scale = this.appliedScale ?? this.asScale();
     const toDeg = (m: number) => keyToDegree(m, scale.degrees, scale.pitchesPerOctave);
-    const toKey = (d: number) => degreeToKey(Math.round(d), scale.degrees, scale.pitchesPerOctave);
+    const toKey = (d: number) => degreeToKey(Math.round(d), scale.degrees, scale.pitchesPerOctave);   // whole degrees only
     const degs = flat.map(toDeg);
     const sorted = [...degs].sort((a, b) => a - b);
     const centre = sorted[Math.floor((n - 1) / 2)];
@@ -2626,8 +2440,7 @@ export class Bloom {
   }
 
   private stepPitch(note: number, k: number, s: Scale): number {
-    const degree = Math.round(keyToDegree(note, s.degrees, s.pitchesPerOctave));
-    return degreeToKey(degree + k, s.degrees, s.pitchesPerOctave);
+    return stepInScale(note, s.degrees, k, s.pitchesPerOctave);
   }
 
   /** Move the `count` notes farthest from the centre one scale step outward (dir 1) or inward (dir -1) */
@@ -2680,19 +2493,10 @@ export class Bloom {
 
     const noteVal = wrapAt(this.notes, index);
     const parents = Array.isArray(noteVal) ? flatNotes(noteVal as NoteArray) as number[] : [noteVal as number];
-    const scale = ivs.some(isDiatonic) ? this.scale : null;
-
     const added: number[] = [];
     parents.forEach(parent => {
       ivs.forEach(iv => {
-        let n = scale && isDiatonic(iv)
-          ? degreeToKey(
-            Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + countOf(iv),
-            scale.degrees, scale.pitchesPerOctave,
-          )
-          : parent + iv;
-        while (n > this.highestPossibleNote) n -= 12;
-        while (n < this.lowestPossibleNote) n += 12;
+        const n = this.moveBy(parent, iv);
         if (!parents.includes(n) && !added.includes(n)) added.push(n);
       });
     });
@@ -2895,9 +2699,7 @@ export class Bloom {
   /** A pitch moved by an interval (lib/intervals) as the intervals list moves it, kept in range */
   private moveBy(parent: number, iv: number): number {
     const scale = this.scale;
-    let n = isDiatonic(iv)
-      ? degreeToKey(Math.round(keyToDegree(parent, scale.degrees, scale.pitchesPerOctave)) + countOf(iv), scale.degrees, scale.pitchesPerOctave)
-      : parent + iv;
+    let n = isDiatonic(iv) ? stepInScale(parent, scale.degrees, countOf(iv), scale.pitchesPerOctave) : parent + iv;
     while (n > this.highestPossibleNote) n -= 12;
     while (n < this.lowestPossibleNote) n += 12;
     return n;
@@ -3312,7 +3114,7 @@ export class Bloom {
 
     this.velocities = this.velocities.map(vel => Math.max(0, Math.min(127, vel)));
 
-    this.timeIntervals = this.timeIntervals.map(ti => (ti < 0 ? 0.05 : ti));
+    this.timeIntervals = this.timeIntervals.map(ti => (ti < MIN_TIME ? MIN_TIME : ti));
     this.chans = this.chans.map(ch => (ch > 15 ? 0 : ch));
 
     this.notes = newNotes as NoteArray;

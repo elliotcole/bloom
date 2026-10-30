@@ -8,6 +8,14 @@ Excludes SC-specific infrastructure that the web architecture already supersedes
 
 ---
 
+## Part 0 — Ported, then removed (30 Oct 2026)
+
+Reached by no key or palette command, and some wrong with chords. In git
+history if wanted: `chord`, `chords`, `chordsShorten`, `chordsRand`,
+`extractChords`, `replaceChords`, `permute`, `flatten` (a scale degree
+flattened at random), `avgTime`, `lower`, `negHarmony` (the function stays in
+`lib/numbers`), `mutate`, `mutateD`, `mutateShape`.
+
 ## Part 1 — Missing Bloom.ts Methods
 
 Functions present in `bloom.sc` but not yet in `Bloom.ts`.
