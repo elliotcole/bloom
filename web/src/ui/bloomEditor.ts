@@ -4,6 +4,7 @@ import { Bloom } from '../core/Bloom';
 import { formatIntervals, parseIntervals } from '../lib/intervals';
 import type { NoteVal } from '../lib/arrays';
 import { spellOctave } from '../lib/numbers';
+import { Overlay, onKeys } from './overlay';
 
 // ─── Note parsing / formatting ────────────────────────────────────────────────
 
@@ -130,8 +131,7 @@ export function formatNoteVal(n: NoteVal): string {
 
 // ─── BloomEditor ──────────────────────────────────────────────────────────────
 
-export class BloomEditor {
-  private _overlay: HTMLElement;
+export class BloomEditor extends Overlay {
   private _notesTA!: HTMLTextAreaElement;
   private _velTA!: HTMLTextAreaElement;
   private _timeTA!: HTMLTextAreaElement;
@@ -143,12 +143,26 @@ export class BloomEditor {
   private _bloom: Bloom | null = null;
 
   constructor(onApply: (bloom: Bloom) => void) {
+    super(BloomEditor._build(), { backdrop: true });
     this._onApply = onApply;
-    this._overlay = this._build();
-    document.body.appendChild(this._overlay);
+    const ov = this.el;
+    this._notesTA  = ov.querySelector('#be-notes')!;
+    this._velTA    = ov.querySelector('#be-vel')!;
+    this._timeTA   = ov.querySelector('#be-time')!;
+    this._chanTA   = ov.querySelector('#be-chan')!;
+    this._intvTA   = ov.querySelector('#be-intv')!;
+    this._scaleInp = ov.querySelector('#be-scale')!;
+    this._statusEl = ov.querySelector('#be-status')!;
+    ov.querySelector('#be-apply')!.addEventListener('click', () => this._apply());
+    ov.querySelector('#be-close')!.addEventListener('click', () => this.close());
+    // esc closes, shift-↵ applies; typing's own keys (↵ for a new line among them) stand
+    onKeys(ov, {
+      Escape: () => this.close(),
+      Enter: e => (e.shiftKey ? this._apply() : false),
+    });
   }
 
-  private _build(): HTMLElement {
+  private static _build(): HTMLElement {
     const ov = document.createElement('div');
     ov.id = 'bloom-editor';
 
@@ -187,26 +201,6 @@ export class BloomEditor {
       </div>
     `;
 
-    this._notesTA  = ov.querySelector('#be-notes')!;
-    this._velTA    = ov.querySelector('#be-vel')!;
-    this._timeTA   = ov.querySelector('#be-time')!;
-    this._chanTA   = ov.querySelector('#be-chan')!;
-    this._intvTA   = ov.querySelector('#be-intv')!;
-    this._scaleInp = ov.querySelector('#be-scale')!;
-    this._statusEl = ov.querySelector('#be-status')!;
-
-    ov.querySelector('#be-apply')!.addEventListener('click', () => this._apply());
-    ov.querySelector('#be-close')!.addEventListener('click', () => this.close());
-
-    // Click on the overlay backdrop closes
-    ov.addEventListener('click', (e) => { if (e.target === ov) this.close(); });
-
-    // Keyboard shortcuts inside modal
-    ov.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
-      if (e.shiftKey && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); this._apply(); }
-    });
-
     return ov;
   }
 
@@ -220,18 +214,8 @@ export class BloomEditor {
     this._scaleInp.value = bloom.scale.degrees.join(' ');
     this._statusEl.textContent = '';
     this._statusEl.className = 'be-status';
-    this._overlay.classList.add('open');
-    this._notesTA.focus();
+    this.show(this._notesTA);
     this._notesTA.select();
-  }
-
-  close(): void {
-    this._overlay.classList.remove('open');
-    (document.activeElement as HTMLElement | null)?.blur?.();   // keys go back to the bloom
-  }
-
-  isOpen(): boolean {
-    return this._overlay.classList.contains('open');
   }
 
   private _apply(): void {

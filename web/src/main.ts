@@ -4,7 +4,7 @@ import './style.css';
 import { Bloom, BloomDefaults } from './core/Bloom';
 import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
 import { Garden } from './garden';
-import { initMidi, onMidiMessage, onOutputChange, registerVirtualOutput } from './audio/midi';
+import { initMidi, getState as midiStateNow, onMidiMessage, onOutputChange, registerVirtualOutput } from './audio/midi';
 import { stopAll, setBpm, getBpm, silence } from './audio/scheduler';
 import { ClockFollower, setTimebase } from './audio/clockSync';
 import { setFigureSlots } from './lib/figures';
@@ -36,6 +36,7 @@ import { cueFor, TAKE_CUE } from './ui/cues';
 import { setNoticeKey } from './ui/notice';
 import { BloomEditor } from './ui/bloomEditor';
 import { CommandPalette } from './ui/commandPalette';
+import { Overlay } from './ui/overlay';
 
 async function main() {
   // ─── DOM refs ───────────────────────────────────────────────────────────────
@@ -73,10 +74,13 @@ async function main() {
     display.setStatus(`piano failed to load: ${err instanceof Error ? err.message : err}`);
   });
 
-  // The built-in piano is offered first, beside the MIDI ports, and stays chosen when a port comes or goes
+  // The built-in piano is offered first, beside the MIDI ports, and stays chosen when a port comes or goes.
+  // The page doesn't wait for the MIDI permission (a prompt left unanswered would leave it dead): the
+  // piano is ready now, and the ports join the list when the browser allows them
   registerVirtualOutput(pianoOutput);
-  const midiState = await initMidi();
+  const midiState = midiStateNow();
   midiState.selectedOutput = pianoOutput;   // always the piano on load
+  void initMidi().then(() => { updateMidiUi(); if (midiState.error) display.setStatus(midiState.error); });
 
   function updateMidiUi() {
     midiSelectEl.innerHTML = '';
@@ -611,8 +615,8 @@ async function main() {
     || e.code === 'Backslash' || e.key === '?' || (e.code === 'Escape' && !e.shiftKey);
 
   window.addEventListener('keydown', (e) => {
-    // Don't send keystrokes to bloom when editor or palette is open
-    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen() || listTyper.isOpen()) return;
+    // an overlay has the keyboard (palette, editor, picker, the typing line)
+    if (Overlay.anyOpen()) return;
     // ...or while typing in a text field (the tuning editor, settings numbers)
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'TEXTAREA'
@@ -928,7 +932,7 @@ async function main() {
     if (takePhase() === 'playing') return;   // the session is set aside
     if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
     // not from inside an overlay or a text field: the editor's own cmd-s is the browser's
-    if (bloomEditor.isOpen() || commandPalette.isOpen() || scalePicker.isOpen() || listTyper.isOpen()) return;
+    if (Overlay.anyOpen()) return;
     const t = e.target as HTMLElement | null;
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && (t as HTMLInputElement).type !== 'checkbox') return;
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); doSave(); }

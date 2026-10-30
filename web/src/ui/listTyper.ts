@@ -14,13 +14,14 @@ export type TyperField =
   | { kind: 'choice'; label: string; options: string[]; value: string }
   | { kind: 'text'; label: string; value: string; size?: number; when?: (values: string[]) => boolean };
 
+import { Overlay } from './overlay';
+
 /** The entries of a typed list, as [start, end) ranges: (…) and […] groups whole, else runs of non-space */
 function entries(text: string): [number, number][] {
   return [...text.matchAll(/\([^)]*\)?|\[[^\]]*\]?|\S+/g)].map(m => [m.index!, m.index! + m[0].length]);
 }
 
-export class ListTyper {
-  private el: HTMLElement;
+export class ListTyper extends Overlay {
   private label: HTMLElement;
   private input: HTMLInputElement;
   private err: HTMLElement;
@@ -30,7 +31,7 @@ export class ListTyper {
   private values: string[] = [];
 
   constructor(parent: HTMLElement) {
-    this.el = document.createElement('div');
+    super(document.createElement('div'), { parent });
     this.el.id = 'list-typer';
     this.el.innerHTML = '<span class="lt-label"></span><input type="text" spellcheck="false" autocomplete="off"><span class="lt-fields"></span><span class="lt-err"></span>';
     this.label = this.el.querySelector('.lt-label')!;
@@ -45,10 +46,7 @@ export class ListTyper {
       if (!document.hasFocus()) return;   // the window lost focus (cmd-tab): what's typed waits
       if (!to || !this.el.contains(to)) this.close();
     });
-    parent.appendChild(this.el);
   }
-
-  isOpen(): boolean { return this.el.classList.contains('open'); }
 
   /** A key in the list or a text field: esc leaves, ↵ sets, ← → step through the entries */
   private keyIn(e: KeyboardEvent, input: HTMLInputElement): void {
@@ -79,8 +77,7 @@ export class ListTyper {
     this.fields = fields;
     this.values = fields.map(f => f.value);
     this.buildFields();
-    this.el.classList.add('open');
-    this.input.focus();
+    this.show(this.input);
     this.input.select();
   }
 
@@ -159,10 +156,5 @@ export class ListTyper {
     if (pick) input.setSelectionRange(pick[0], pick[1]);
   }
 
-  close(): void {
-    if (!this.isOpen()) return;
-    this.el.classList.remove('open');
-    this.commit = null;
-    (document.activeElement as HTMLElement | null)?.blur();
-  }
+  protected override onClose(): void { this.commit = null; }
 }

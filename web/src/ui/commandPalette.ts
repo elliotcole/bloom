@@ -1,6 +1,7 @@
 // Command palette — open with Cmd+K, dot-chain commands, Tab/↑↓ to complete, ↵ to execute
 
 import { Bloom } from '../core/Bloom';
+import { Overlay, onKeys } from './overlay';
 
 export interface PaletteCommand {
   /** Primary name and any aliases (all lowercase) */
@@ -11,8 +12,7 @@ export interface PaletteCommand {
   fn: (bloom: Bloom) => void;
 }
 
-export class CommandPalette {
-  private _overlay: HTMLElement;
+export class CommandPalette extends Overlay {
   private _input!: HTMLInputElement;
   private _suggestEl!: HTMLElement;
   private _statusEl!: HTMLElement;
@@ -22,10 +22,20 @@ export class CommandPalette {
   private _selectedIdx = -1;
 
   constructor(getBloom: () => Bloom, onExecute: (bloom: Bloom) => void) {
+    super(CommandPalette._build(), { backdrop: true });
     this._getBloom   = getBloom;
     this._onExecute  = onExecute;
-    this._overlay    = this._build();
-    document.body.appendChild(this._overlay);
+    this._input     = this.el.querySelector('#cp-input')!;
+    this._suggestEl = this.el.querySelector('#cp-suggest')!;
+    this._statusEl  = this.el.querySelector('#cp-status')!;
+    this._input.addEventListener('input', () => this._refreshSuggestions());
+    onKeys(this._input, {
+      Escape: () => this.close(),
+      Enter: () => this._execute(),
+      Tab: () => this._completeFirst(),
+      ArrowDown: () => this._moveSel(1),
+      ArrowUp: () => this._moveSel(-1),
+    });
   }
 
   /** Register a command. `names[0]` is the canonical name shown in autocomplete. */
@@ -36,7 +46,7 @@ export class CommandPalette {
 
   // ─── Build UI ───────────────────────────────────────────────────────────────
 
-  private _build(): HTMLElement {
+  private static _build(): HTMLElement {
     const ov = document.createElement('div');
     ov.id = 'cmd-palette';
 
@@ -49,23 +59,6 @@ export class CommandPalette {
         <div id="cp-status" class="cp-status"></div>
       </div>
     `;
-
-    this._input     = ov.querySelector('#cp-input')!;
-    this._suggestEl = ov.querySelector('#cp-suggest')!;
-    this._statusEl  = ov.querySelector('#cp-status')!;
-
-    this._input.addEventListener('input', () => this._refreshSuggestions());
-
-    this._input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); this.close(); return; }
-      if (e.key === 'Enter')  { e.stopPropagation(); this._execute(); return; }
-      if (e.key === 'Tab')    { e.preventDefault();  this._completeFirst(); return; }
-      if (e.key === 'ArrowDown') { e.preventDefault(); this._moveSel(1); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); this._moveSel(-1); return; }
-    });
-
-    // Click backdrop to close
-    ov.addEventListener('click', (e) => { if (e.target === ov) this.close(); });
 
     return ov;
   }
@@ -185,16 +178,6 @@ export class CommandPalette {
     this._statusEl.textContent = '';
     this._statusEl.className = 'cp-status';
     this._selectedIdx = -1;
-    this._overlay.classList.add('open');
-    this._input.focus();
-  }
-
-  close(): void {
-    this._overlay.classList.remove('open');
-    this._input.blur();   // keys go back to the bloom
-  }
-
-  isOpen(): boolean {
-    return this._overlay.classList.contains('open');
+    this.show(this._input);
   }
 }

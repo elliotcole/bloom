@@ -5,6 +5,7 @@
 import type { Scale } from '../lib/scales';
 import { ALL_SCALES, scaleTranspose } from '../lib/scales';
 import { spell } from '../lib/numbers';
+import { Overlay, onKeys } from './overlay';
 
 export interface ScalePickerHost {
   /** The attached scale, if any, and the root a new one goes on */
@@ -25,8 +26,7 @@ function groups(): { title: string; scales: Scale[] }[] {
   ];
 }
 
-export class ScalePicker {
-  private el: HTMLElement;
+export class ScalePicker extends Overlay {
   private input: HTMLInputElement;
   private rootSel: HTMLSelectElement;
   private listEl: HTMLElement;
@@ -35,8 +35,8 @@ export class ScalePicker {
   private host: ScalePickerHost;
 
   constructor(host: ScalePickerHost) {
+    super(document.createElement('div'), { backdrop: true });
     this.host = host;
-    this.el = document.createElement('div');
     this.el.id = 'scale-picker';
     this.el.innerHTML = `
       <div id="sp-box">
@@ -53,24 +53,19 @@ export class ScalePicker {
     for (let pc = 0; pc < 12; pc++) this.rootSel.append(new Option(spell(pc), String(pc)));
     this.input.addEventListener('input', () => this.render());
     this.rootSel.addEventListener('change', () => { this.render(); this.input.focus(); });
-    this.input.addEventListener('keydown', e => this.onKey(e));
-    this.el.addEventListener('mousedown', e => { if (e.target === this.el) this.close(); });
-    document.body.appendChild(this.el);
+    onKeys(this.input, {
+      Escape: () => this.close(),
+      ArrowDown: () => this.setActive(Math.min(this.rows.length - 1, this.active + 1)),
+      ArrowUp: () => this.setActive(Math.max(0, this.active - 1)),
+      Enter: () => this.choose(this.active),
+    });
   }
-
-  isOpen(): boolean { return this.el.classList.contains('open'); }
 
   open(): void {
     this.rootSel.value = String(this.host.root());
     this.input.value = '';
-    this.el.classList.add('open');
     this.render();
-    this.input.focus();
-  }
-
-  close(): void {
-    this.el.classList.remove('open');
-    this.input.blur();
+    this.show(this.input);
   }
 
   private render(): void {
@@ -122,13 +117,5 @@ export class ScalePicker {
     if (!r) return;
     this.host.apply(r.scale, Number(this.rootSel.value));
     this.close();
-  }
-
-  private onKey(e: KeyboardEvent): void {
-    e.stopPropagation();
-    if (e.key === 'Escape') { e.preventDefault(); this.close(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); this.setActive(Math.min(this.rows.length - 1, this.active + 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); this.setActive(Math.max(0, this.active - 1)); }
-    else if (e.key === 'Enter') { e.preventDefault(); this.choose(this.active); }
   }
 }

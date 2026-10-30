@@ -88,7 +88,7 @@ other edit to the pitches starts the breeze fresh.
 The settings are in `GESTURE` (`breeze`, `breezePull`, `breezeMemory`). In the
 list modes, `#` `$` do the same with a palette step, with the same memory.
 
-**Pitches only**: hold **opt** with `s S R u U d D` to move only the pitches.
+**Pitches only**: opt + `s S R u U d D` moves only the pitches.
 Rhythm, dynamics and channels stay where they are. To rotate the pitches
 alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 
@@ -104,9 +104,11 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 | `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
 | `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
 | `;` / `:` | clump / flatten chords | `k K j J` | scales: choose, slant, lift, reduce |
+| opt-`w` | wheels within wheels: one accent, then quiet, in a velocity list one longer than the notes, so the accent moves round each cycle | | |
 
 ## Other home keys
 
+- **Playing:** space plays the bloom once; shift-`space` plays the selected garden slot (the picture shows it meanwhile). `,` loops the bloom and `/` pulses it (one play every few beats: `<` `>` set how many); opt-`,` and opt-`/` do the same with the whole garden, slot by slot. `~` holds and lifts the sustain pedal on every channel in use. `` ` `` records what a MIDI keyboard plays until `` ` `` again, as the bloom (notes struck together become a chord).
 - **Stopping:** `.` stops the loop, the pulsar and the garden's: nothing more starts (a figure's later steps included) and what sounds ends in its own time. With nothing running, `.` is a panic: every note off, now.
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. `del` deletes the slot and the rest close up.

@@ -14,20 +14,14 @@ import { formatFigures, parseFigures, FIGURE_TIMES } from '../lib/figures';
 import type { FigureTime } from '../lib/figures';
 import type { TyperField } from './listTyper';
 import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
-import {
-  playOnce, startLooper, stopLooper, isLooping, updateLooper,
-  startPulsar, stopPulsar, isPulsing, updatePulsar,
-  setPulsarRate, getPulsarRate, beatsToMs, silence,
-  startGardenLooper, stopGardenLooper, isGardenLooping,
-  startGardenPulsar, stopGardenPulsar, isGardenPulsing,
-} from '../audio/scheduler';
-import { controlChange } from '../audio/midi';
-import { startRecording, stopRecording, isRecording } from '../audio/recorder';
+import { playOnce, isLooping, updateLooper, isPulsing, updatePulsar, isGardenLooping, isGardenPulsing, beatsToMs } from '../audio/scheduler';
+import type { VizMode } from './theme';
+import { findHome, keyChar } from './homeKeys';
+import type { HomeCtx } from './homeKeys';
 import { autosaveGarden } from '../io/garden-io';
 import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
-import type { VizMode } from './theme';
 import { Notice, snap, sameSnap, describeChange } from './notice';
 import { extractSelection, mergeSelection } from './selection';
 import {
@@ -128,16 +122,6 @@ const FREEZE_ITEMS: FreezeItem[] = [
   { key: '5', name: 'intervals', selector: '.freeze-palette[data-list="iv"]' },
   { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
 ];
-
-// ─── Pitches only (opt + an order key at home) ────────────────────────────────
-
-const PITCH_ONLY: Record<string, [PatternOp, PatternOp]> = {
-  // e.code: [plain, shift]
-  KeyS: ['scramble', 'shuffle'],
-  KeyR: ['mirror', 'mirror'],
-  KeyU: ['stutter', 'sputter'],
-  KeyD: ['braid', 'pyramid'],
-};
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -260,9 +244,8 @@ export function createKeyHandler(state: KeyHandlerState) {
   // each step remembers the pins with the bloom: a key can move them (events
   // added before a pin), and undo must put them back on the same events
   const _undo: { bloom: Bloom; pins: number[] }[] = [];
-  let _splitSlices = 2;   // what } offered last time (split at home, divide in time mode)
-  let _repeatTimes = 2;   // what " offered last time
-  let _chunks = 3;        // what S offered last time
+  // what the asking keys offered last time: } (split at home, divide in time mode), " and S
+  const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3 };
 
   /**
    * Ask how many (2 to `max`, offering the last answer), then do it; `act`
@@ -290,16 +273,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
-  /** The key as typed, caps lock seen through: a letter's case follows shift alone */
-  function keyChar(e: KeyboardEvent): string {
-    const k = e.key;
-    if (k.length === 1 && /[a-z]/i.test(k) && e.getModifierState?.('CapsLock')) return e.shiftKey ? k.toUpperCase() : k.toLowerCase();
-    return k;
-  }
 
-  // every opt combination with a meaning (by code); any other opt key does nothing,
-  // rather than acting as the plain key (as it would on Windows and Linux)
-  const ALT_CODES = new Set(['KeyT', 'KeyC', 'KeyE', 'KeyP', 'KeyW', 'Comma', 'Slash', 'Backslash', 'ArrowDown']);
   const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
   let _prevBloom = snapshotOf(state.bloom);
@@ -451,20 +425,13 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   function clearSelection() { select([]); }
 
-  /** Keys that play, view, move through the garden or switch modes see the whole bloom */
-  const WHOLE_BLOOM_CODES = new Set([
-    'Space', 'Comma', 'Period', 'Slash', 'Backquote', 'Escape',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete',
-  ]);
+  /** Keys that play, view, move through the garden or switch modes see the whole bloom (homeKeys: `whole`) */
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
-    if (e.key === 'T' || state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
-    if (WHOLE_BLOOM_CODES.has(e.code)) return false;
-    if (e.code === 'Backslash') return false;
-    if (!e.altKey && own(MODE_KEYS, e.key)) return false;
-    if (e.altKey && (e.code.startsWith('Digit')
-      || ['KeyC', 'KeyE', 'KeyP', 'KeyT'].includes(e.code))) return false;
-    return true;
+    if (state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
+    if (!e.altKey && own(MODE_KEYS, keyChar(e))) return false;
+    const home = findHome(e);
+    return home ? !home.whole : true;
   }
 
   /** The key has acted on the lifted-out events: put them back, and follow where the pins and selection went */
@@ -866,13 +833,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
     // } divides in time mode (as it splits at home), asking how many
-    if (m === 'time' && ch === '}' && askCount(e, 'divide long durations into:', _splitSlices, n => {
-      _splitSlices = n;
+    if (m === 'time' && ch === '}' && askCount(e, 'divide long durations into:', _memo.splitSlices, n => {
+      _memo.splitSlices = n;
       return b.divideTimes(n) ? `${tag} divide: a few long durations into ${n} (no notes added)` : `${tag} no duration is long enough for ${n} parts`;
     })) return true;
     // " repeats this list, Z trims it to the notes, as they do every list at home
-    if (ch === '"' && askCount(e, `repeat the ${MODE_NAME[m]} list, times:`, _repeatTimes, n => {
-      _repeatTimes = n;
+    if (ch === '"' && askCount(e, `repeat the ${MODE_NAME[m]} list, times:`, _memo.repeatTimes, n => {
+      _memo.repeatTimes = n;
       b.repeatLists(n, [LIST_OF_MODE[m]]);
       return `${tag} repeated ${n} times: ${b.getList(LIST_OF_MODE[m]).length} long`;
     })) return true;
@@ -918,8 +885,8 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
 
     // S scrambles this list in chunks, as it does the notes at home
-    if (ch === 'S' && askCount(e, `scramble the ${MODE_NAME[m]} list in chunks, how many:`, _chunks, n => {
-      _chunks = n;
+    if (ch === 'S' && askCount(e, `scramble the ${MODE_NAME[m]} list in chunks, how many:`, _memo.chunks, n => {
+      _memo.chunks = n;
       return b.scrambleChunksList(LIST_OF_MODE[m], n) ? `${tag} scrambled in ${n} chunks` : `${tag} nothing to reorder`;
     }, b.getList(LIST_OF_MODE[m]).length)) return true;
 
@@ -1009,11 +976,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) return;
 
     const ch = keyChar(e);
-    const shift = e.shiftKey;
     const alt = e.altKey;
-    const b = state.bloom;
-    const g = state.garden;
-    if (alt && !ALT_CODES.has(e.code) && !own(PITCH_ONLY, e.code) && !/^Digit/.test(e.code)) { e.preventDefault(); return; }
 
     // ─── Freeze menu: F, then the key for what to freeze ──────────────────────
     if (_freezeMenu && onFreezeKey(e)) return;
@@ -1038,747 +1001,58 @@ export function createKeyHandler(state: KeyHandlerState) {
     }
     if (_mode && onListKey(e, _mode)) return;
 
-    // ─── Visualization mode  (opt+1 … opt+9) ─────────────────────────────────
-    if (alt && !shift && e.code.startsWith('Digit')) {
-      const n = parseInt(e.code.slice(5), 10);   // 'Digit3' → 3
-      if (n >= 1 && n <= 9) {
-        e.preventDefault();
-        const VIZ_ORDER: VizMode[] = [
-          'deep', 'field', 'orbit', 'score',
-          'tonal', 'set', 'spiral', 'helix', 'flower',
-        ];
-        const mode = VIZ_ORDER[n - 1];
-        state.setVizModeFn?.(mode);
-        status(`view: ${mode}`);
-        return;
-      }
-    }
-
-    // ─── Tuning hold (opt+t): one tuning over every bloom ─────────────────────
-    if (alt && !shift && e.code === 'KeyT') {
+    // ─── Home: the table in homeKeys.ts ──────────────────────────────────────
+    const home = findHome(e, ch);
+    if (home) {
       e.preventDefault();
-      toggleHold();
+      home.act(homeCtx(e, ch));
       return;
     }
+    // opt with a key that means nothing with opt: nothing (not the plain key, as on Windows and Linux)
+    if (alt) e.preventDefault();
+  }
 
-    // ─── Clean view (opt+c): the picture alone, for recording ────────────────
-    if (alt && !shift && e.code === 'KeyC') {
-      e.preventDefault();
-      setClean(!document.body.classList.contains('clean'));
-      return;
-    }
-
-    // ─── Editor / Palette ─────────────────────────────────────────────────────
-    if (alt && e.code === 'KeyE') {
-      e.preventDefault();
-      state.editorOpenFn?.();
-      return;
-    }
-
-    // ─── Pitches only: opt + an order key ─────────────────────────────────────
-    // At home the order keys move whole notes; with opt they move only the
-    // pitches over the rhythm, dynamics and channels that stay put
-    if (alt && own(PITCH_ONLY, e.code)) {
-      e.preventDefault();
-      const op = PITCH_ONLY[e.code][shift ? 1 : 0];
-      status(`${op} pitches`);
-      b.patternList('notes', op);
-      refresh(`${op} pitches`);
-      return;
-    }
-
-    // ─── Storage ─────────────────────────────────────────────────────────────
-    // lowercase stays in the key, shift opens up to all twelve
-    if (ch === 'n' && !shift && !alt) {
-      status('new bloom (same scale)');
-      const scale = b.scale, tuning = b.tuning;
-      b.import(new Bloom().seed().applyScale(scale));
-      newBloomTuning(b, tuning);
-      refresh('new bloom (same scale)');
-      return;
-    }
-    if (ch === 'N' && shift) {
-      status('new bloom');
-      b.import(new Bloom().seed());
-      newBloomTuning(b, null);
-      refresh('new bloom');
-      return;
-    }
-    // tuning mode: T opens the tuning view
-    if (ch === 'T' && !alt) {
-      if (_mode) setListMode(null);
-      state.tuningView?.toggle();
-      return;
-    }
-    // tilt: l down, L up, each press one scale step steeper
-    const tilt = tiltKey(e);
-    if (tilt) {
-      e.preventDefault();
-      const label = TILT_LABELS[tilt].pitch;
-      status(label);
-      b.shapeList('notes', tilt);
-      refresh(label);
-      return;
-    }
-    // push / pop: deliberate save points (cmd-z undoes any single change)
-    if (alt && e.code === 'KeyP') {
-      e.preventDefault();
-      if (shift) { status('pop'); b.pop(); refresh('pop'); }
-      else { status(`push (${b.stack.length + 1} saved)`); b.push(); refresh('push'); }
-      return;
-    }
-    if (ch === '`') {
-      if (isRecording()) {
-        stopRecording(b);
-        if (state.recordDotEl) state.recordDotEl.classList.remove('active');
-        refresh('recorded');
-      } else {
-        startRecording();
-        if (state.recordDotEl) state.recordDotEl.classList.add('active');
-        status('recording… (` to stop)');
-      }
-      return;
-    }
-
-    // ─── Shaping ─────────────────────────────────────────────────────────────
-    if (ch === 'm' && !shift) {
-      status('mutate notes (diatonic)');
-      b.mutateNotesD();
-      refresh('mutateD');
-      return;
-    }
-    if (ch === 'M' && shift) {
-      status('mutate notes');
-      b.mutateNotes();
-      refresh('mutate');
-      return;
-    }
-    if (ch === 's' && !shift) {
-      status('scramble');
-      b.scramble();
-      refresh('scramble');
-      return;
-    }
-    // S asks how many chunks, cuts the notes into that many runs and reorders the runs: a variation that keeps phrases
-    if (ch === 'S' && shift && askCount(e, 'scramble in chunks, how many:', _chunks, n => {
-      _chunks = n;
-      return b.scrambleChunks(n) ? `scramble in ${n} chunks` : 'nothing to reorder';
-    }, b.notes.length)) return;
-    if (ch === 'H' && shift) {
-      status('thicken');
-      b.thicken(0.3);
-      refresh('thicken');
-      return;
-    }
-    if (ch === 'h' && !shift) {
-      status('thin');
-      b.thin();
-      refresh('thin');
-      return;
-    }
-    if (ch === 'g' && !shift) {
-      status('gap');
-      b.gap();
-      refresh('gap');
-      return;
-    }
-    if (ch === 'G' && shift) {
-      status('unGap');
-      b.unGap();
-      refresh('unGap');
-      return;
-    }
-    // ─── Gestures (whole bloom) ───────────────────────────────────────────────
-    if (ch === '-') {
-      status('calm');
-      b.calm();
-      refresh('calm');
-      return;
-    }
-    if (ch === '=' || ch === '+') {
-      status('intensify');
-      b.intensify();
-      refresh('intensify');
-      return;
-    }
-    if (ch === "'") {
-      status('vary');
-      b.vary();
-      refresh('vary');
-      return;
-    }
-    if (ch === '{') {
-      status('merge two notes');
-      b.mergeNote();
-      refresh('merge');
-      return;
-    }
-    // } asks how many slices, then splits a note (one it chooses) into that many repeats
-    if (ch === '}' && askCount(e, 'split a note into:', _splitSlices, n => {
-      _splitSlices = n;
-      return b.splitNote(n) ? `split a note into ${n}` : `no note is long enough for ${n} slices`;
-    })) return;
-    // " repeats every list, Z trims every list to the notes
-    if (ch === '"' && askCount(e, 'repeat every list, times:', _repeatTimes, n => {
-      _repeatTimes = n;
-      b.repeatLists(n);
-      return `every list repeated ${n} times: ${b.notes.length} notes`;
-    })) return;
-    if (ch === 'Z' && !alt) {
-      const cut = b.trimLists();
-      const msg = cut ? `${cut} list${cut === 1 ? '' : 's'} trimmed to the ${b.notes.length} notes` : 'no list is longer than the notes';
-      status(msg);
-      refresh(msg);
-      return;
-    }
-
-    // ─── Blending ─────────────────────────────────────────────────────────────
-    if (ch === 'x' && !shift) {
-      status('interlace');
-      const src = g.current;
-      if (src) { b.interlace(src); refresh('interlace'); }
-      else state.display?.setStatus('no bloom in slot');
-      return;
-    }
-    if (ch === 'X' && shift) {
-      status('blend');
-      const src = g.current;
-      if (src) { b.blend(src); refresh('blend'); }
-      else state.display?.setStatus('no bloom in slot');
-      return;
-    }
-    if (ch === 'f' && !shift) {
-      status('lift shape');
-      const src = g.current;
-      if (src) { b.applyShape(src); refresh('lift shape'); }
-      else state.display?.setStatus('no bloom in slot');
-      return;
-    }
-    if (ch === 'C' && shift) {
-      status('cast');
-      const src = g.current;
-      if (src) { b.cast(src); refresh('cast'); }
-      else state.display?.setStatus('no bloom in slot');
-      return;
-    }
-
-    // ─── Expanding/contracting ────────────────────────────────────────────────
-    if (ch === 'z' && !shift) {
-      status('drop last');
-      b.dropLast();
-      refresh('drop last');
-      return;
-    }
-    if (ch === 'A' && shift) {
-      status('add one');
-      b.addOne();
-      refresh('add one');
-      return;
-    }
-    if (ch === 'a' && !shift) {
-      status('add one in scale');
-      b.addOneInScale();
-      refresh('add one in scale');
-      return;
-    }
-    if (ch === '9') {
-      status('rotate notes <<');
-      b.rotate(-1);
-      refresh('rotate <<');
-      return;
-    }
-    if (ch === '0') {
-      status('rotate notes >>');
-      b.rotate(1);
-      refresh('rotate >>');
-      return;
-    }
-
-    // ─── Patterning ───────────────────────────────────────────────────────────
-    if (ch === 'u' && !shift) {
-      status('stutter');
-      b.stutter();
-      refresh('stutter');
-      return;
-    }
-    if (ch === 'U' && shift) {
-      status('sputter');
-      b.sputter();
-      refresh('sputter');
-      return;
-    }
-    if (ch === 'Y' && shift) {
-      status('spray');
-      b.spray();
-      refresh('spray');
-      return;
-    }
-    if (ch === 'R' && shift) {
-      status('mirror');
-      b.mirror();
-      refresh('mirror');
-      return;
-    }
-    if (ch === 'd' && !shift) {
-      status('braid');
-      b.braid();
-      refresh('braid');
-      return;
-    }
-    if (ch === 'D' && shift) {
-      status('pyramid');
-      b.pyramid();
-      refresh('pyramid');
-      return;
-    }
-    if (ch === 'o') {
-      status('sort pitches up');
-      b.sortNotes();
-      refresh('sort pitches up');
-      return;
-    }
-    if (ch === 'O') {
-      status('sort pitches down');
-      b.sortNotes(true);
-      refresh('sort pitches down');
-      return;
-    }
-
-    // ─── Pitch ────────────────────────────────────────────────────────────────
-    if (ch === 'e' && !shift) {
-      status('shear: some an octave outward');
-      b.shear();
-      refresh('shear');
-      return;
-    }
-    if (ch === 'E' && shift) {
-      status('center range');
-      b.compass(48, 72);
-      refresh('compass 48-72');
-      return;
-    }
-    if (ch === 'i' && !shift) {
-      status('invert');
-      b.invert();
-      refresh('invert');
-      return;
-    }
-    if (ch === 'I' && shift) {
-      status('invert around mean');
-      b.invertMean();
-      refresh('invertMean');
-      return;
-    }
-    if (ch === '1' && !shift) {
-      status('down semitone');
-      b.transpose(-1);
-      refresh('transpose -1');
-      return;
-    }
-    if (ch === '2' && !shift) {
-      status('up semitone');
-      b.transpose(1);
-      refresh('transpose +1');
-      return;
-    }
-    if (ch === '!') {
-      status('down octave');
-      b.transpose(-12);
-      refresh('transpose -12');
-      return;
-    }
-    if (ch === '@') {
-      status('up octave');
-      b.transpose(12);
-      refresh('transpose +12');
-      return;
-    }
-    if (ch === '3' && !shift) {
-      status('down step');
-      b.dTranspose(-1);
-      refresh('dTranspose -1');
-      return;
-    }
-    if (ch === '4' && !shift) {
-      status('up step');
-      b.dTranspose(1);
-      refresh('dTranspose +1');
-      return;
-    }
-    if (ch === '#') {
-      status('breeze: some notes a step down');
-      b.breeze(-1);
-      refresh('breeze -1');
-      return;
-    }
-    if (ch === '$') {
-      status('breeze: some notes a step up');
-      b.breeze(1);
-      refresh('breeze +1');
-      return;
-    }
-    // ( ) pivot and [ ] flatward / sharpward: the same keys as in pitch mode
-    if (ch === '(') {
-      status('pivot (highest)');
-      b.pivot();
-      refresh('pivot');
-      return;
-    }
-    if (ch === ')') {
-      status('pivot (loudest)');
-      b.pivotLoudest();
-      refresh('pivotLoudest');
-      return;
-    }
-    if (ch === '[' || ch === ']') {
-      const name = ch === ']' ? 'sharpward' : 'flatward';
-      const moved = b.fifthsward(ch === ']' ? 1 : -1);
-      if (moved) { status(`${name}: ${moved}`); refresh(name); }
-      else status(`no ${name} step from here`);
-      return;
-    }
-    if (ch === 'w' && !shift && !alt) {
-      status('draw curves (diatonic)');
-      b.drawCurvesD(b.notes.length * 2);
-      refresh('drawCurvesD');
-      return;
-    }
-    if (e.code === 'KeyW' && !shift && alt) {
-      status('wheels within wheels');
-      b.velocities = [100, ...Array(b.notes.length).fill(30)];  // N+1 vels for N notes → accent shifts each cycle
-      refresh('wheels within wheels');
-      return;
-    }
-    if (ch === 'W' && shift) {
-      status('remove doubles');
-      b.removeDoubles();
-      refresh('remove doubles');
-      return;
-    }
-
-    // ─── Chords ───────────────────────────────────────────────────────────────
-    if (ch === ';') {
-      status('clump chords');
-      b.chordsRandShorten();
-      refresh('chordsRand');
-      return;
-    }
-    if (ch === ':') {
-      status('flatten chords');
-      b.flattenChords();
-      refresh('flattenChords');
-      return;
-    }
-
-    // ─── Diatonicism ──────────────────────────────────────────────────────────
-    if (ch === 'k' && !shift) {
-      status('choose nearest scale');
-      b.chooseScale();
-      refresh('chooseScale');
-      return;
-    }
-    if (ch === 'K' && shift) {
-      status('slant scale');
-      b.slantScale();
-      refresh('slantScale');
-      return;
-    }
-    if (ch === 'j' && !shift) {
-      status('lift scale');
-      const src = g.current;
-      if (src) { b.applyScale(src.scale); refresh('lift scale'); }
-      else state.display?.setStatus('no bloom in slot');
-      return;
-    }
-    if (ch === 'J' && shift) {
-      status('reduce scale');
-      b.reduceScale();
-      refresh('reduceScale');
-      return;
-    }
-
-    // ─── Figures ──────────────────────────────────────────────────────────────
-    // What a note plays instead of itself, one entry per note: 0, (1 2 3), @3.
-    // b is figures mode (↵ there types them); B clears them
-    if (!alt && ch === 'B') {
-      const had = b.hasFigures();
-      b.figures = [0];
-      const msg = had ? 'figures cleared' : 'no figures to clear';
-      status(msg);
-      refresh(msg);
-      return;
-    }
-
-    // ─── Intervals ────────────────────────────────────────────────────────────
-    // Notes added at playback; the bloom's own notes are untouched
-    if (!alt) {
-      const intervalKeys: Record<string, [string, () => unknown]> = {
-        '6': ['widen intervals', () => (b.hasIntervals() ? b.incrementIntervals(1) : (b.startIntervals(), 'intervals: a fifth below every 4th note'))],
-        '^': ['narrow intervals', () => b.incrementIntervals(-1)],
-        '7': ['intervals sparser', () => b.spaceIntervals(true)],
-        '&': ['intervals denser', () => b.spaceIntervals(false)],
-        '8': ['reset intervals', () => b.resetIntervals()],
-        '*': ['bake into notes', () => {
-          const raga = b.bakeRaga();
-          const ivs = b.hasIntervals();
-          const figs = b.bakeFigures();   // the intervals go in with them
-          b.bakeIntervals();
-          const what = [raga && 'the raga', figs && 'the figures', ivs && 'the intervals'].filter(Boolean) as string[];
-          const kept = b.hasFigures() ? ' (figures from the garden stay)' : '';
-          return what.length ? `bake ${what.join(' and ').replace(/ and (?=.* and )/, ', ')} into the notes${kept}` : `nothing to bake${kept}`;
-        }],
-      };
-      const hit = intervalKeys[ch];
-      if (hit) {
-        const said = hit[1]();
-        // say what the intervals now are, by name
-        const msg = typeof said === 'string' ? said : ch === '8' ? hit[0] : `${hit[0]}: ${formatIntervals(b.intervals)}`;
-        status(msg);
-        refresh(msg);
-        return;
-      }
-    }
-
-
-    // ─── Playback ─────────────────────────────────────────────────────────────
-    if (ch === ' ' && !shift && !alt) {
-      e.preventDefault();
-      play(b, 'play');
-      return;
-    }
-    if (ch === ' ' && shift) {
-      e.preventDefault();
-      const src = g.current;
-      if (src) {
+  /** What a home key's action can reach (homeKeys.ts HomeCtx) */
+  function homeCtx(e: KeyboardEvent, ch: string): HomeCtx {
+    return {
+      e, ch, shift: e.shiftKey, alt: e.altKey, b: state.bloom, g: state.garden, state,
+      status, refresh, play,
+      verb: (label, fn, said = label) => { status(label); fn(); refresh(said); },
+      withSlot: (label, fn, said = label) => {
+        status(label);
+        const src = state.garden.current;
+        if (src) { fn(src); refresh(said); } else state.display?.setStatus('no bloom in slot');
+      },
+      previewSlot: src => {
         // play() calls refresh() internally which resets viz to state.bloom,
         // so set the preview AFTER play() returns (JS is single-threaded).
         if (_previewResetId !== null) clearTimeout(_previewResetId);
-        play(src, `play slot [${g.index}]`);
+        play(src, `play slot [${state.garden.index}]`);
         state.viz?.setBloom(src, false);
-        const durationMs = beatsToMs(src.dur());
         _previewResetId = setTimeout(() => {
           _previewResetId = null;
           state.viz?.setBloom(state.bloom);
-        }, durationMs + 200);
-      } else {
-        status('nothing in slot');
-      }
-      return;
-    }
-    if (ch === ',' && !alt) {
-      b.resolveFixed();
-      if (!isLooping()) {
-        startLooper(
-          b,
-          state.out!,
-          (idx, tick) => state.viz?.activateNote(idx, tick),
-          (vel, time, chan, intervals, figures) => {
-            // Reuse a single display bloom; import notes/scale from the live bloom each cycle
-            if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
-            _loopDisplayBloom.import(state.bloom);
-            _loopDisplayBloom.velocities    = vel;
-            _loopDisplayBloom.timeIntervals = time;
-            _loopDisplayBloom.chans         = chan;
-            _loopDisplayBloom.intervals     = intervals;
-            _loopDisplayBloom.figures       = figures;   // they drift too: the marks follow
-            state.viz?.setBloom(_loopDisplayBloom, false);
-          },
-        );
-      }
-      updateLooper(b);
-      status('looping');
-      return;
-    }
-    if (e.code === 'Comma' && !shift && alt) {
-      e.preventDefault();
-      if (!state.out) { status('No MIDI output'); return; }
-      if (isGardenLooping()) {
-        stopGardenLooper();
-        status('garden loop stopped');
-      } else {
-        startGardenLooper(g.slots, state.out, idx => state.viz?.activateNote(idx));
-        status('loop garden');
-      }
-      return;
-    }
-    // . stops what runs: nothing more starts, what sounds ends in its own time. With nothing running, it's a panic: everything off now
-    if (ch === '.') {
-      const wasActive = isLooping() || isPulsing() || isGardenLooping() || isGardenPulsing();
-      stopLooper(); stopPulsar(); stopGardenLooper(); stopGardenPulsar();
-      if (!wasActive) { state.cancelLastPlay?.(); state.cancelLastPlay = null; silence(state.out); }
-      state.viz?.deactivateAll();
-      status(wasActive ? 'stopped' : 'all notes off');
-      return;
-    }
-    if (ch === '/' && !alt) {
-      b.resolveFixed();
-      if (!isPulsing()) startPulsar(b, state.out!, getPulsarRate(), (idx, tick) => state.viz?.activateNote(idx, tick));
-      updatePulsar(b);
-      status(`pulsar [${getPulsarRate()}b]`);
-      return;
-    }
-    if (e.code === 'Slash' && !shift && alt) {
-      e.preventDefault();
-      if (!state.out) { status('No MIDI output'); return; }
-      if (isGardenPulsing()) {
-        stopGardenPulsar();
-        status('garden pulsar stopped');
-      } else {
-        startGardenPulsar(g.slots, state.out, getPulsarRate(), idx => state.viz?.activateNote(idx));
-        status(`pulse garden [${getPulsarRate()}b]`);
-      }
-      return;
-    }
-    if (ch === '<') {
-      const r = Math.max(1, getPulsarRate() - 1);
-      setPulsarRate(r);
-      status(`pulse rate ${r}b`);
-      return;
-    }
-    if (ch === '>') {
-      const r = getPulsarRate() + 1;
-      setPulsarRate(r);
-      status(`pulse rate ${r}b`);
-      return;
-    }
-
-    // ─── Sustain pedal ────────────────────────────────────────────────────────
-    if (ch === '~') {
-      if (!state.out) { status('No MIDI output'); return; }
-      state.pedalDown = !state.pedalDown;
-      const val = state.pedalDown ? 127 : 0;
-      for (let c = 0; c <= Bloom.maxChan; c++) {
-        controlChange(state.out, c, 64, val);
-      }
-      status(state.pedalDown ? 'pedal ▼' : 'pedal ▲');
-      return;
-    }
-
-    // ─── Garden navigation ────────────────────────────────────────────────────
-    if (e.code === 'ArrowDown' && !shift) {
-      e.preventDefault();
-      // opt-↓ inserts before this slot; plain ↓ overwrites it
-      if (alt) g.insert(b); else g.save(b);
-      // Update garden visibility BEFORE animateSave so getBoundingClientRect()
-      // returns real geometry (garden may have been hidden on first save).
-      state.gardenViz?.update(state.garden);
-      const mc = document.getElementById('bloom-canvas') as HTMLCanvasElement;
-      state.gardenViz?.animateSave(b, mc);
-      const verb = alt ? 'inserted' : 'saved';
-      status(`${verb} [${g.index}]`);
-      refresh(`${verb} [${g.index}]`);
-      return;
-    }
-    if (e.code === 'ArrowDown' && shift) {
-      e.preventDefault();
-      g.insertEmpty();
-      status(`inserted slot [${g.index}]`);
-      refresh(`inserted [${g.index}]`);
-      return;
-    }
-    if (e.code === 'ArrowUp') {
-      e.preventDefault();
-      const lifted = g.lift();
-      if (lifted) {
-        const mc = document.getElementById('bloom-canvas') as HTMLCanvasElement;
-        state.gardenViz?.animateRestore(lifted, mc);
-        b.import(lifted);
-        if (isLooping()) updateLooper(b);
-        if (isPulsing()) updatePulsar(b);
-        clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
-        clearSelection();
-        status(`lifted [${g.index}]`);
-        refresh(`lifted [${g.index}]`, false);
-      } else {
-        status('nothing here');
-      }
-      return;
-    }
-    if (e.code === 'ArrowLeft') {
-      e.preventDefault();
-      if (g.cursor > 0) state.gardenViz?.animateSlide('left');
-      const had = g.back();
-      if (shift && had) play(g.current!, `play [${g.index}]`);
-      else refresh(`[${g.index}]`);
-      return;
-    }
-    if (e.code === 'ArrowRight') {
-      e.preventDefault();
-      state.gardenViz?.animateSlide('right');
-      g.forward();
-      if (shift && g.current) play(g.current, `play [${g.index}]`);
-      else refresh(`[${g.index}]`);
-      return;
-    }
-    if (e.code === 'Enter') {
-      e.preventDefault();
-      g.jumpToEnd();
-      status(`new entry [${g.index}]`);
-      return;
-    }
-    if (e.code === 'Backspace' || e.code === 'Delete') {
-      e.preventDefault();
-      g.clear();
-      refresh(`deleted [${g.index}]`);
-      return;
-    }
-
-    // ─── View: the \\ key holds the display toggles ─────────────────────────────
-    // \ console, | note labels, opt-\ lanes
-    if (e.code === 'Backslash' && shift && !alt) {
-      const next = state.viz?.toggleNoteLabels() ?? false;
-      const cb = document.getElementById('show-note-labels') as HTMLInputElement | null;
-      if (cb) cb.checked = next;
-      status(next ? 'labels on' : 'labels off');
-      return;
-    }
-
-    if (e.code === 'Backslash' && alt && !shift) {
-      e.preventDefault();
-      const on = state.viz?.toggleLanes() ?? false;
-      try { localStorage.setItem('bloom.lanes', on ? '1' : '0'); } catch { /* private window */ }
-      status(on ? 'lanes on' : 'lanes off');
-      return;
-    }
-
-    if (e.code === 'Backslash' && !shift && !alt) {
-      state.consoleToggleFn?.();
-      return;
-    }
-
-    // ─── Help ─────────────────────────────────────────────────────────────────
-    if (ch === '?') {
-      state.fullHelpToggleFn?.();
-      return;
-    }
-    if (e.code === 'Escape' && document.body.classList.contains('clean')) {
-      setClean(false);
-      return;
-    }
-    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
-    // esc clears what's marked, shift-esc inverts it: the selection if there
-    // is one, otherwise the pins (the help, when open, closes first)
-    if (e.code === 'Escape' && !helpOpen && (_selection.length || _pinned.size || shift)) {
-      if (_selection.length) {
-        if (shift) {
-          const n = state.bloom.notes.length;
-          const sel = new Set(_selection);
-          select(Array.from({ length: n }, (_, i) => i).filter(i => !sel.has(i)));
-        } else clearSelection();
-      } else if (shift) invertPins();
-      else {
-        const n = _pinned.size;
-        clearPins();
-        status(`${n} event${n === 1 ? '' : 's'} unpinned`);
-      }
-      return;
-    }
-    if (e.code === 'Escape') {
-      state.fullHelpCloseFn?.();
-      state.consoleClearFn?.();
-      state.consoleShowFn?.();
-      return;
-    }
+        }, beatsToMs(src.dur()) + 200);
+      },
+      askCount: (label, last, act, max) => askCount(e, label, last, act, max),
+      memo: _memo,
+      onLoopCycle: (vel, time, chan, intervals, figures) => {
+        // Reuse a single display bloom; import notes/scale from the live bloom each cycle
+        if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
+        _loopDisplayBloom.import(state.bloom);
+        _loopDisplayBloom.velocities    = vel;
+        _loopDisplayBloom.timeIntervals = time;
+        _loopDisplayBloom.chans         = chan;
+        _loopDisplayBloom.intervals     = intervals;
+        _loopDisplayBloom.figures       = figures;   // they drift too: the marks follow
+        state.viz?.setBloom(_loopDisplayBloom, false);
+      },
+      leaveListMode: () => { if (_mode) setListMode(null); },
+      toggleHold, setClean, newBloomTuning,
+      selection: () => _selection,
+      pins: () => _pinned,
+      select, clearSelection, clearPins, invertPins,
+    };
   }
 
   // ─── Fission / fusion (buttons in garden ▾, no keys) ──────────────────────
