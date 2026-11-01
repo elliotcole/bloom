@@ -15,7 +15,7 @@ import { formatIntervals } from '../lib/intervals';
 import { controlChange } from '../audio/midi';
 import { startRecording, stopRecording, isRecording } from '../audio/recorder';
 import {
-  startLooper, stopLooper, isLooping, updateLooper,
+  startLooper, stopLooper, isLooping, updateLooper, atNextCycle,
   startPulsar, stopPulsar, isPulsing, updatePulsar,
   setPulsarRate, getPulsarRate, silence,
   startGardenLooper, stopGardenLooper, isGardenLooping,
@@ -63,6 +63,8 @@ export interface HomeCtx {
   clearSelection(): void;
   clearPins(forget?: boolean): void;
   invertPins(): void;
+  /** each pin to where its event went (null: the event is gone) */
+  movePins(to: (i: number) => number | null): void;
 }
 
 /** One home key */
@@ -82,6 +84,12 @@ export interface HomeKey {
   label: string;
   act: (c: HomeCtx) => void;
 }
+
+/** play ▾ → launch: a lifted bloom waits for the loop to come round */
+const launchQuantized = (): boolean => (document.getElementById('launch-quantize') as HTMLInputElement | null)?.checked ?? false;
+
+/** The colours a bloom can wear in the garden (opt-n) */
+export const BLOOM_COLORS = ['none', 'red', 'orange', 'yellow', 'green', 'blue', 'violet'];
 
 const VIZ_ORDER: VizMode[] = ['deep', 'field', 'orbit', 'score', 'tonal', 'set', 'spiral', 'helix', 'flower'];
 
@@ -134,6 +142,20 @@ export const HOME_KEYS: HomeKey[] = [
     }),
   },
   { key: 'N', label: 'new bloom', act: c => c.verb('new bloom', () => { c.b.import(new Bloom().seed()); c.newBloomTuning(c.b, null); }) },
+  {
+    code: 'KeyN', alt: true, shift: false, whole: true, label: 'name the bloom, give it a colour (for the garden)',
+    act: c => {
+      if (!c.state.typeList) return;
+      c.state.typeList('name:', c.b.name, (text, _complete, values) => {
+        c.b.name = text.trim();
+        c.b.color = values[0] === 'none' ? '' : values[0];
+        c.b.colorLevel = 1;   // named: an anchor, its colour whole
+        const said = [c.b.name && `named ${c.b.name}`, c.b.color && `coloured ${c.b.color}`].filter(Boolean).join(', ') || 'no name, no colour';
+        c.refresh(said);
+        return null;
+      }, [{ kind: 'choice', label: 'colour', options: BLOOM_COLORS, value: c.b.color || 'none' }]);
+    },
+  },
   { key: 'T', whole: true, label: 'tuning mode', act: c => { c.leaveListMode(); c.state.tuningView?.toggle(); } },
   {
     code: 'KeyL', label: 'tilt down (shift: up)', name: 'l L',
@@ -186,7 +208,7 @@ export const HOME_KEYS: HomeKey[] = [
     }),
   },
   {
-    key: '"', label: 'repeat every list (asks how many times)',
+    key: '"', whole: true, label: 'repeat every list (asks how many times)',
     act: c => c.askCount('repeat every list, times:', c.memo.repeatTimes, n => {
       c.memo.repeatTimes = n;
       c.b.repeatLists(n);
@@ -194,7 +216,7 @@ export const HOME_KEYS: HomeKey[] = [
     }),
   },
   {
-    key: 'Z', label: 'fit every list to the notes',
+    key: 'Z', whole: true, label: 'fit every list to the notes',
     act: c => {
       const { cut, looped } = c.b.fitLists();
       const did = [cut && `${cut} cut`, looped && `${looped} looped`].filter(Boolean).join(', ');
@@ -369,14 +391,22 @@ export const HOME_KEYS: HomeKey[] = [
     act: c => {
       const lifted = c.g.lift();
       if (!lifted) { c.status('nothing here'); return; }
-      c.state.gardenViz?.animateRestore(lifted, document.getElementById('bloom-canvas') as HTMLCanvasElement);
-      c.b.import(lifted);
-      if (isLooping()) updateLooper(c.b);
-      if (isPulsing()) updatePulsar(c.b);
-      c.clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
-      c.clearSelection();
-      c.status(`lifted [${c.g.index}]`);
-      c.refresh(`lifted [${c.g.index}]`, false);
+      const index = c.g.index;
+      const land = () => {
+        c.state.gardenViz?.animateRestore(lifted, document.getElementById('bloom-canvas') as HTMLCanvasElement);
+        c.b.import(lifted);
+        if (isLooping()) updateLooper(c.b);
+        if (isPulsing()) updatePulsar(c.b);
+        c.clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
+        c.clearSelection();
+        c.status(`lifted [${index}]`);
+        c.refresh(`lifted [${index}]`, false);
+      };
+      // launch quantize (play ▾): while the loop runs, the lifted bloom starts when it next comes round
+      if (isLooping() && launchQuantized()) {
+        atNextCycle(land);
+        c.status(`lifted [${index}] · starts when the loop comes round`);
+      } else land();
     },
   },
   {
@@ -398,7 +428,22 @@ export const HOME_KEYS: HomeKey[] = [
     },
   },
   { code: 'Enter', whole: true, label: 'a new slot at the end', act: c => { c.g.jumpToEnd(); c.status(`new entry [${c.g.index}]`); } },
-  { code: ['Backspace', 'Delete'], whole: true, name: 'del', label: 'delete the slot', act: c => { c.g.clear(); c.refresh(`deleted [${c.g.index}]`); } },
+  { code: ['Backspace', 'Delete'], alt: true, whole: true, name: 'opt-del', label: 'delete the slot', act: c => { c.g.clear(); c.refresh(`deleted [${c.g.index}]`); } },
+  {
+    code: ['Backspace', 'Delete'], alt: false, whole: true, name: 'del', label: 'delete the selected events',
+    act: c => {
+      const sel = c.selection().filter(i => !c.pins().has(i));   // pinned events stay
+      if (!sel.length) { c.status(c.selection().length ? 'every selected event is pinned' : 'select events to delete them · opt-del deletes the slot'); return; }
+      const gone = c.b.removeAt(sel);
+      if (!gone) { c.status('the last note stays'); return; }
+      const went = new Set(sel.slice(0, gone));
+      c.movePins(i => (went.has(i) ? null : i - [...went].filter(j => j < i).length));
+      c.clearSelection();
+      const said = `deleted ${gone} event${gone === 1 ? '' : 's'}`;
+      c.refresh(said);
+      c.status(said);
+    },
+  },
 
   // ─── View ──────────────────────────────────────────────────────────────────
   {
@@ -449,7 +494,12 @@ export const HOME_KEYS: HomeKey[] = [
 ];
 
 /** ↓ saves over the slot; opt-↓ inserts before it */
+/** How much of its colour an unnamed bloom keeps at each save: the generations fade from the anchor */
+const COLOR_FADE = 0.7;
+
 function saveSlot(c: HomeCtx, insert: boolean): void {
+  // a named bloom is an anchor and keeps its colour whole; a descendant's dims with each save
+  if (!c.b.name && c.b.color) c.b.colorLevel = Math.max(0.1, Math.round(c.b.colorLevel * COLOR_FADE * 1000) / 1000);
   if (insert) c.g.insert(c.b); else c.g.save(c.b);
   // the garden is shown before the animation measures it (it may have been hidden until the first save)
   c.state.gardenViz?.update(c.state.garden);

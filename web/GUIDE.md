@@ -72,8 +72,9 @@ These move each note together with its time, velocity, channel and interval.
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |
 
-If the lists were phasing, a whole-note move first lines them all up to the
-number of notes. It keeps what one play-through sounds like, but the drift stops.
+If the lists are phasing, they go on phasing: a whole-note move carries along
+the lists that are in step with the notes (as long as they are) and leaves the
+others exactly as they were. Nothing lines the lists up but `Z`.
 
 **Breeze**: `#` `$` move only some notes a scale step, not the whole bloom in
 lockstep. The **share** is the average fraction moved per press (30%, always at
@@ -111,7 +112,9 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 - **Playing:** space plays the bloom once; shift-`space` plays the selected garden slot (the picture shows it meanwhile). `,` loops the bloom and `/` pulses it (one play every few beats: `<` `>` set how many); opt-`,` and opt-`/` do the same with the whole garden, slot by slot. `~` holds and lifts the sustain pedal on every channel in use. `` ` `` records what a MIDI keyboard plays until `` ` `` again, as the bloom (notes struck together become a chord).
 - **Stopping:** `.` stops the loop, the pulsar and the garden's: nothing more starts (a figure's later steps included) and what sounds ends in its own time. With nothing running, `.` is a panic: every note off, now.
 
-- **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. `del` deletes the slot and the rest close up.
+- **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. opt-`del` deletes the slot and the rest close up.
+- **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the name along the bottom of its slot and the colour as a ring; the console shows the name. Both are saved with the garden. A name names one bloom: the first change makes a new, unnamed bloom. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
+- **Launch quantize:** **play ▾** → launch. On, a bloom lifted with `↑` while the loop runs waits for the loop to come round, then starts from its first note with its lists together, so you can't land in the middle of a bloom. Stopping the loop lands it at once.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
 - **Figures:** `b` enters figures mode (`↵` there types them), `B` clears them. See **Figures** below.
@@ -413,11 +416,17 @@ point: stutter only the velocities and the accent pattern drifts.
 | `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 
-**Merge: `{`** (as `{` merges two notes at home) makes the list one entry
-shorter: two neighbours become one. In time mode the two durations add up
+**Merge: `{`** (as `{` merges two notes at home): a few pairs of neighbours
+(about a fifth of the list, as `}` divides; at least one) each become one, the
+list that much shorter. In time mode the two durations add up
 (pairs whose sum is already in the palette are likelier); in every other mode
 the first of the pair stays, equal neighbours likelier so the least is lost.
 The list then phases differently against the notes, or `Z` fits it back.
+
+In a list mode other than pitch, the keys that change the list's length (`z`
+`a` `A` `"` `Z` `{` `}` `S`) work on the whole list even with a selection or
+pins: a list that isn't per event has no events to select. `"` and `Z` do the
+same at home.
 
 **Divide, in time mode only: `}`** (as `}` splits at home). It asks how many
 parts (it remembers), then a few of the longest durations (at least half the
@@ -600,6 +609,14 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   inverts** it. With a selection, esc and shift-esc act on it; without one,
   on the pins. (Esc first leaves a list mode, clean view or the help.)
 - **Playing, the garden, views and modes** still see the whole bloom.
+- **The key and scale stay the whole bloom's:** transposing a selected note a
+  semitone moves that note, not the key.
+- **`del` deletes the selected events** (pinned ones stay). With nothing
+  selected, `del` only says so: opt-`del` deletes the garden slot.
+- **cmd-`c` copies the selected events** (all of them with no selection) with
+  their time, velocity, channel and intervals; **cmd-`v` pastes them** after
+  the last selected event (at the end with none) and selects them, so they can
+  be moved or changed at once. Lists phasing against the notes aren't touched.
 - **Pins still hold** inside a selection.
 - The command palette and the editor work on the whole bloom.
 - Lifting a garden slot or loading a file clears the selection.

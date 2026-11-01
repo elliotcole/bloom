@@ -280,6 +280,10 @@ export class Bloom {
   declare writtenNotes?: NoteArray;
   keyRoot: number;
   name: string;
+  /** a colour for the garden ('' none): red orange yellow green blue violet */
+  color: string;
+  /** how bright the colour is, 1 full: it dims with each save of an unnamed descendant */
+  colorLevel: number;
   /** null: 12-TET. Degree 0 of the tuning sits on tuningRoot, which follows the key */
   tuning: Tuning | null;
   tuningRoot: number;
@@ -308,6 +312,8 @@ export class Bloom {
     this.appliedScale = null;
     this.keyRoot = 0;
     this.name = '';
+    this.color = '';
+    this.colorLevel = 1;
     this.tuning = null;
     this.tuningRoot = 0;
     this.stack = [];
@@ -359,6 +365,8 @@ export class Bloom {
       : null;
     b.keyRoot = this.keyRoot;
     b.name = this.name;
+    b.color = this.color;
+    b.colorLevel = this.colorLevel;
     b.tuning = this.tuning ? JSON.parse(JSON.stringify(this.tuning)) as Tuning : null;
     b.tuningRoot = this.tuningRoot;
     b.stack = this.stack.map(s => s.clone());
@@ -391,6 +399,8 @@ export class Bloom {
     this.appliedScale = b.appliedScale;
     this.keyRoot = b.keyRoot;
     this.name = b.name;
+    this.color = b.color;
+    this.colorLevel = b.colorLevel;
     this.tuning = b.tuning;
     this.tuningRoot = b.tuningRoot;
     // don't copy stack
@@ -628,22 +638,18 @@ export class Bloom {
 
   // ─── Expanding / Contracting ───────────────────────────────────────────────
 
+  /** Add a note at the end (a random one when none is given). The lists in step with the notes grow with them, one of their own values; a phasing list isn't touched */
   addOne(noteOrList?: number | number[], vel?: number, time?: number): this {
-    if (noteOrList === undefined) {
-      this.notes.push(Math.round(rrand(20, 100)));
-      if (this.velocities.length <= this.notes.length)
-        this.velocities.push(this.velocities[Math.floor(Math.random() * this.velocities.length)]);
-      if (this.timeIntervals.length <= this.notes.length)
-        this.timeIntervals.push(this.timeIntervals[Math.floor(Math.random() * this.timeIntervals.length)]);
-    } else if (Array.isArray(noteOrList)) {
-      this.notes.push(noteOrList[0]);
-      this.velocities.push(noteOrList[1] ?? this.velocities[Math.floor(Math.random() * this.velocities.length)]);
-      this.timeIntervals.push(noteOrList[2] ?? this.timeIntervals[Math.floor(Math.random() * this.timeIntervals.length)]);
-    } else {
-      this.notes.push(noteOrList);
-      this.velocities.push(vel ?? this.velocities[Math.floor(Math.random() * this.velocities.length)]);
-      this.timeIntervals.push(time ?? this.timeIntervals[Math.floor(Math.random() * this.timeIntervals.length)]);
-    }
+    const n = this.notes.length;
+    const grow = (arr: number[], v?: number) => { if (arr.length === n && n > 0) arr.push(v ?? pick(arr)); };
+    let note: number, v = vel, t = time;
+    if (noteOrList === undefined) note = Math.round(rrand(20, 100));
+    else if (Array.isArray(noteOrList)) { [note, v, t] = noteOrList; }
+    else note = noteOrList;
+    this.notes.push(note);
+    grow(this.velocities, v);
+    grow(this.timeIntervals, t);
+    grow(this.chans);
     return this;
   }
 
@@ -664,10 +670,7 @@ export class Bloom {
   }
 
   remove(index = 0): this {
-    this.notes.splice(index, 1);
-    if (this.timeIntervals[index] !== undefined) this.timeIntervals.splice(index, 1);
-    if (this.velocities[index] !== undefined) this.velocities.splice(index, 1);
-    if (this.chans[index] !== undefined) this.chans.splice(index, 1);
+    this.removeAt([index]);
     return this;
   }
 
@@ -1618,7 +1621,7 @@ export class Bloom {
 
   /** Fresh random channel array, one per note — the chan analog of a new seed */
   newChans(): this {
-    this.chans = this.notes.map(() => Math.floor(Math.random() * (Bloom.maxChan + 1)));
+    this.chans = Array.from({ length: this.chans.length || this.notes.length }, () => Math.floor(Math.random() * (Bloom.maxChan + 1)));
     return this;
   }
 
@@ -1652,17 +1655,56 @@ export class Bloom {
     }));
   }
 
+  /**
+   * Write the events back. A list in step with the notes (as long as they
+   * were) follows them: reordered, grown or cut with them. A list of another
+   * length is phasing on purpose and isn't touched, so the drift stays until Z
+   * fits it. An empty velocity, time or channel list takes the events' values.
+   */
   setEvents(evs: NoteEvent[]): this {
     if (evs.length === 0) return this;
-    // an untouched [0] intervals list stays as it is
-    const carryIntervals = this.hasIntervals();
-    const carryFigures = this.hasFigures();
+    const n0 = this.notes.length;
+    const inStep = (arr: unknown[]) => arr.length === n0 || arr.length === 0;
+    const carryIntervals = this.hasIntervals() && this.intervals.length === n0;   // an untouched [0] stays as it is
+    const carryFigures = this.hasFigures() && this.figures.length === n0;
     this.notes = evs.map(e => JSON.parse(JSON.stringify(e.note)) as NoteVal);
-    this.velocities = evs.map(e => e.vel);
-    this.timeIntervals = evs.map(e => e.time);
-    this.chans = evs.map(e => e.chan);
+    if (inStep(this.velocities)) this.velocities = evs.map(e => e.vel);
+    if (inStep(this.timeIntervals)) this.timeIntervals = evs.map(e => e.time);
+    if (inStep(this.chans)) this.chans = evs.map(e => e.chan);
     if (carryIntervals) this.intervals = evs.map(e => JSON.parse(JSON.stringify(e.iv)) as IntervalVal);
     if (carryFigures) this.figures = evs.map(e => JSON.parse(JSON.stringify(e.fig ?? 0)) as Figure);
+    return this;
+  }
+
+  /** Delete these events (notes, and the lists in step with them); at least one note stays. Returns how many went. */
+  removeAt(indices: number[]): number {
+    const n = this.notes.length;
+    const gone = new Set(indices.filter(i => i >= 0 && i < n));
+    if (gone.size >= n) { for (const i of [...gone].sort((a, b) => a - b).slice(0, 1)) gone.delete(i); }
+    if (!gone.size) return 0;
+    const keep = <T>(arr: T[]): T[] => (arr.length === n ? arr.filter((_, i) => !gone.has(i)) : arr);
+    this.notes = keep(this.notes) as NoteArray;
+    this.velocities = keep(this.velocities);
+    this.timeIntervals = keep(this.timeIntervals);
+    this.chans = keep(this.chans);
+    this.intervals = keep(this.intervals);
+    this.figures = keep(this.figures);
+    return gone.size;
+  }
+
+  /** Put these events in after position `after` (-1: at the start); the lists in step with the notes grow with them */
+  insertEvents(after: number, evs: NoteEvent[]): this {
+    if (!evs.length) return this;
+    const n = this.notes.length;
+    const at = Math.max(0, Math.min(n, after + 1));
+    const grow = <T>(arr: T[], of: (e: NoteEvent) => T, when = arr.length === n && n > 0): T[] =>
+      (when ? [...arr.slice(0, at), ...evs.map(e => JSON.parse(JSON.stringify(of(e))) as T), ...arr.slice(at)] : arr);
+    this.velocities = grow(this.velocities, e => e.vel);
+    this.timeIntervals = grow(this.timeIntervals, e => e.time);
+    this.chans = grow(this.chans, e => e.chan);
+    this.intervals = grow(this.intervals, e => e.iv, this.hasIntervals() && this.intervals.length === n);
+    this.figures = grow(this.figures, e => e.fig ?? (0 as Figure), this.hasFigures() && this.figures.length === n);
+    this.notes = grow(this.notes as NoteVal[], e => e.note, true) as NoteArray;
     return this;
   }
 
@@ -1966,7 +2008,8 @@ export class Bloom {
   }
 
   /**
-   * A list mode's {: the list one entry shorter, two neighbours become one.
+   * A list mode's {: a few pairs of neighbours (about a fifth of the list, as
+   * } divides; at least one) each become one, the list that much shorter.
    * Durations add (pairs whose sum is already in the palette likelier, as at
    * home); in the other lists the first of the pair stays (equal neighbours
    * likelier, so the least is lost). False when the list has fewer than two.
@@ -1976,13 +2019,25 @@ export class Bloom {
     if (arr.length < 2) return false;
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     const pal = k === 'time' ? new Set(this.paletteOf('time')) : null;
-    const weights = arr.slice(0, -1).map((a, i) => {
+    const weights: number[] = arr.slice(0, -1).map((a, i) => {
       const b = arr[i + 1];
       return (pal ? pal.has(roundTime((a as number) + (b as number))) : same(a, b)) ? 4 : 1;
     });
-    const i = weightedIndex(weights);
-    const merged = k === 'time' ? roundTime((arr[i] as number) + (arr[i + 1] as number)) : arr[i];
-    this.setList(k, [...arr.slice(0, i), merged, ...arr.slice(i + 2)]);
+    const want = Math.max(1, Math.round(arr.length * GESTURE.divide));
+    const starts = new Set<number>();   // the first of each merged pair; pairs don't overlap
+    while (starts.size < want && weights.some(w => w > 0)) {
+      const i = weightedIndex(weights);
+      starts.add(i);
+      weights[i] = 0;
+      if (i > 0) weights[i - 1] = 0;
+      if (i + 1 < weights.length) weights[i + 1] = 0;
+    }
+    const out: unknown[] = [];
+    for (let i = 0; i < arr.length; i++) {
+      if (starts.has(i)) { out.push(k === 'time' ? roundTime((arr[i] as number) + (arr[i + 1] as number)) : arr[i]); i++; }
+      else out.push(arr[i]);
+    }
+    this.setList(k, out);
     return true;
   }
 
@@ -2096,7 +2151,7 @@ export class Bloom {
       case 'quantize': this.quantize(amount); break;
       case 'renew': {
         const choices = pal.length > 1 ? pal : [target / 2, target, target * 2].map(roundTime);
-        this.timeIntervals = this.notes.map(() => pick(choices));
+        this.timeIntervals = Array.from({ length: n || this.notes.length }, () => pick(choices));
         break;
       }
       case 'dropLast': if (n > 1) this.timeIntervals = ts.slice(0, -1); break;
@@ -2163,7 +2218,7 @@ export class Bloom {
         break;
       case 'more': set(v => (coin(0.33) ? v + pick([-12, 12]) : v)); break;
       case 'quantize': this.velocities = clusterValues(vs, amount, linearDist, v => v === 0); break;
-      case 'renew': this.velocities = this.notes.map(() => Math.round(exprand(40, 110))); break;
+      case 'renew': this.velocities = Array.from({ length: n || this.notes.length }, () => Math.round(exprand(40, 110))); break;
       case 'dropLast': if (n > 1) this.velocities = vs.slice(0, -1); break;
       case 'addFromPalette': this.velocities = [...vs, pick(live)]; break;
       case 'addRandom': this.velocities = [...vs, Math.round(exprand(30, 110))]; break;

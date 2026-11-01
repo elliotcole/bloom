@@ -30,6 +30,8 @@ export interface BloomJSON {
   appliedScale: Scale | null;
   keyRoot: number;
   name: string;
+  color?: string;
+  colorLevel?: number;
   tuning?: Tuning | null;   // absent in files saved before tunings existed
   tuningRoot?: number;
 }
@@ -72,6 +74,8 @@ export function bloomToJSON(b: Bloom): BloomJSON {
       : null,
     keyRoot: b.keyRoot,
     name: b.name,
+    color: b.color,
+    colorLevel: b.colorLevel,
     tuning: b.tuning ? JSON.parse(JSON.stringify(b.tuning)) as Tuning : null,
     tuningRoot: b.tuningRoot,
   };
@@ -112,7 +116,9 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   b.sustain = json.sustain === null ? null : num(json.sustain, b.sustain ?? 4);
   b.appliedScale = json.appliedScale && Array.isArray(json.appliedScale.degrees) ? json.appliedScale : null;
   b.keyRoot = num(json.keyRoot, 0);
-  b.name = json.name ?? '';
+  b.name = typeof json.name === 'string' ? json.name : '';
+  b.color = typeof json.color === 'string' ? json.color : '';
+  b.colorLevel = isNum(json.colorLevel) ? Math.max(0, Math.min(1, json.colorLevel)) : 1;
   b.tuning = json.tuning ?? null;
   b.tuningRoot = json.tuningRoot ?? 0;
   return b;

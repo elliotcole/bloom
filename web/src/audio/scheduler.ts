@@ -173,9 +173,25 @@ interface LoopState {
   /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
   lock: { start: number; beats: number } | null;
   pending: Pending;
+  /** Changes waiting for the loop to come round (launch quantize); the loop then starts its lists afresh */
+  atCycle: (() => void)[];
 }
 
 let _loop: LoopState | null = null;
+
+/**
+ * Run `fn` when the loop next comes round to its first note (launch quantize),
+ * the lists starting together from there; at once when nothing is looping.
+ * Stopping the loop runs what's waiting.
+ */
+export function atNextCycle(fn: () => void): void {
+  if (_loop) _loop.atCycle.push(fn); else fn();
+}
+
+/** Something is waiting for the loop to come round */
+export function cycleWaiting(): boolean {
+  return (_loop?.atCycle.length ?? 0) > 0;
+}
 
 /** Build the N effective values for the upcoming notes cycle starting at `tick` */
 function buildCycleSlice<T>(
@@ -206,6 +222,7 @@ export function startLooper(
     onLoop,
     lock: null,
     pending: newPending(),
+    atCycle: [],
   };
 
   state.intervalId = setInterval(() => {
@@ -224,6 +241,12 @@ export function startLooper(
 
       // At the start of each notes cycle: update the display + fire onLoop
       if (noteIdx === 0) {
+        if (state.atCycle.length) {   // launch quantize: the held change lands here, its lists from the top
+          const fns = state.atCycle.splice(0);
+          fns.forEach(fn => fn());
+          state.globalTick = 0;
+          if (b.notes.length === 0 || b.velocities.length === 0 || b.timeIntervals.length === 0 || b.chans.length === 0) break;
+        }
         // a running clock (Live playing): the cycle starts on its next beat and follows it
         const tb = timebase();
         const at = tb && !state.lock ? tb.beatAt(state.nextEventTime) : null;
@@ -285,7 +308,9 @@ export function stopLooper(): void {
   if (_loop) {
     clearInterval(_loop.intervalId);
     letGo(_loop.pending);
+    const waiting = _loop.atCycle.splice(0);
     _loop = null;
+    waiting.forEach(fn => fn());   // what was waiting for the loop lands now
   }
 }
 

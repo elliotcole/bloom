@@ -828,6 +828,9 @@
           <label>bpm <input type="number" id="bpm-input" min="20" max="300" step="any" value="60"></label>
           <button class="s-btn" id="tap-tempo">tap</button>
           <span id="clock-sync-status">clk: free</span>
+          <label title="a bloom lifted while the loop runs (↑) waits for the loop to come round, then starts from its first note">launch
+            <input type="checkbox" id="launch-quantize">
+          </label>
         </span>
 <span class="s-section">
           <span class="s-section-label">freeze</span>
@@ -1173,9 +1176,10 @@ playback &amp; garden keys unchanged</div>
             <div class="hf-h">Garden</div>
             <div class="hf-body"><b>↓</b>         save here    <b>↑</b>    lift here
 <b>← →</b>       navigate     <b>↵</b>    new slot
-<b>Del</b>       clear slot
+<b>opt-del</b>   delete slot  <b>opt-n</b> name, colour
 <b>opt ↓</b>     insert here  <b>shift ↓</b> empty slot
-<b>shift ← →</b> navigate + play</div>
+<b>shift ← →</b> navigate + play
+<b>play ▾</b>    launch: ↑ waits for the loop to come round</div>
           </div>
           <div class="hf-sec">
             <div class="hf-h">View</div>
@@ -1188,6 +1192,9 @@ playback &amp; garden keys unchanged</div>
           (while it plays: the keys above, . stops)
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
+<b>drag</b>     a box selects events: keys act on them
+<b>del</b>      delete the selected events
+<b>cmd-c v</b>  copy / paste them after the selection
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>
           </div>
         </div>

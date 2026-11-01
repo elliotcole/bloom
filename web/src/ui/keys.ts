@@ -5,7 +5,7 @@ import {
   alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
-import type { ListKey, ListVerb, PatternOp } from '../core/Bloom';
+import type { ListKey, ListVerb, NoteEvent, PatternOp } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
@@ -285,8 +285,10 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** Record the current state; returns what changed since the last one ('' if nothing) */
   function record(): string {
     const now = snap(state.bloom);
-    if (sameSnap(now, _prevSnap)) return '';
+    if (sameSnap(now, _prevSnap)) { _prevBloom = snapshotOf(state.bloom); return ''; }   // only a setting changed (a name, say): the record keeps it
     const what = describeChange(_prevSnap, now);
+    // a name names one bloom: a change makes a new one, unnamed (its colour stays, and dims with each save)
+    if (state.bloom.name && state.bloom.name === _prevBloom.name) state.bloom.name = '';
     _undo.push({ bloom: _prevBloom, pins: _prevPins });
     if (_undo.length > HISTORY_MAX) _undo.shift();
     _redo.length = 0;
@@ -430,8 +432,45 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
     if (state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
     if (!e.altKey && own(MODE_KEYS, keyChar(e))) return false;
+    // in a list mode other than pitch, a key that changes the list's length works on the whole list:
+    // a list that isn't per event has no events to select
+    if (_mode && _mode !== 'pitch' && 'zaA"Z{}S'.includes(keyChar(e))) return false;
     const home = findHome(e);
     return home ? !home.whole : true;
+  }
+
+  // ─── Copy and paste ──────────────────────────────────────────────────────────
+  // cmd-c keeps the selected events (all of them with no selection) with their
+  // time, velocity, channel and intervals; cmd-v puts them in after the last
+  // selected event (at the end with no selection) and selects them, so they can
+  // be moved or changed at once. Lists phasing against the notes aren't touched.
+  let _clip: NoteEvent[] = [];
+
+  function copyEvents() {
+    const evs = state.bloom.events();
+    _clip = (_selection.length ? _selection : evs.map((_, i) => i)).map(i => JSON.parse(JSON.stringify(evs[i])) as NoteEvent);
+    status(`copied ${_clip.length} event${_clip.length === 1 ? '' : 's'} · cmd-v pastes after the selection`);
+  }
+
+  function pasteEvents() {
+    if (!_clip.length) { status('nothing copied: select events and cmd-c'); return; }
+    _notice?.begin();
+    const after = _selection.length ? _selection[_selection.length - 1] : state.bloom.notes.length - 1;
+    const n = _clip.length;
+    state.bloom.insertEvents(after, _clip);
+    // pins and the selection move past the pasted events; the pasted ones become the selection
+    movePins(i => (i > after ? i + n : i));
+    _selection = Array.from({ length: n }, (_, j) => after + 1 + j);
+    selectionChanged();
+    refresh(`pasted ${n} event${n === 1 ? '' : 's'} after [${after}]`);
+  }
+
+  /** Each pin to where its event went (null: the event is gone) */
+  function movePins(to: (i: number) => number | null) {
+    const next = [..._pinned].map(to).filter((i): i is number => i !== null);
+    _pinned.clear();
+    next.forEach(i => _pinned.add(i));
+    pinsChanged();
   }
 
   /** The key has acted on the lifted-out events: put them back, and follow where the pins and selection went */
@@ -978,6 +1017,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       undo(e.shiftKey);
       return;
     }
+    // cmd-c / cmd-v: copy the selected events (or all), paste them after the selection (or at the end)
+    if ((e.metaKey || e.ctrlKey) && (e.code === 'KeyC' || e.code === 'KeyV') && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      if (e.code === 'KeyC') copyEvents(); else pasteEvents();
+      return;
+    }
     // Ignore if modifier keys other than shift/option are active (e.g. Ctrl+R)
     if (e.ctrlKey || e.metaKey) return;
     _notice?.begin();
@@ -1060,7 +1105,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       toggleHold, setClean, newBloomTuning,
       selection: () => _selection,
       pins: () => _pinned,
-      select, clearSelection, clearPins, invertPins,
+      select, clearSelection, clearPins, invertPins, movePins,
     };
   }
 

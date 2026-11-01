@@ -150,6 +150,10 @@ async function main() {
     // Density
     reg('thicken',   'new notes in the longest gaps', b => { b.thicken(); });
     reg('thin',      'remove random notes',       b => b.thin());
+    reg('launch',    'launch quantize on / off (a lifted bloom waits for the loop to come round)', () => {
+      const cb = document.getElementById('launch-quantize') as HTMLInputElement | null;
+      if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+    });
     reg(['gap', 'addgap'],    'insert time gap',  b => b.gap());
     reg('ungap',     'remove time gap',           b => b.unGap());
 
@@ -900,13 +904,26 @@ async function main() {
     viz.setShowNoteLabels(showNoteLabelsCb.checked);
   });
 
-  // Max channels
+  // Max channels (⚙ → midi), remembered across sessions
   const maxChanInput = document.getElementById('max-chan-input') as HTMLInputElement;
+  try {
+    const saved = parseInt(localStorage.getItem('bloom.maxChan') ?? '');
+    if (!isNaN(saved) && saved >= 0 && saved <= 15) { Bloom.maxChan = saved; if (maxChanInput) maxChanInput.value = String(saved); }
+  } catch { /* private window */ }
   maxChanInput?.addEventListener('change', () => {
     const v = parseInt(maxChanInput.value);
     if (!isNaN(v) && v >= 0 && v <= 15) {
       Bloom.maxChan = v;
+      try { localStorage.setItem('bloom.maxChan', String(v)); } catch { /* best effort */ }
     }
+  });
+
+  // Launch quantize (play ▾): a bloom lifted while the loop runs waits for it to come round
+  const launchCb = document.getElementById('launch-quantize') as HTMLInputElement | null;
+  try { if (launchCb) launchCb.checked = localStorage.getItem('bloom.launch') === '1'; } catch { /* private window */ }
+  launchCb?.addEventListener('change', () => {
+    try { localStorage.setItem('bloom.launch', launchCb.checked ? '1' : '0'); } catch { /* best effort */ }
+    display.setStatus(`launch quantize ${launchCb.checked ? 'on: a lifted bloom waits for the loop to come round' : 'off'}`);
   });
 
   // ─── Save / load garden ───────────────────────────────────────────────────────

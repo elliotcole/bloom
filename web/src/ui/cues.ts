@@ -55,6 +55,8 @@ const TIPS = [
   'opt-s u d: move only the pitches',
   'opt-p push a save point · opt-shift-p pop back',
   'opt-w wheels within wheels',
+  'opt-n name the bloom, give it a colour',
+  'drag a box: del deletes, cmd-c cmd-v copy and paste the events',
   'opt-1 … 9 change the view',
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',

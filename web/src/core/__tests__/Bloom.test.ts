@@ -250,3 +250,78 @@ describe('mergeList', () => {
     expect(b.mergeList('vel')).toBe(false);
   });
 });
+
+describe('lists phasing against the notes stay as they are', () => {
+  it('a whole-note move carries the lists in step with the notes and leaves the others', () => {
+    const b = bloom([60, 62, 64, 65, 67], [80, 40], [0.25, 0.25, 0.25, 0.25, 0.25]);   // 2 velocities phase, 5 times in step
+    b.chans = [0, 1, 2];
+    b.rotate(1);
+    expect(b.notes).toEqual([67, 60, 62, 64, 65]);
+    expect(b.velocities).toEqual([80, 40]);
+    expect(b.chans).toEqual([0, 1, 2]);
+    expect(b.timeIntervals.length).toBe(5);
+  });
+  it('thin, thicken, split and merge change the notes without cutting a phasing list', () => {
+    for (let i = 0; i < 10; i++) {
+      // lists longer than the notes can ever get, so they can't fall into step by chance
+      const vels = [80, 40, 60, 70, 50, 30, 20, 90, 100, 110, 45, 55, 65];
+      const times = [1, 0.5, 0.25, 0.25, 1, 0.5, 0.25, 0.25, 1, 0.5, 0.25];
+      const b = bloom([60, 62, 64, 65, 67, 69], [...vels], [...times]);
+      b.thin(0.5); b.thicken(); b.splitNote(); b.mergeNote();
+      expect(b.velocities).toEqual(vels);
+      expect(b.timeIntervals).toEqual(times);
+    }
+  });
+  it('a adds a note; only the lists in step grow, with one of their own values', () => {
+    const b = bloom([60, 62, 64], [80, 40], [0.5, 0.25, 0.25]);
+    b.addOneInScale();
+    expect(b.notes.length).toBe(4);
+    expect(b.velocities).toEqual([80, 40]);
+    expect(b.timeIntervals.length).toBe(4);
+    expect([0.5, 0.25]).toContain(b.timeIntervals[3]);
+    expect(b.chans.length).toBe(4);
+  });
+  it('removeAt and insertEvents do the same, and the last note stays', () => {
+    const b = bloom([60, 62, 64, 65], [80, 40], [0.5, 0.25, 0.25, 1]);
+    expect(b.removeAt([1, 3])).toBe(2);
+    expect(b.notes).toEqual([60, 64]);
+    expect(b.timeIntervals).toEqual([0.5, 0.25]);
+    expect(b.velocities).toEqual([80, 40]);
+    expect(b.removeAt([0, 1])).toBe(1);
+    expect(b.notes.length).toBe(1);
+    const c = bloom([60, 62, 64], [80, 40], [0.5, 0.25, 0.25]);
+    c.insertEvents(0, [{ note: 70, vel: 99, time: 2, chan: 3, iv: 0 }, { note: 71, vel: 98, time: 3, chan: 3, iv: 0 }]);
+    expect(c.notes).toEqual([60, 70, 71, 62, 64]);
+    expect(c.timeIntervals).toEqual([0.5, 2, 3, 0.25, 0.25]);
+    expect(c.chans).toEqual([0, 3, 3, 0, 0]);
+    expect(c.velocities).toEqual([80, 40]);
+  });
+  it('a new velocity, time or channel list keeps its own length', () => {
+    const b = bloom([60, 62, 64, 65], [80, 40], [0.5, 0.25, 0.25]);
+    b.chans = [0, 1];
+    b.shapeList('vel', 'renew'); b.shapeList('time', 'renew'); b.shapeList('chan', 'renew');
+    expect(b.velocities.length).toBe(2);
+    expect(b.timeIntervals.length).toBe(3);
+    expect(b.chans.length).toBe(2);
+  });
+});
+
+describe('mergeList merges a few pairs', () => {
+  it('about a fifth of the list, never overlapping, the total time kept', () => {
+    const b = bloom(Array.from({ length: 10 }, (_, i) => 60 + i), [80], Array(10).fill(0.25));
+    expect(b.mergeList('time')).toBe(true);
+    expect(b.timeIntervals.length).toBe(8);
+    expect(b.timeIntervals.reduce((a, x) => a + x, 0)).toBeCloseTo(2.5, 6);
+    expect(b.timeIntervals.every(t => t === 0.25 || t === 0.5)).toBe(true);
+  });
+});
+
+describe('name and colour', () => {
+  it('clone and import carry the name, the colour and how bright it is', () => {
+    const b = bloom([60]); b.name = 'anchor'; b.color = 'green'; b.colorLevel = 0.49;
+    const c = b.clone();
+    expect([c.name, c.color, c.colorLevel]).toEqual(['anchor', 'green', 0.49]);
+    const d = new Bloom().import(b);
+    expect([d.name, d.color, d.colorLevel]).toEqual(['anchor', 'green', 0.49]);
+  });
+});

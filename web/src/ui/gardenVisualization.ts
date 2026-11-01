@@ -13,6 +13,11 @@ import type { VizMode, ThemeId, Theme } from './visualization';
 const SLIDE_DURATION = 150; // ms
 const ANIM_DURATION = 180;  // ms — save/restore overlay
 
+/** The colours a bloom can wear (homeKeys BLOOM_COLORS), as paint */
+const SLOT_COLORS: Record<string, string> = {
+  red: '#e05555', orange: '#e8923f', yellow: '#d9c84a', green: '#5cb86b', blue: '#5b8fe6', violet: '#a371e0',
+};
+
 export class GardenVisualization {
   private gardenArea: HTMLElement;
   private vizArea: HTMLElement;
@@ -247,6 +252,33 @@ export class GardenVisualization {
     }
 
     ctx.restore();
+
+    // its colour (opt-n) as a ring, its name along the bottom
+    if (bloom.color && SLOT_COLORS[bloom.color]) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + (isCurrent ? 6 : 1.5), 0, Math.PI * 2);
+      ctx.strokeStyle = SLOT_COLORS[bloom.color];
+      ctx.globalAlpha = Math.max(0.1, Math.min(1, bloom.colorLevel));   // a descendant's colour fades with each save
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (bloom.name) {
+      ctx.save();
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const label = bloom.name.length > 14 ? `${bloom.name.slice(0, 13)}…` : bloom.name;
+      const w = ctx.measureText(label).width + 8;
+      ctx.fillStyle = theme.bg;
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(cx - w / 2, cy + r * 0.45, w, 13);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = SLOT_COLORS[bloom.color] ?? theme.text;
+      ctx.fillText(label, cx, cy + r * 0.45 + 6.5);
+      ctx.restore();
+    }
 
     // Current slot highlight ring
     if (isCurrent) {

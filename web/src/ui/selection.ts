@@ -26,19 +26,22 @@ export function extractSelection(full: Bloom, sel: number[]): Bloom {
 
 /**
  * Put a worked-on selection back. Lists the key didn't touch keep their own
- * shape (while the number of events holds); a changed list is spelled out per event, the selected slots take the
- * new values in order, and if the selection grew or shrank, events are added
- * after its last slot or its last slots are dropped. Returns the new bloom,
- * where the selected events now are, and where each of the others moved to.
+ * shape (a phasing one even when events came or went); a changed list is
+ * spelled out per event, the selected slots take the new values in order, and
+ * if the selection grew or shrank, events are added after its last slot or its
+ * last slots are dropped. Returns the new bloom, where the selected events now
+ * are, and where each of the others moved to.
  */
 export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, worked: Bloom)
   : { bloom: Bloom; sel: number[]; moved: Map<number, number> } {
   const out = full.clone();
   out.stack = full.stack;
-  // settings a key may change (scale, ranges, legato …) come from the worked bloom
+  // settings a key may change (ranges, legato …) come from the worked bloom;
+  // the scale and key belong to the whole bloom (transposing a few notes doesn't change the key)
   const settings = worked.clone();
   settings.notes = out.notes; settings.timeIntervals = out.timeIntervals;
   settings.velocities = out.velocities; settings.chans = out.chans; settings.intervals = out.intervals; settings.figures = out.figures;
+  settings.appliedScale = full.appliedScale; settings.keyRoot = full.keyRoot;
   out.import(settings);
 
   const n = full.notes.length;
@@ -60,10 +63,15 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   const lengthChanged = kNew !== k;
   for (const f of FIELDS) {
     const after = worked[f] as unknown[];
+    const ex = extracted[f] as unknown[];
     const fullList = full[f] as unknown[];
-    const same = JSON.stringify(after) === JSON.stringify(extracted[f]);
-    // untouched lists keep their shape, unless events came or went around them
-    if (same && (!lengthChanged || fullList.length <= 1)) continue;
+    // untouched: the same values, only grown or cut with the events that came or went
+    const common = Math.min(after.length, ex.length);
+    const untouched = after.length - ex.length === kNew - k
+      && JSON.stringify(after.slice(0, common)) === JSON.stringify(ex.slice(0, common));
+    // an untouched list keeps its shape; one in step with the notes follows events that came or went,
+    // a phasing one stays as it is (Z fits it)
+    if (untouched && (!lengthChanged || fullList.length !== n)) continue;
     if (after.length === 0 || fullList.length === 0) continue;
     (out as unknown as Record<Field, unknown[]>)[f] =
       plan.map(([src, i]) => (src === 'full' ? atEvent(fullList, i) : atEvent(after, i)));
