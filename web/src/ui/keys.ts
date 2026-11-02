@@ -5,16 +5,16 @@ import {
   alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
-import type { ListKey, ListVerb, NoteEvent, PatternOp } from '../core/Bloom';
+import type { ListKey, ListVerb, NoteEvent, PatternOp, IntervalVal } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
 import { formatIntervals, parseIntervals } from '../lib/intervals';
 import { formatFigures, parseFigures, FIGURE_TIMES } from '../lib/figures';
-import type { FigureTime } from '../lib/figures';
+import type { FigureTime, Figure } from '../lib/figures';
 import type { TyperField } from './listTyper';
 import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
-import { playOnce, isLooping, updateLooper, isPulsing, updatePulsar, isGardenLooping, isGardenPulsing, beatsToMs } from '../audio/scheduler';
+import { playOnce, isLooping, updateLooper, isPulsing, updatePulsar, isGardenLooping, isGardenPulsing, beatsToMs, parkLooper, unparkLooper, setParkedBloom, isParkedLooping, stopParked, startParkedInStep, nextMeeting, } from '../audio/scheduler';
 import type { VizMode } from './theme';
 import { findHome, keyChar } from './homeKeys';
 import type { HomeCtx } from './homeKeys';
@@ -121,6 +121,7 @@ const FREEZE_ITEMS: FreezeItem[] = [
   { key: 'd', name: 'duration', selector: '#fixed-dur-enabled' },
   { key: '5', name: 'intervals', selector: '.freeze-palette[data-list="iv"]' },
   { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
+  { key: 'l', name: "the other voice's length", selector: '#voice-lock' },
 ];
 
 // ─── App state ────────────────────────────────────────────────────────────────
@@ -218,6 +219,8 @@ export interface KeyHandlerState {
   /** The tuning view (opt-t) */
   /** ↵ in a list mode: type the list (main.ts gives it the line to type on) */
   typeList?: (label: string, text: string, commit: (text: string, complete: boolean, values: string[]) => string | null, fields?: TyperField[]) => void;
+  /** Two voices: the view of the other voice, drawn dimmed over the main one */
+  ghost?: BloomVisualization | null;
   tuningView?: {
     toggle(): void; close(): void; isOpen(): boolean;
     /** the alterations palette's comma, and the slices selected on the pie */
@@ -229,6 +232,18 @@ export function createKeyHandler(state: KeyHandlerState) {
   let _previewResetId: ReturnType<typeof setTimeout> | null = null;
   /** Temporary bloom used for loop-cycle display; reused across cycles to avoid allocation */
   let _loopDisplayBloom: Bloom | null = null;
+
+  /** The loop's display: each cycle's lists as they phase, shown on a reused bloom */
+  function loopCycle(vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]): void {
+    if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
+    _loopDisplayBloom.import(state.bloom);
+    _loopDisplayBloom.velocities    = vel;
+    _loopDisplayBloom.timeIntervals = time;
+    _loopDisplayBloom.chans         = chan;
+    _loopDisplayBloom.intervals     = intervals;
+    _loopDisplayBloom.figures       = figures;   // they drift too: the marks follow
+    state.viz?.setBloom(_loopDisplayBloom, false);
+  }
 
   function setClean(on: boolean) {
     document.body.classList.toggle('clean', on);
@@ -735,10 +750,12 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (!box) return true;
     if (f.key === 'd') { cycleDuration(box); return true; }
     box.checked = !box.checked;
-    box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click
+    box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click (the lock, below)
     updateFreezeBadge();
     refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
-    status(`${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
+    status(f.key === 'l'
+      ? box.checked ? `held to the other voice's length ❄${_voices ? ` (${otherName()}: ${_voices.other.bloom.passDur()} beats)` : ', once there are two voices (opt-tab)'}` : 'length free of the other voice'
+      : `${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
     return true;
   }
 
@@ -770,7 +787,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   // Clicks in the settings bar update the badge too
-  document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-dur-mode, #fixed-grid-enabled')
+  document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-dur-mode, #fixed-grid-enabled, #voice-lock')
     .forEach(el => el.addEventListener('change', updateFreezeBadge));
 
   /** Handle a key in a list mode. Returns true if the key was consumed. */
@@ -788,6 +805,19 @@ export function createKeyHandler(state: KeyHandlerState) {
       b.shapeList(LIST_OF_MODE[m], tilt);
       status(`${tag} ${label}`);
       refresh(`${tag} ${label}`);
+      return true;
+    }
+    // with two voices, opt-f / opt-x copy or lace this list from the other voice
+    // (f / x take it from the garden slot); at home opt-x copies the whole voice across
+    if (e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.code === 'KeyX')) {
+      if (!_voices) { status(`${tag} opt-${e.code === 'KeyF' ? 'f' : 'x'} takes from the other voice: opt-tab brings one in`); return true; }
+      const k = LIST_OF_MODE[m];
+      const from = _voices.other.bloom;
+      if (!from.getList(k).length) { status(`${tag} ${otherName()} has no ${MODE_NAME[m]} list`); return true; }
+      const msg = e.code === 'KeyX' ? `${tag} laced with ${otherName()}'s ${MODE_NAME[m]}` : `${tag} ${otherName()}'s ${MODE_NAME[m]}`;
+      if (e.code === 'KeyX') b.laceList(k, from); else b.copyList(k, from);
+      status(msg);
+      refresh(msg);
       return true;
     }
     if (e.altKey) return false;   // all other opt combos keep their home meaning
@@ -826,8 +856,8 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'T']);
     if (PASS.has(ch)) return false;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) {
-      return false;   // shift-esc (esc itself left the mode above) inverts at home
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape', 'Tab'].includes(e.code)) {
+      return false;   // tab moves between voices; shift-esc (esc itself left the mode above) inverts at home
     }
 
     const apply = (msg: string, fn: () => void) => {
@@ -1090,17 +1120,8 @@ export function createKeyHandler(state: KeyHandlerState) {
       },
       askCount: (label, last, act, max) => askCount(e, label, last, act, max),
       memo: _memo,
-      onLoopCycle: (vel, time, chan, intervals, figures) => {
-        // Reuse a single display bloom; import notes/scale from the live bloom each cycle
-        if (!_loopDisplayBloom) _loopDisplayBloom = new Bloom();
-        _loopDisplayBloom.import(state.bloom);
-        _loopDisplayBloom.velocities    = vel;
-        _loopDisplayBloom.timeIntervals = time;
-        _loopDisplayBloom.chans         = chan;
-        _loopDisplayBloom.intervals     = intervals;
-        _loopDisplayBloom.figures       = figures;   // they drift too: the marks follow
-        state.viz?.setBloom(_loopDisplayBloom, false);
-      },
+      onLoopCycle: loopCycle,
+      voices: { on: () => !!_voices, toggle: toggleVoices, flip: flipVoice, duplicate: duplicateVoice, stopOther: stopOtherVoice },
       leaveListMode: () => { if (_mode) setListMode(null); },
       toggleHold, setClean, newBloomTuning,
       selection: () => _selection,
@@ -1123,6 +1144,189 @@ export function createKeyHandler(state: KeyHandlerState) {
     refresh('curdle');
   }
 
+  // ─── Two voices (a mode: opt-tab) ──────────────────────────────────────────
+  // One bloom is the default. opt-tab brings in a second voice, B, a copy of
+  // A to start; tab moves the focus. Every key acts on the focused voice: the
+  // live bloom (state.bloom, the one object everything holds) takes the
+  // focused voice's contents, and the other voice waits here with its own
+  // history, pins, selection and freezes. Its loop, if it has one, is parked
+  // in the scheduler and plays on, lit in the dimmed view over the main one.
+  // opt-tab again goes back to one bloom (the focused one); the other is set
+  // aside and comes back with the next opt-tab.
+  interface Voice {
+    bloom: Bloom;
+    undo: { bloom: Bloom; pins: number[] }[];
+    redo: { bloom: Bloom; pins: number[] }[];
+    prevBloom: Bloom;
+    prevSnap: ReturnType<typeof snap>;
+    prevPins: number[];
+    pinned: number[];
+    selection: number[];
+    frozen: Bloom['frozen'];
+    fixed: [Bloom['fixedDur'], Bloom['fixedDurMode'], Bloom['fixedGrid']];
+  }
+  const VOICE_NAMES = ['A', 'B'] as const;
+  let _voices: { other: Voice; focus: 0 | 1 } | null = null;
+  let _voicesAside: { other: Voice; focus: 0 | 1 } | null = null;
+  const focusName = () => (_voices ? VOICE_NAMES[_voices.focus] : '');
+  const otherName = () => (_voices ? VOICE_NAMES[1 - _voices.focus] : '');
+  const ghostLight = (i: number, t: number) => state.ghost?.activateNote(i, t);
+  const copyOf = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+  /** The focused voice as it stands, taken out of the handler (its history moves with it) */
+  function takeFocused(): Voice {
+    const b = state.bloom;
+    return {
+      bloom: b.clone(), undo: _undo.splice(0), redo: _redo.splice(0),
+      prevBloom: _prevBloom, prevSnap: _prevSnap, prevPins: _prevPins,
+      pinned: [..._pinned], selection: [..._selection],
+      frozen: copyOf(b.frozen), fixed: [b.fixedDur, b.fixedDurMode, b.fixedGrid],
+    };
+  }
+
+  /** Make `v` the focused voice: its contents into the live bloom, its history into the handler */
+  function giveFocused(v: Voice): void {
+    const b = state.bloom;
+    b.import(v.bloom);
+    b.stack = v.bloom.stack.map(s => s.clone());
+    b.frozen = copyOf(v.frozen);
+    [b.fixedDur, b.fixedDurMode, b.fixedGrid] = v.fixed;
+    _undo.push(...v.undo); _redo.push(...v.redo);
+    _prevBloom = v.prevBloom; _prevSnap = v.prevSnap; _prevPins = v.prevPins;
+    _pinned.clear(); v.pinned.forEach(i => _pinned.add(i));
+    _selection = [...v.selection];
+  }
+
+  /** A fresh voice from a bloom: no history of its own yet */
+  function voiceFrom(b: Bloom): Voice {
+    const c = b.clone();
+    return {
+      bloom: c, undo: [], redo: [], prevBloom: snapshotOf(c), prevSnap: snap(c), prevPins: [],
+      pinned: [], selection: [], frozen: copyOf(b.frozen), fixed: [b.fixedDur, b.fixedDurMode, b.fixedGrid],
+    };
+  }
+
+  /** The badge and the dimmed view say which voice has the focus */
+  function voicesShown(): void {
+    document.body.classList.toggle('voices', !!_voices);
+    const badge = document.getElementById('voice-badge');
+    if (badge) {
+      badge.textContent = badgeText();
+      badge.title = _voices ? `two voices: ${focusName()} has the focus${isParkedLooping(otherName()) ? `, ${otherName()} is looping` : ''} · tab switches · opt-x copies ${focusName()} into ${otherName()} · opt-tab back to one bloom` : '';
+    }
+    if (_voices) state.ghost?.setBloom(_voices.other.bloom); else { state.ghost?.deactivateAll(); state.ghost?.clear(); }
+    state.viz?.setVoiceLanes(_voices ? [focusName(), otherName()] : null);
+    watchMeeting();
+    syncLock();
+  }
+
+  // Both looping at different lengths, they drift and come round together now
+  // and then: the badge counts the beats to the meeting and the view flares on it
+  let _meetTimer: ReturnType<typeof setInterval> | null = null;
+  let _meetFlashAt = 0;
+  /** "A · B", ↻ when the other loops, and where the two loops meet */
+  function badgeText(): string {
+    return _voices ? `${focusName()} · ${otherName()}${isParkedLooping(otherName()) ? ' ↻' : ''}${meetingText()}` : '';
+  }
+  function meetingText(): string {
+    const m = _voices ? nextMeeting() : null;
+    if (!m) return '';
+    if (m.inStep) return ' · in step';
+    return ` · meet ${Math.max(1, Math.ceil(m.inMs / beatsToMs(1)))}`;
+  }
+  function watchMeeting(): void {
+    if (!_voices) { if (_meetTimer) clearInterval(_meetTimer); _meetTimer = null; return; }
+    if (_meetTimer) return;
+    _meetTimer = setInterval(() => {
+      if (!_voices) { watchMeeting(); return; }
+      const m = nextMeeting();
+      const badge = document.getElementById('voice-badge');
+      if (badge) badge.textContent = badgeText();
+      // a meeting within the next tick is set to flare on the beat (once), unless they're in step
+      if (m && !m.inStep && m.inMs < 300) {
+        const at = performance.now() + m.inMs;
+        if (Math.abs(at - _meetFlashAt) > 100) {
+          _meetFlashAt = at;
+          setTimeout(() => state.viz?.meet(), m.inMs);
+        }
+      }
+    }, 250);
+  }
+
+  /** The lock (F l): the focused voice held to the other's length, which only changes while it has the focus */
+  function syncLock(): void {
+    const on = (document.getElementById('voice-lock') as HTMLInputElement | null)?.checked ?? false;
+    state.bloom.heldDur = _voices && on ? _voices.other.bloom.passDur() : false;
+  }
+  document.getElementById('voice-lock')?.addEventListener('change', syncLock);
+
+  function toggleVoices(): void {
+    if (_voices) {
+      // back to one bloom: the focused voice stays; the other stops and is set aside
+      stopParked(otherName());
+      _voicesAside = _voices;
+      _voices = null;
+      voicesShown();
+      status(`one bloom: ${VOICE_NAMES[_voicesAside.focus]} · opt-tab brings ${VOICE_NAMES[1 - _voicesAside.focus]} back`);
+      return;
+    }
+    const back = _voicesAside;
+    _voices = back ?? { other: voiceFrom(state.bloom), focus: 0 };
+    _voicesAside = null;
+    voicesShown();
+    status(back ? `two voices: ${focusName()}, and ${otherName()} back · tab switches`
+      : `two voices: B is a copy of A · tab switches · opt-tab back to one bloom`);
+  }
+
+  /** tab: the focus to the other voice. Each keeps playing (or not) as it was. */
+  function flipVoice(): void {
+    if (!_voices) { status('one bloom: opt-tab brings in a second voice'); return; }
+    if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
+    const from = focusName(), to = otherName();
+    const leaving = takeFocused();
+    const coming = _voices.other;
+    // the focused loop is parked under its voice, playing the bloom as it was left; the other's comes back
+    parkLooper(from, leaving.bloom, ghostLight);
+    state.ghost?.deactivateAll();
+    giveFocused(coming);
+    unparkLooper(to, state.bloom, (i, t) => state.viz?.activateNote(i, t), loopCycle);
+    _voices = { other: leaving, focus: (1 - _voices.focus) as 0 | 1 };
+    state.viz?.deactivateAll();
+    voicesShown();
+    refresh(`voice ${to}${isLooping() ? ' (looping)' : ''}${isParkedLooping(from) ? ` · ${from} plays on` : ''}`, false);
+    selectionChanged();
+    pinsChanged();
+  }
+
+  /** opt-x: the focused voice copied into the other; if both loop, the copy starts on the focused loop's next downbeat, in step */
+  function duplicateVoice(): void {
+    if (!_voices) { status('one bloom: opt-tab brings in a second voice'); return; }
+    const v = _voices.other;
+    v.undo.push({ bloom: snapshotOf(v.bloom), pins: [...v.pinned] });
+    v.redo.length = 0;
+    v.bloom = state.bloom.clone();
+    v.prevBloom = snapshotOf(v.bloom); v.prevSnap = snap(v.bloom); v.prevPins = [];
+    v.pinned = []; v.selection = [];
+    v.frozen = copyOf(state.bloom.frozen); v.fixed = [state.bloom.fixedDur, state.bloom.fixedDurMode, state.bloom.fixedGrid];
+    const other = otherName();
+    let how = '';
+    if (isParkedLooping(other) && isLooping() && state.out) {
+      state.ghost?.deactivateAll();
+      startParkedInStep(other, v.bloom, state.out, ghostLight);
+      how = `, in step from ${focusName()}'s next downbeat`;
+    } else setParkedBloom(other, v.bloom);
+    voicesShown();
+    status(`${focusName()} copied into ${other}${how}`);
+  }
+
+  /** '.' with nothing of the focused voice playing: stop the other voice's loop */
+  function stopOtherVoice(): boolean {
+    if (!_voices || !stopParked(otherName())) return false;
+    state.ghost?.deactivateAll();
+    voicesShown();
+    return true;
+  }
+
   /** Where the user is, for the cue line */
   function cueContext(): CueContext {
     const b = state.bloom;
@@ -1132,8 +1336,9 @@ export function createKeyHandler(state: KeyHandlerState) {
       ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), figures: b.hasFigures(), held: isHeld(),
       pulsing: isPulsing() || isGardenPulsing(), looping: isLooping() || isGardenLooping(),
       slot: !!state.garden?.current,
+      voice: _voices ? focusName() : undefined,
     };
   }
 
-  return { cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
+  return { voicesShown, otherVoice: () => _voices?.other.bloom ?? null, cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
 }

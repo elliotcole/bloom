@@ -1187,6 +1187,9 @@ export class Bloom {
     const outer = flat.map((note, i) => (Math.abs(note - mid) > 6 ? i : -1)).filter(i => i >= 0);
     const picked = someIndices(outer.length, share);
     const moving = new Set([...picked].map(k => outer[k]));
+    // the farthest note always comes in, so every press narrows the range
+    const far = outer.reduce((f, i) => (Math.abs(flat[i] - mid) > Math.abs(flat[f] - mid) ? i : f), outer[0]);
+    if (far !== undefined) moving.add(far);
     this.notes = flat.map((note, i) => (moving.has(i) ? note + (note > mid ? -12 : 12) : note));
     this.restoreNest();
     return this;
@@ -3296,6 +3299,14 @@ export class Bloom {
   fixedDur: number | false = false;
   fixedDurMode: 'trim' | 'scale' = 'trim';
   fixedGrid: number | false = false;
+  /** Two voices with the lock on: one pass held to the other voice's length, stretched, before each play. Set from outside; not saved. */
+  heldDur: number | false = false;
+
+  /** One pass of the notes in beats, from the start: each note's time, the time list read round when it's another length */
+  passDur(): number {
+    if (!this.timeIntervals.length) return 0;
+    return roundTime(this.notes.reduce<number>((acc, _, i) => acc + wrapAt(this.timeIntervals, i), 0));
+  }
 
   /**
    * Palette freezes, one per list. Each captures the bloom's palette when it's
@@ -3327,6 +3338,8 @@ export class Bloom {
       this._resolveFixedGrid();
       if (typeof this.fixedDur === 'number') this.trimToDur(this.fixedDur);
     }
+    // the other voice's length has the last word, so the two come round together
+    if (typeof this.heldDur === 'number' && this.heldDur > 0) this.scaleToDur(this.heldDur);
     if (this.frozen.pitch) this.applyScale(this.frozen.pitch);
     const fv = this.frozen.vel;
     if (fv) this.velocities = this.velocities.map(v => (v === 0 ? 0 : fv[nearestLinear(fv, v)]));

@@ -33,7 +33,10 @@ export type TakeEvent =
   | [number, 'g', number]                // the garden strip (index in gardens)
   | [number, 'n', number, number]        // a note lights: index, tick
   | [number, 'x']                        // the lights go out
-  | [number, 'a', GardenAnim, number];   // the garden animates (save / restore: the bloom's index)
+  | [number, 'a', GardenAnim, number]    // the garden animates (save / restore: the bloom's index)
+  | [number, 'v', number]                // two voices: the other voice's view shows a bloom (index), -1 nothing
+  | [number, 'w', number, number]        // a note of the other voice lights: index, tick
+  | [number, 'y'];                       // the other voice's lights go out
 
 export type GardenAnim = 'left' | 'right' | 'save' | 'restore';
 
@@ -65,6 +68,10 @@ export interface TakeHost {
   light(index: number, tick: number): void;
   dark(): void;
   animate(kind: GardenAnim, b: Bloom | null): void;
+  /** Two voices: the other voice's view shows a bloom (null: nothing), a note, the dark */
+  other?: { show(b: Bloom | null): void; light(index: number, tick: number): void; dark(): void };
+  /** Two voices: the other voice's bloom in view now, null with one bloom */
+  otherShown?(): Bloom | null;
   /** Recording began or ended, playing began or ended */
   changed(): void;
 }
@@ -193,6 +200,8 @@ function begin(atMs: number): void {
   rec.add([0, 'g', rec.garden(garden)]);
   const shown = _host.shown();
   rec.add([0, 'b', rec.bloom(shown.bloom), shown.trace ? 1 : 0, shown.bloom === bloom ? 1 : 0]);
+  const other = _host.otherShown?.() ?? null;
+  rec.add([0, 'v', other ? rec.bloom(other) : -1]);   // one bloom: -1, so a replay shows no second voice
   _host.changed();
 }
 
@@ -276,6 +285,17 @@ let _play: { T0: number; timer: ReturnType<typeof setInterval>; gen: number } | 
 let _gen = 0;
 
 /** Play the last take from the start; false if there's none */
+/** Two voices: what the other voice's view shows, a note of it, its dark */
+export function takeOtherShown(b: Bloom | null): void {
+  if (_phase === 'recording' && _rec) _rec.add([_rec.at(performance.now()), 'v', b ? _rec.bloom(b) : -1]);
+}
+export function takeOtherLit(index: number, tick: number): void {
+  if (_phase === 'recording' && _rec) _rec.add([_rec.at(performance.now()), 'w', index, tick]);
+}
+export function takeOtherDark(): void {
+  if (_phase === 'recording' && _rec) _rec.add([_rec.at(performance.now()), 'y']);
+}
+
 export function playTake(): boolean {
   const take = _take;
   if (!take || !_host || _phase !== 'idle') return false;
@@ -310,6 +330,9 @@ export function playTake(): boolean {
         case 'n': { const [, , ix, t] = e; later(at, () => host.light(ix, t)); break; }
         case 'x': later(at, () => host.dark()); break;
         case 'a': { const [, , kind, ix] = e; later(at, () => host.animate(kind, ix < 0 ? null : bloomAt(ix))); break; }
+        case 'v': { const ix = e[2]; later(at, () => host.other?.show(ix < 0 ? null : bloomAt(ix))); break; }
+        case 'w': { const [, , ix, t] = e; later(at, () => host.other?.light(ix, t)); break; }
+        case 'y': later(at, () => host.other?.dark()); break;
       }
     }
     if (i >= ev.length && now > take.length + DELAY_MS + 50) stopPlaying();

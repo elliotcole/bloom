@@ -85,7 +85,7 @@ export class Lanes {
    */
   draw(
     ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number,
-    b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number,
+    b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number, voice?: string,
   ): void {
     const n = b.notes.length;
     if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length || !b.intervals.length || !b.figures.length) return;
@@ -130,6 +130,15 @@ export class Lanes {
     ctx.globalAlpha = 0.85;
     ctx.fillRect(x0, y0, w, LANES_HEIGHT);
     ctx.globalAlpha = 1;
+    // two voices: whose lanes these are, down the left edge
+    if (voice) {
+      ctx.fillStyle = ink(0.12);
+      ctx.fillRect(x0, y0 + 4, 12, LANES_HEIGHT - 8);
+      ctx.fillStyle = ink(0.8);
+      ctx.textAlign = 'center';
+      ctx.fillText(voice, x0 + 6, y0 + LANES_HEIGHT / 2);
+    }
+    const nameX = x0 + (voice ? 16 : 8);
 
     LANES.forEach((L, r) => {
       const top = y0 + 4 + r * LANE_H, mid = top + (LANE_H - 3) / 2;
@@ -140,7 +149,7 @@ export class Lanes {
       ctx.fillStyle = active ? MODE : frozen ? ICE : ink(0.45);
       // intervals in scale steps are marked °
       const name = L.name;
-      ctx.fillText(`${frozen ? '❄ ' : ''}${name}`, x0 + 8, mid);
+      ctx.fillText(`${frozen ? '❄ ' : ''}${name}`, nameX, mid);
       ctx.fillStyle = ink(0.25);
       ctx.textAlign = 'right';
       ctx.fillText(`×${len[L.key]}`, x0 + LABEL_W - 6, mid);

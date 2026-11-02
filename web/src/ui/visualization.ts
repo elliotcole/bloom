@@ -2067,6 +2067,8 @@ export class BloomVisualization {
   private _showLanes = false;
   private _clean = false;
   private _listMode: LaneMode = null;
+  /** Two voices: [focused, other]. The lanes stack, the other voice's (drawn by its following view) above the focused one's */
+  private _voiceTags: [string, string] | null = null;
   private _lanes = new Lanes();
   /** The bloom as written, for the lanes; the looper's display bloom is wrapped to one pass */
   private _lanesBloom: Bloom | null = null;
@@ -2123,12 +2125,43 @@ export class BloomVisualization {
   /** Called when choosing a view leaves the tuning view */
   onTuningViewClosed: (() => void) | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /** Two voices: a view of the other voice, drawn over the leader's at its mode, theme, camera and frame, with no background, overlays or clicks */
+  private _leader: BloomVisualization | null = null;
+
+  constructor(canvas: HTMLCanvasElement, leader?: BloomVisualization) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
+    this._leader = leader ?? null;
     this._setupResize();
     this._startLoop();
-    this._setupDrag();
+    if (!leader) this._setupDrag();
+  }
+
+  /** Show nothing (a following view whose voice is gone) */
+  clear(): void {
+    this.bloom = null;
+    this._lanesBloom = null;
+    this._roadPast = [];
+    this.playheadIndex = -1;
+    this._tick = -1;
+  }
+
+  /** A following view takes the leader's settings each frame */
+  private _follow(l: BloomVisualization): void {
+    this._mode = l._mode;
+    this._theme = l._theme;
+    this._camera = l._camera;
+    this._drift = l._drift;
+    this._driftT = l._driftT;
+    this._frame = l._frame;
+    this._size = l._size;
+    this._clean = l._clean;
+    this._framePreview = l._framePreview;
+    this._showLanes = l._showLanes;
+    this._showNoteLabels = l._showNoteLabels;
+    this._listMode = l._listMode;
+    this._voiceTags = l._voiceTags;
+    this._tuningView = false;
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -2194,6 +2227,10 @@ export class BloomVisualization {
   setChanStrip(show: boolean): void { this._showChanStrip = show; }
   /** Which list mode is active, so its lane is lit */
   setListMode(m: LaneMode): void { this._listMode = m; }
+  setVoiceLanes(tags: [string, string] | null): void { this._voiceTags = tags; }
+  /** Two voices: the loops have just come round together, so the rim flares */
+  meet(): void { this._metAt = performance.now(); }
+  private _metAt = 0;
   /** Bloom lanes: the four lists on one time axis under the view */
   toggleLanes(): boolean { this._showLanes = !this._showLanes; return this._showLanes; }
   setLanes(show: boolean): void { this._showLanes = show; }
@@ -2419,6 +2456,8 @@ export class BloomVisualization {
   // ─── Main draw dispatcher ────────────────────────────────────────────────────
 
   private _draw(): void {
+    if (this._leader) this._follow(this._leader);
+    const ghost = this._leader !== null;
     const canvas = this.canvas;
     const ctx = this.ctx;
     const dpr = window.devicePixelRatio || 1;
@@ -2442,7 +2481,8 @@ export class BloomVisualization {
     // In clean view (or previewing it): the frame, and the picture's overall size within it
     const frame = this._frameRect(canvasW, fullH);
     const W = frame.w;
-    const H = lanesOn ? Math.max(80, fullH - LANES_HEIGHT) : frame.h;
+    const laneRows = lanesOn ? (this._voiceTags ? 2 : 1) : 0;
+    const H = lanesOn ? Math.max(80, fullH - laneRows * LANES_HEIGHT) : frame.h;
     const zoom = this._framed ? this._size : 1;
 
     const bloom = this.bloom ? inFlow(this.bloom) : null;
@@ -2457,11 +2497,14 @@ export class BloomVisualization {
       this._orbitRotation += 0.0008;
     }
 
-    // Standard clear + background
+    // Standard clear + background (a following view lets the leader's show through)
     ctx.clearRect(0, 0, canvasW, fullH);
-    ctx.fillStyle = theme.bg;
-    ctx.fillRect(0, 0, canvasW, fullH);
+    if (!ghost) {
+      ctx.fillStyle = theme.bg;
+      ctx.fillRect(0, 0, canvasW, fullH);
+    }
 
+    if (ghost && (!bloom || bloom.notes.length === 0)) { ctx.restore(); return; }
     if (!bloom || bloom.notes.length === 0) {
       this._lastHits = [];
       this._drawEmpty(ctx, frame.x + W / 2, frame.y + H / 2, theme);
@@ -2604,6 +2647,12 @@ export class BloomVisualization {
     }
     this._lastHits = _hits;
     _hits = null;
+    if (ghost) {
+      ctx.restore();
+      if (lanesOn && this._voiceTags) this._drawLanes(ctx, H, W, bloom, theme, this._voiceTags[1]);
+      ctx.restore();
+      return;
+    }
     if (!this._tuningView) {
       this._drawSelected(ctx, theme);
       this._drawPins(ctx, theme);
@@ -2616,19 +2665,32 @@ export class BloomVisualization {
     this._drawBox(ctx, theme);
     if (frame.w !== canvasW || frame.h !== fullH) this._shadeOutside(ctx, frame, canvasW, fullH, theme);
 
+    const met = this._metAt ? 1 - (now - this._metAt) / 900 : 0;
+    if (met > 0) {
+      ctx.strokeStyle = withAlpha(theme.text, 0.6 * met);
+      ctx.lineWidth = 1 + 3 * met;
+      ctx.strokeRect(frame.x + 2, frame.y + 2, frame.w - 4, (lanesOn ? H : frame.h) - 4);
+      ctx.lineWidth = 1;
+    } else this._metAt = 0;
+
     if (lanesOn) {
-      let progress = 0;
-      if (this.playheadIndex >= 0 && this._beadActivatedAt > 0) {
-        const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
-        progress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
-      }
-      this._lanes.draw(ctx, 0, H, W, this._lanesBloom ?? bloom, theme, this._listMode,
-        this.playheadIndex >= 0 ? this._tick : -1, progress);
+      this._drawLanes(ctx, fullH - LANES_HEIGHT, W, bloom, theme, this._voiceTags?.[0]);
     } else if (this._showChanStrip && !this._clean) {
       this._drawChanStrip(ctx, W, H, bloom, theme);
     }
 
     ctx.restore();
+  }
+
+  /** The lanes at `y`, each list's cursor where this view's loop is */
+  private _drawLanes(ctx: CanvasRenderingContext2D, y: number, W: number, bloom: Bloom, theme: Theme, voice?: string): void {
+    let progress = 0;
+    if (this.playheadIndex >= 0 && this._beadActivatedAt > 0) {
+      const intervalMs = beatsToMs(wrapAt(bloom.timeIntervals, this.playheadIndex));
+      progress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
+    }
+    this._lanes.draw(ctx, 0, y, W, this._lanesBloom ?? bloom, theme, this._listMode,
+      this.playheadIndex >= 0 ? this._tick : -1, progress, voice);
   }
 
   /** A soft disc behind every node of a selected event, and the box being dragged */

@@ -344,10 +344,51 @@ describe('gather (E), the opposite of shear', () => {
     }
   });
 
+  it('always brings the farthest note in, even at a small share, so the range narrows', () => {
+    for (let run = 0; run < 200; run++) {
+      const b = new Bloom();
+      b.notes = [40, 52, 58, 62, 68, 80];   // middle 60: 40 and 80 the farthest
+      b.gather(0.05);
+      const after = b.notes as number[];
+      expect(Math.max(...after) - Math.min(...after)).toBeLessThan(40);
+    }
+  });
+
   it('leaves a bloom with nothing far out alone', () => {
     const b = new Bloom();
     b.notes = [58, 60, 62, 64];
     b.gather(1);
     expect(b.notes).toEqual([58, 60, 62, 64]);
+  });
+});
+
+describe('two voices: the length lock', () => {
+  it('passDur sums one pass, reading a time list of another length round', () => {
+    const b = new Bloom();
+    b.notes = [60, 62, 64, 65, 67];
+    b.timeIntervals = [1, 0.5];
+    expect(b.passDur()).toBe(4);
+    b.timeIntervals = [];
+    expect(b.passDur()).toBe(0);
+  });
+
+  it('heldDur stretches one pass to the other voice\'s length before play, after the fixed duration', () => {
+    const b = new Bloom();
+    b.notes = [60, 62, 64];
+    b.timeIntervals = [1, 1, 2];
+    b.heldDur = 6;
+    b.resolveFixed();
+    expect(b.passDur()).toBeCloseTo(6, 2);
+    expect(b.timeIntervals[2] / b.timeIntervals[0]).toBeCloseTo(2, 1);
+    b.fixedDur = 2; b.fixedDurMode = 'trim';
+    b.resolveFixed();
+    expect(b.passDur()).toBeCloseTo(6, 2);
+  });
+
+  it('is off by default and is not carried by import or clone', () => {
+    const a = new Bloom();
+    expect(a.heldDur).toBe(false);
+    a.heldDur = 3;
+    expect(new Bloom().import(a).heldDur).toBe(false);
   });
 });

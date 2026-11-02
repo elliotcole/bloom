@@ -179,6 +179,176 @@ interface LoopState {
 
 let _loop: LoopState | null = null;
 
+// ─── Two voices: a loop set aside keeps running ──────────────────────────────
+// In two-voice mode the focused voice's loop is `_loop`, as ever; the other
+// voice's loop is parked here under its name and plays on, its notes lit on
+// whatever `onNoteOn` it was parked with, its cycle display and onLoop off.
+
+const _parked = new Map<string, LoopState>();
+
+/** Beats from note `tick` until the notes next come round to their first (0 when it is the first) */
+export function beatsToDownbeat(b: Bloom, tick: number): number {
+  const n = b.notes.length;
+  if (!n || !b.timeIntervals.length) return 0;
+  let beats = 0;
+  for (let t = tick; ((t % n) + n) % n !== 0; t++) {
+    const idx = ((t % n) + n) % n;
+    beats += Math.max(0, b.sounding(t - idx).stepAt(idx, t));
+  }
+  return beats;
+}
+
+/** When a loop next starts its notes again, in ms */
+function downbeatOf(s: LoopState): number {
+  return s.nextEventTime + beatsToMs(beatsToDownbeat(s.bloom, s.globalTick));
+}
+
+/** Beats of one pass of the notes starting at `tick` (a tick on the first note), the other lists read where they are */
+export function passBeats(b: Bloom, tick: number): number {
+  const n = b.notes.length;
+  if (!n || !b.timeIntervals.length) return 0;
+  const s = b.sounding(tick);
+  let beats = 0;
+  for (let i = 0; i < n; i++) beats += Math.max(0, s.stepAt(i, tick + i));
+  return beats;
+}
+
+/** The tick of the notes' next first note, from `tick` (itself when it is one) */
+function downbeatTick(b: Bloom, tick: number): number {
+  const n = b.notes.length;
+  return n ? tick + (((-tick % n) + n) % n) : tick;
+}
+
+/** A loop seen from now: its bloom, the tick it plays next, and the beats until it does */
+export interface LoopView { bloom: Bloom; tick: number; inBeats: number }
+
+/**
+ * Beats from now until two loops next start their notes together (their
+ * downbeats within `tol` of each other), looking `limit` beats ahead; null
+ * when they don't meet by then. Loops of one length in step meet every pass;
+ * different lengths drift and meet at something like their lcm.
+ */
+export function meetingIn(a: LoopView, b: LoopView, limit = 512, tol = 0.02): number | null {
+  const downbeats = (v: LoopView): (() => number | null) => {
+    const n = v.bloom.notes.length;
+    if (!n || !v.bloom.timeIntervals.length) return () => null;
+    let at = v.inBeats + beatsToDownbeat(v.bloom, v.tick);
+    let tick = downbeatTick(v.bloom, v.tick);
+    return () => {
+      if (at > limit) return null;
+      const here = at;
+      const pass = passBeats(v.bloom, tick);
+      if (pass <= 0) { at = Infinity; return here; }
+      at += pass; tick += n;
+      return here;
+    };
+  };
+  const na = downbeats(a), nb = downbeats(b);
+  let x = na(), y = nb();
+  while (x !== null && y !== null) {
+    if (Math.abs(x - y) <= tol) return Math.max(x, y);
+    if (x < y) x = na(); else y = nb();
+  }
+  return null;
+}
+
+/**
+ * When the focused loop and the parked one next start together: ms from now,
+ * and whether they're in step (meeting on their very next downbeats, with
+ * passes of one length). Null when not both looping, or not soon.
+ */
+export function nextMeeting(): { inMs: number; inStep: boolean } | null {
+  const other = _parked.values().next();
+  if (!_loop || other.done) return null;
+  const now = performance.now();
+  const view = (s: LoopState): LoopView => ({ bloom: s.bloom, tick: s.globalTick, inBeats: Math.max(0, s.nextEventTime - now) / beatsToMs(1) });
+  const a = view(_loop), b = view(other.value);
+  const beats = meetingIn(a, b);
+  if (beats === null) return null;
+  const next = (v: LoopView) => v.inBeats + beatsToDownbeat(v.bloom, v.tick);
+  const pass = (v: LoopView) => passBeats(v.bloom, downbeatTick(v.bloom, v.tick));
+  const inStep = Math.abs(beats - next(a)) < 0.02 && Math.abs(beats - next(b)) < 0.02 && Math.abs(pass(a) - pass(b)) < 0.02;
+  return { inMs: beatsToMs(beats), inStep };
+}
+
+/** Set the focused loop aside under `name`, still playing; its notes now light `onNoteOn` */
+export function parkLooper(name: string, bloom: Bloom, onNoteOn?: (index: number, tick: number) => void): boolean {
+  stopParked(name);
+  if (!_loop) return false;
+  _loop.bloom = bloom;
+  _loop.onNoteOn = onNoteOn;
+  _loop.onCycleUpdate = undefined;
+  _loop.onLoop = undefined;
+  _parked.set(name, _loop);
+  _loop = null;
+  return true;
+}
+
+/** Bring the loop parked under `name` back as the focused loop, with the focused loop's callbacks */
+export function unparkLooper(
+  name: string,
+  bloom: Bloom,
+  onNoteOn?: (index: number, tick: number) => void,
+  onCycleUpdate?: LoopState['onCycleUpdate'],
+  onLoop?: () => void,
+): boolean {
+  const s = _parked.get(name);
+  if (!s) return false;
+  _parked.delete(name);
+  stopLooper();
+  Object.assign(s, { bloom, onNoteOn, onCycleUpdate, onLoop });
+  _loop = s;
+  return true;
+}
+
+/** The bloom a parked loop plays from now on */
+export function setParkedBloom(name: string, bloom: Bloom): void {
+  const s = _parked.get(name);
+  if (s) s.bloom = bloom;
+}
+
+/** A loop parked under `name` (any, when no name) is playing */
+export function isParkedLooping(name?: string): boolean {
+  return name === undefined ? _parked.size > 0 : _parked.has(name);
+}
+
+/** Stop the loop parked under `name` (every parked loop when no name); true when one was playing */
+export function stopParked(name?: string): boolean {
+  const names = name === undefined ? [..._parked.keys()] : [name];
+  let any = false;
+  for (const k of names) {
+    const s = _parked.get(k);
+    if (!s) continue;
+    clearInterval(s.intervalId);
+    letGo(s.pending);
+    s.atCycle.splice(0).forEach(fn => fn());
+    _parked.delete(k);
+    any = true;
+  }
+  return any;
+}
+
+/**
+ * Start a parked loop under `name` (replacing one there) on the focused loop's
+ * next downbeat, so the two run in step: duplicating a voice into the other.
+ * At once when nothing is looping.
+ */
+export function startParkedInStep(name: string, bloom: Bloom, out: MidiOutput, onNoteOn?: (index: number, tick: number) => void): void {
+  stopParked(name);
+  const focused = _loop;
+  const at = focused ? downbeatOf(focused) : undefined;
+  _loop = null;
+  startLooper(bloom, out, onNoteOn, undefined, undefined, at);
+  parkLooper(name, bloom, onNoteOn);
+  _loop = focused;
+}
+
+/** A parked loop is playing: the focused loop, started now, would join it on its downbeat */
+export function parkedDownbeat(): number | undefined {
+  const first = _parked.values().next();
+  return first.done ? undefined : downbeatOf(first.value);
+}
+
 /**
  * Run `fn` when the loop next comes round to its first note (launch quantize),
  * the lists starting together from there; at once when nothing is looping.
@@ -206,6 +376,8 @@ export function startLooper(
   onNoteOn?: (index: number, tick: number) => void,
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void,
   onLoop?: () => void,
+  /** when to start, in ms: two voices start the second loop on the first one's downbeat */
+  startAt: number | undefined = parkedDownbeat(),
 ): void {
   stopLooper();
 
@@ -215,7 +387,7 @@ export function startLooper(
     bloom,
     out,
     intervalId: 0 as unknown as ReturnType<typeof setInterval>,
-    nextEventTime: performance.now(),
+    nextEventTime: Math.max(performance.now(), startAt ?? 0),
     globalTick: 0,
     onNoteOn,
     onCycleUpdate,
@@ -401,6 +573,7 @@ export function isPulsing(): boolean {
 
 export function stopAll(): void {
   stopLooper();
+  stopParked();
   stopPulsar();
   stopGardenLooper();
   stopGardenPulsar();

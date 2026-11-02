@@ -529,6 +529,7 @@ own rhythmic vocabulary, dynamic levels, instruments.
 | `n` | new random list (for time: drawn from the palette; for pitch: in the scale) |
 | `N` | pitch mode only: new pitches on any of the twelve (elsewhere the same as `n`) |
 | `x` / `f` | lace with / copy from the selected garden slot |
+| opt-`x` / opt-`f` | two voices: lace with / copy from the other voice's list |
 
 **Time verbs stay in your vocabulary wherever they can.** `3 4 - = y i e w`
 move along the durations you already use, and past either end they halve or
@@ -551,6 +552,7 @@ set of values. Press **`F`**, then:
 | `5` | intervals | the interval steps in use right now (steps of 0 stay 0) |
 | `d` | duration | the total length (amount set in **play ▾**). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
 | `g` | grid | a time grid (size set in **play ▾**) |
+| `l` | the other voice's length | two voices: one pass of the voice with the focus stretched to the other's, so the two come round together |
 
 The menu is sticky, like the list modes: each key toggles one freeze (`d` cycles through three states) and the menu stays open, so you can set several or step `d` round. `F` or `esc` closes it. Playback, garden and view keys work while it's open. The header shows
 what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …`. The same switches are in **play ▾** under
@@ -721,6 +723,53 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   page opened kept whatever view was showing. shift-opt-`v` saves the whole
   cloth as one image, the print of the performance. Nothing played yet, it
   shows the pattern the loop would weave.
+
+## Two voices: opt-`tab`
+
+One bloom is the default. opt-`tab` brings in a second voice, as in writing
+two patterns against each other (the piano piece *Facets* was made of two
+blooms of the same length, five notes and three, taking turns). The second
+voice, B, starts as a copy of A. `tab` moves the focus between them: every
+key acts on the voice with the focus, and each voice keeps its own undo
+history, save points, pins, selection and freezes. The badge by the scale
+says which has the focus (↻ when the other is looping), and the other voice
+is drawn dimmed over the picture, in the same view.
+
+Each voice loops on its own, at the same tempo. `,` loops the voice with the
+focus; if the other is already looping, it starts on the other's next
+downbeat, so the two begin together, and from there each wraps at its own
+length (two of the same length stay together; different lengths drift and
+meet again). Leave one running, `tab` to the other, and work on that: the
+way of working is to turn one until it sounds right against the other, let
+it run, and experiment on the other. `.` stops the voice with the focus;
+`.` again, with that one stopped, stops the other. opt-`x` copies the voice
+with the focus into the other, replacing it (undoable from that voice);
+when both are looping, the copy starts on the focused voice's next
+downbeat, so the two loop in unison and pull apart as you change one.
+
+A list can cross alone. In a list mode, opt-`f` copies the other voice's
+list into the voice with the focus and opt-`x` laces the two (as `f` and `x`
+do with the garden slot): in time mode with B focused, opt-`f` gives B A's
+rhythm and B keeps its pitches. The lock, `F l` (or **play ▾** → freeze →
+voice), holds the voice with the focus to the other's length: before each
+play one pass of it is stretched to the other's, so B can gain or lose notes
+and still come round with A. It follows the focus: after `tab`, the other one
+is held. Off by default.
+
+With both looping, the badge says where they are: `in step` when they come
+round together every pass, or `meet 12`, the beats until two loops of
+different lengths next start together, counting down. On the meeting the
+rim of the picture flares. With the lanes open (opt-`\`), both voices' lists
+show, the other voice's dimmed above the focused one's, each with its own
+cursors and lettered down the left.
+
+The garden is shared: `↓` saves the voice with the focus, and `↑` lifts a
+slot into it, so save A, `tab`, save B. Channels are each bloom's own
+(their `c` lists). The tuning sounds for the voice with the focus (one
+output has one tuning); opt-`t` holds one over both. A take records both
+voices and the focus moving between them. opt-`tab` again goes back to one
+bloom, the one with the focus; the other stops and is set aside, and the
+next opt-`tab` brings it back.
 
 ## Takes: perform ▾ → take
 

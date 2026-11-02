@@ -15,7 +15,7 @@ import { formatIntervals } from '../lib/intervals';
 import { controlChange } from '../audio/midi';
 import { startRecording, stopRecording, isRecording } from '../audio/recorder';
 import {
-  startLooper, stopLooper, isLooping, updateLooper, atNextCycle,
+  startLooper, stopLooper, isLooping, updateLooper, atNextCycle, isParkedLooping,
   startPulsar, stopPulsar, isPulsing, updatePulsar,
   setPulsarRate, getPulsarRate, silence,
   startGardenLooper, stopGardenLooper, isGardenLooping,
@@ -65,6 +65,8 @@ export interface HomeCtx {
   invertPins(): void;
   /** each pin to where its event went (null: the event is gone) */
   movePins(to: (i: number) => number | null): void;
+  /** two voices (a mode): bring in or set aside the second, move the focus, copy across, stop the other */
+  voices: { on(): boolean; toggle(): void; flip(): void; duplicate(): void; stopOther(): boolean };
 }
 
 /** One home key */
@@ -129,6 +131,9 @@ export const HOME_KEYS: HomeKey[] = [
     },
   },
   { code: 'KeyT', alt: true, shift: false, whole: true, label: 'hold the tuning over every bloom', act: c => c.toggleHold() },
+  { code: 'Tab', alt: true, shift: false, whole: true, name: 'opt-tab', label: 'two voices: bring in a second bloom (a copy, to start) / back to one', act: c => c.voices.toggle() },
+  { code: 'Tab', alt: false, shift: false, whole: true, name: 'tab', label: 'two voices: the focus to the other voice', act: c => c.voices.flip() },
+  { code: 'KeyX', alt: true, shift: false, whole: true, name: 'opt-x', label: 'two voices: copy the focused voice into the other (in step, if both loop)', act: c => c.voices.duplicate() },
   { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },
   {
@@ -339,11 +344,12 @@ export const HOME_KEYS: HomeKey[] = [
     key: ',', whole: true, label: 'loop',
     act: c => {
       c.b.resolveFixed();
+      const joining = !isLooping() && c.voices.on() && isParkedLooping();
       if (!isLooping()) {
-        startLooper(c.b, c.state.out!, (idx, tick) => c.state.viz?.activateNote(idx, tick), c.onLoopCycle);
+        startLooper(c.b, c.state.out!, (idx, tick) => c.state.viz?.activateNote(idx, tick), c.onLoopCycle);   // two voices: on the other's downbeat
       }
       updateLooper(c.b);
-      c.status('looping');
+      c.status(joining ? 'looping, from the other voice\'s next downbeat' : 'looping');
     },
   },
   {
@@ -359,6 +365,8 @@ export const HOME_KEYS: HomeKey[] = [
     key: '.', whole: true, label: 'stop',
     act: c => {
       const wasActive = isLooping() || isPulsing() || isGardenLooping() || isGardenPulsing();
+      // two voices: the focused voice stops first; . again stops the other
+      if (!wasActive && c.voices.stopOther()) { c.status('the other voice stopped'); return; }
       stopLooper(); stopPulsar(); stopGardenLooper(); stopGardenPulsar();
       if (!wasActive) { c.state.cancelLastPlay?.(); c.state.cancelLastPlay = null; silence(c.state.out); }
       c.state.viz?.deactivateAll();

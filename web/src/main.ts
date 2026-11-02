@@ -12,7 +12,7 @@ import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDeca
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave, sessionNow, restoreSession, pauseAutosave } from './io/garden-io';
 import {
   initTakes, armTake, stopTake, playTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, loadTakeFile, clock as hms,
-  takeShown, takeGarden, takeLit, takeDark, takeAnimate,
+  takeShown, takeGarden, takeLit, takeDark, takeAnimate, takeOtherShown, takeOtherLit, takeOtherDark,
 } from './audio/take';
 import { askRestore } from './ui/restorePrompt';
 import {
@@ -59,6 +59,9 @@ async function main() {
 
   // ─── UI ─────────────────────────────────────────────────────────────────────
   const viz = new BloomVisualization(canvas);
+  // two voices (opt-tab): the other voice, drawn dimmed over the main view, following its view and camera
+  const voiceCanvas = document.getElementById('voice-canvas') as HTMLCanvasElement;
+  const ghost = new BloomVisualization(voiceCanvas, viz);
   const gardenViz = new GardenVisualization(gardenArea, vizArea);
   const display = new Display(displayEl);
 
@@ -276,6 +279,7 @@ async function main() {
     garden,
     out: midiState.selectedOutput,
     viz,
+    ghost,
     gardenViz,
     display,
     cancelLastPlay: null,
@@ -299,7 +303,7 @@ async function main() {
     },
   };
 
-  const { cueContext, onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
+  const { voicesShown, otherVoice, cueContext, onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
 
   // ─── Cue line: the keys that belong to where you are ───────────────────────
   const cueEl = document.getElementById('cue-line') as HTMLElement;
@@ -340,6 +344,11 @@ async function main() {
     viz.setBloom = (b, trace = true) => { _shownNow = { bloom: b, trace }; takeShown(b, trace, b === bloom); setBloom(b, trace); };
     viz.activateNote = (i, tick = i) => { takeLit(i, tick); light(i, tick); };
     viz.deactivateAll = () => { takeDark(); dark(); };
+    const gShow = ghost.setBloom.bind(ghost), gClear = ghost.clear.bind(ghost), gLight = ghost.activateNote.bind(ghost), gDark = ghost.deactivateAll.bind(ghost);
+    ghost.setBloom = (b, trace = true) => { takeOtherShown(b); gShow(b, trace); };
+    ghost.clear = () => { takeOtherShown(null); gClear(); };
+    ghost.activateNote = (i, tick = i) => { takeOtherLit(i, tick); gLight(i, tick); };
+    ghost.deactivateAll = () => { takeOtherDark(); gDark(); };
     const update = gardenViz.update.bind(gardenViz), slide = gardenViz.animateSlide.bind(gardenViz);
     const save = gardenViz.animateSave.bind(gardenViz), restore = gardenViz.animateRestore.bind(gardenViz);
     gardenViz.update = (g) => { takeGarden(g); update(g); };
@@ -356,6 +365,7 @@ async function main() {
       keyState.cancelLastPlay?.();
       keyState.cancelLastPlay = null;
       viz.deactivateAll();
+      ghost.deactivateAll();
     },
     out: () => midiState.selectedOutput,
     show: (b, trace, main) => {
@@ -368,6 +378,13 @@ async function main() {
       if (kind === 'left' || kind === 'right') gardenViz.animateSlide(kind);
       else if (b) (kind === 'save' ? gardenViz.animateSave : gardenViz.animateRestore)(b, canvas);
     },
+    other: {
+      // a take of two voices shows the other one dimmed, as it was
+      show: b => { document.body.classList.toggle('voices', b !== null); if (b) ghost.setBloom(b); else ghost.clear(); },
+      light: (i, tick) => ghost.activateNote(i, tick),
+      dark: () => ghost.deactivateAll(),
+    },
+    otherShown: () => otherVoice(),
     changed: takeUi,
   });
 
@@ -392,6 +409,7 @@ async function main() {
       clearPins();
       clearSelection();
       keysRefresh('take ended', false);
+      voicesShown();   // the session's voices, as they were
     }
     document.body.classList.toggle('take-playing', ph === 'playing');
     if (takeRecBtn) {
