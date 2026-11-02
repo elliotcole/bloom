@@ -325,3 +325,29 @@ describe('name and colour', () => {
     expect([d.name, d.color, d.colorLevel]).toEqual(['anchor', 'green', 0.49]);
   });
 });
+
+describe('gather (E), the opposite of shear', () => {
+  it('brings some outer notes an octave inward, same pitch class, never throwing a central note out', () => {
+    for (let run = 0; run < 50; run++) {
+      const b = new Bloom();
+      b.notes = [36, 50, 60, 62, 70, 84];   // middle 60: 36 and 84 are far out, 60 and 62 central
+      const before = b.notes.slice() as number[];
+      b.gather(1);
+      const after = b.notes as number[];
+      after.forEach((n, i) => {
+        expect(((n - before[i]) % 12 + 12) % 12).toBe(0);           // same pitch class
+        expect(Math.abs(n - 60)).toBeLessThanOrEqual(Math.abs(before[i] - 60));   // never further out
+      });
+      expect(after[2]).toBe(60);
+      expect(after[3]).toBe(62);
+      expect(Math.max(...after) - Math.min(...after)).toBeLessThan(48);
+    }
+  });
+
+  it('leaves a bloom with nothing far out alone', () => {
+    const b = new Bloom();
+    b.notes = [58, 60, 62, 64];
+    b.gather(1);
+    expect(b.notes).toEqual([58, 60, 62, 64]);
+  });
+});

@@ -1,4 +1,4 @@
-// Bloom visualizer — 10 modes × 7 themes, Canvas 2D
+// Bloom visualizer — 12 modes × 7 themes, Canvas 2D
 
 import { Bloom } from '../core/Bloom';
 import { wrapAt, flatNotes } from '../lib/arrays';
@@ -11,6 +11,10 @@ import type { LaneMode } from './lanes';
 import { drawTuningPie, degreeAt } from './tuningPie';
 import type { PieMarks } from './tuningPie';
 import { drawOrreryAt } from './orrery';
+import { drawRoadAt, roadAhead, stepTiles } from './road';
+import type { Tile } from './road';
+import { drawWeaveAt, weaveRow, weaveRows, weavePeriod, fitWeave, weaveImage } from './weave';
+import type { Row } from './weave';
 
 /**
  * The bloom with its times as the flow plays them: an inserted figure takes
@@ -2068,6 +2072,10 @@ export class BloomVisualization {
   private _lanesBloom: Bloom | null = null;
   /** Running count of notes played, so each lane's cursor cycles at its own length */
   private _tick = -1;
+  /** The road: what has sounded, each step's tiles with its onset, newest last */
+  private _roadPast: { atMs: number; tiles: Tile[] }[] = [];
+  /** The weave: every note the session has played, a row each, oldest first (kept whatever the view, so the cloth is whole) */
+  private _weave: Row[] = [];
 
   // Flash / playhead state
   private petalFlash: number[] = [];
@@ -2243,11 +2251,31 @@ export class BloomVisualization {
     this.playheadIndex = index;
     this._beadActivatedAt = performance.now();
     this._lastNoteAt = this._beadActivatedAt;
+    if (this._mode === 'road') {
+      this._roadPast.push({ atMs: this._beadActivatedAt, tiles: stepTiles(this._lanesBloom ?? this.bloom, index, tick) });
+      if (this._roadPast.length > 64) this._roadPast.shift();
+    }
+    this._weave.push(weaveRow(this._lanesBloom ?? this.bloom, index, tick));
+    if (this._weave.length > 20000) this._weave.shift();
 
     // orbit: flash driven by petalFlash; rotation is autonomous (no playhead jump)
   }
 
+  /** Save the weave so far as a PNG (the bloom's pattern when nothing has played); false when there is no bloom */
+  saveWeave(): boolean {
+    const raw = this._lanesBloom ?? this.bloom;
+    if (!raw) return false;
+    const rows = this._weave.length ? this._weave : weaveRows(raw, 0, Math.min(96, Math.max(32, weavePeriod(raw))));
+    const c = weaveImage(raw, rows, this._theme);
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png');
+    a.download = `bloom-weave-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.png`;
+    a.click();
+    return true;
+  }
+
   deactivateAll(): void {
+    this._roadPast = [];
     this.petalFlash = this.petalFlash.map(() => 0);
     this.playheadIndex = -1;
     this._beadActivatedAt = 0;
@@ -2533,6 +2561,44 @@ export class BloomVisualization {
           progress = Math.min(1, (performance.now() - this._beadActivatedAt) / stepMs);
         }
         drawOrreryAt(ctx, cx, cy, minDim * 0.45, raw, this.petalFlash, theme, playing ? this._tick : -1, progress, this._showNoteLabels, hit);
+        break;
+      }
+
+      case 'road': {
+        // what sounded, at its distance behind; what the loop will play, ahead of the note that sounds
+        const raw = this._lanesBloom ?? this.bloom!;
+        const playing = this.playheadIndex >= 0 && this._tick >= 0 && this._beadActivatedAt > 0;
+        let tiles: Tile[];
+        if (playing) {
+          const now = performance.now(), msPerBeat = beatsToMs(1);
+          tiles = this._roadPast.flatMap(e => e.tiles.map(t => ({ ...t, at: t.at + (e.atMs - now) / msPerBeat })));
+          const step = raw.timeIntervals.length ? raw.stepAt(this.playheadIndex, this._tick) : 1;
+          const nextAt = (this._beadActivatedAt - now) / msPerBeat + step;
+          tiles.push(...roadAhead(raw, this._tick + 1, 32).map(t => ({ ...t, at: t.at + nextAt })));
+        } else {
+          tiles = roadAhead(raw, 0, 32).map(t => ({ ...t, at: t.at + 0.4 }));
+        }
+        drawRoadAt(ctx, cx, cy, minDim * 0.48, raw, tiles, this.petalFlash, theme, playing, hit);
+        break;
+      }
+
+      case 'weave': {
+        // the cloth so far, newest row at the bottom; nothing played yet, the pattern the loop would weave
+        const raw = this._lanesBloom ?? this.bloom!;
+        const playing = this.playheadIndex >= 0 && this._tick >= 0 && this._beadActivatedAt > 0;
+        const bx = W * 0.05, bw = W * 0.9, by = H * 0.03, bh = H * 0.94;
+        // about 60 rows of cloth on screen, whatever the tempo: the median step is a 60th of the height
+        const steps = raw.timeIntervals.filter(t => t > 0).sort((p, q) => p - q);
+        const median = steps.length ? steps[Math.floor(steps.length / 2)] : 1;
+        let rows = this._weave, px = bh / 60 / median, progress = 1;
+        if (!rows.length) {
+          rows = weaveRows(raw, 0, Math.min(96, Math.max(32, weavePeriod(raw))));   // several cycles, or as much of the period as fits
+          px = fitWeave(rows, bh - 14);
+        } else if (playing) {
+          const last = rows[rows.length - 1];
+          progress = Math.min(1, (performance.now() - this._beadActivatedAt) / beatsToMs(Math.max(0.02, last.dur)));
+        }
+        drawWeaveAt(ctx, bx, by, bw, bh, raw, rows, this.petalFlash, theme, px, progress, hit);
         break;
       }
     }

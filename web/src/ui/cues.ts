@@ -49,7 +49,7 @@ const TIPS = [
   'l L tilt the line down / up',
   '# $ breeze: some notes a scale step',
   'k K j J choose, slant, lift, reduce the scale',
-  'e E shear an octave outward / centre the range',
+  'e E shear some an octave outward / gather some inward',
   'w draw curves · W remove doubles',
   '; : clump / flatten chords',
   'opt-s u d: move only the pitches',
@@ -59,6 +59,8 @@ const TIPS = [
   'drag a box: del deletes, cmd-c cmd-v copy and paste the events',
   'opt-1 … 9 change the view',
   'opt-0 the orrery: every list a ring, turning at its own length',
+  'opt-o the road: the notes come at you as tiles, what plays next laid out ahead',
+  'opt-v the weave: the performance as cloth, a row per note, a thread per list (shift saves it as an image)',
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',
   '5 ↵ add a chord every few notes: -P5/10',
@@ -87,7 +89,7 @@ function situations(c: CueContext): string[] {
 }
 
 /** While a take plays back (perform ▾ → take): only the view is yours */
-export const TAKE_CUE = 'playing the take · opt-0 … 9 view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
+export const TAKE_CUE = 'playing the take · opt-0 … 9 opt-o opt-v view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
 
 /** What the line says now; `now` turns the tips */
 export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: boolean } {

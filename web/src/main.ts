@@ -195,6 +195,7 @@ async function main() {
     reg('pyramid',   'pyramid pattern',           b => b.pyramid());
     reg('quantize',  'quantize to grid (4)',      b => b.quantize(4));
     reg('shear',     'shear: some notes an octave outward', b => b.shear());
+    reg('gather',    'gather: some notes an octave inward', b => b.gather());
     reg('removedoubles', 'remove double notes',   b => b.removeDoubles());
     reg('drawcurves', 'draw curves diatonic',     b => b.drawCurvesD(10));
 
@@ -615,7 +616,7 @@ async function main() {
 
   /** What a take playing back leaves free: the view, clean view, the display toggles, help, esc */
   const viewKey = (e: KeyboardEvent) =>
-    (e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && e.code === 'KeyC')
+    (e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && (e.code === 'KeyC' || e.code === 'KeyO' || e.code === 'KeyV'))
     || e.code === 'Backslash' || e.key === '?' || (e.code === 'Escape' && !e.shiftKey);
 
   window.addEventListener('keydown', (e) => {
@@ -632,7 +633,7 @@ async function main() {
     if (takePhase() === 'playing') {
       if (e.key === '.' && !e.altKey && !e.metaKey && !e.ctrlKey) { stopPlaying(); display.setStatus('take stopped'); return; }
       if (!viewKey(e)) {
-        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-c, \\ | opt-\\, ?, esc); . stops it');
+        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-o, opt-v, opt-c, \\ | opt-\\, ?, esc); . stops it');
         return;
       }
     }

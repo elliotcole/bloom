@@ -9,6 +9,8 @@ import {
   THEMES,
 } from './visualization';
 import { drawOrreryAt } from './orrery';
+import { drawRoadAt, roadAhead } from './road';
+import { drawWeaveAt, weaveRows, weavePeriod, fitWeave } from './weave';
 import type { VizMode, ThemeId, Theme } from './visualization';
 
 const SLIDE_DURATION = 150; // ms
@@ -250,6 +252,14 @@ export class GardenVisualization {
       case 'orrery':
         drawOrreryAt(ctx, cx, cy, r * 0.9, bloom, [], theme);
         break;
+      case 'road':
+        drawRoadAt(ctx, cx, cy, r, bloom, roadAhead(bloom, 0, 32).map(t => ({ ...t, at: t.at + 0.4 })), [], theme);
+        break;
+      case 'weave': {
+        const rows = weaveRows(bloom, 0, Math.min(48, Math.max(16, weavePeriod(bloom))));
+        drawWeaveAt(ctx, cx - r, cy - r, d, d, bloom, rows, [], theme, fitWeave(rows, d));
+        break;
+      }
       case 'score':
         drawScoreAt(ctx, cx - r, cy - r, d, d, bloom, [], theme, false, true);
         break;
@@ -350,6 +360,12 @@ export class GardenVisualization {
         case 'set': drawSetAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'helix': drawHelixAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
         case 'orrery': drawOrreryAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
+        case 'road': drawRoadAt(actx, cx, cy, minDim * 0.48, bloom, roadAhead(bloom, 0, 32).map(t => ({ ...t, at: t.at + 0.4 })), [], theme); break;
+        case 'weave': {
+          const rows = weaveRows(bloom, 0, Math.min(96, Math.max(32, weavePeriod(bloom))));
+          drawWeaveAt(actx, w * 0.05, h * 0.04, w * 0.9, h * 0.92, bloom, rows, [], theme, fitWeave(rows, h * 0.92 - 14));
+          break;
+        }
         case 'deep': {
           const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
           const uh = minDim * 0.50;

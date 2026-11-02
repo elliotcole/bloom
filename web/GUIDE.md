@@ -100,7 +100,7 @@ alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
 | `m` | mutate (scale steps) | `M` | mutate (chromatic) |
 | `1` `2` | ∓ semitone | `!` `@` | ∓ octave |
 | `3` `4` | ∓ scale step | `#` `$` | **breeze**: some notes ∓ a scale step |
-| `e` / `E` | shear (a third of the notes an octave outward, same pitch class) / centre range |
+| `e` / `E` | shear (a third of the notes an octave outward, same pitch class) / gather (the opposite: some of the outer notes an octave inward, so the range narrows) |
 | `l` / `L` | tilt down / up (each press a scale step steeper) | | | `[` / `]` | step flatward / sharpward |
 | `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
 | `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
@@ -319,7 +319,7 @@ list drifts through the notes in the loop): `0` is no figure.
 - **A run**, in brackets: `(1 2 3)` plays do re mi, starting on the note.
   The numbers count steps of the scale as musicians name them: `1` the note
   itself, `2` a step up, `-2` a step down, `5` a fifth up. Chromatic
-  intervals go by name (`+P5`, `-m2`), and `·` is a rest. `(1 1 1)` is a
+  intervals go by name (`+P5`, `-m2`), and `.` is a rest. `(1 1 1)` is a
   ratchet, `(1 -2 1)` a lower neighbour, `(1 · 1 1)` a little rhythm.
 - **A garden slot**, `@3`: slot 3 (numbered as the console shows the slots,
   from 0), a tiny bloom with its own times, velocities and channels. Its
@@ -463,7 +463,7 @@ visited, so repeated slants wander outward instead of circling.
 **Intervals mode (`5`) treats the intervals as a list like the others.**
 
 *What they are.* Each step of the list adds a chord to the note it falls on,
-at playback, or nothing (`·`). Intervals are written by name, the sign saying
+at playback, or nothing (`.`). Intervals are written by name, the sign saying
 above (+) or below (−):
 
 | kind | names | counts |
@@ -683,8 +683,10 @@ nodes sit on a soft disc and the header shows `▣ 4`.
     reset view also resets the drift.
 - **Turning deep and spiral:** two-finger scroll (sideways turns, up and down
   tilts) or opt-drag. A plain drag selects.
-- **Views:** opt-`1`…`9`, and opt-`0` the **orrery**. The `\` key holds the
-  display toggles: `\` console, `|` note labels, opt-`\` lanes.
+- **Views:** opt-`1`…`9`, opt-`0` the **orrery**, opt-`o` the **road**, opt-`v`
+  the **weave**. The
+  `\` key holds the display toggles: `\` console, `|` note labels, opt-`\`
+  lanes.
 - **The orrery (opt-`0`)** shows the lists phasing. Each list is a ring with
   one cell per entry (the pitches outermost, then the times, the dynamics, the
   channels, and the intervals and figures when the bloom has them), and each
@@ -694,6 +696,31 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   the conjunction, the line at the top flares, and the centre counts the notes
   until the next one (the lengths' least common multiple). `Z` makes every
   ring the notes' length, so they turn as one.
+- **The road (opt-`o`)** comes at you in five-point perspective: you stand on
+  it looking along it, the vanishing point at the centre, the ring where
+  things pass beside you, and what has passed wrapping round the rim and
+  dissolving. A lane per channel; a tile per sound, as long as the note's
+  time, lifted by its pitch (with a shadow on the road), in its pitch class's
+  colour and as bright as its velocity. A chord's tile has a side per note:
+  a dyad is a diamond, a triad a triangle, four a hexagon, more a disc. An
+  added note (intervals) is an outline, a figure's step a smaller tile, a
+  rest a gap. Since a loop is deterministic, the road ahead is drawn before
+  it sounds: the horizon shows what is coming, and a transform visibly
+  rewrites it. Stopped, the bloom lies ahead from its start.
+- **The weave (opt-`v`)** is the performance as cloth. The warp runs down the
+  picture, a group of threads per list in use (pitch, time, vel, chan, and
+  int and fig when the bloom has them), one thread per entry. The weft is the
+  notes as they sound: one row per note, as tall as the note's time, in its
+  pitch class's colour and as bright as its velocity, a chord stacked in its
+  float. In each group the thread shows only at the cell that list is on, so
+  a list of 7 lays a diagonal of one slope and a list of 11 another: the
+  phasing comes out as twill, and their interference as moiré. A rest is a
+  row of bare warp; a conjunction draws a line across the cloth and knots the
+  selvedge; `Z` makes a plain weave. The newest row is woven at the bottom
+  as the note sounds and the cloth climbs from there, every note since the
+  page opened kept whatever view was showing. shift-opt-`v` saves the whole
+  cloth as one image, the print of the performance. Nothing played yet, it
+  shows the pattern the loop would weave.
 
 ## Takes: perform ▾ → take
 
@@ -712,7 +739,7 @@ tunings, play a keyboard along), and the take keeps it all.
 - **stop take** (click twice). The take really stops: nothing more is played,
   what's sounding holds for 10 seconds and is let go, the pedal lifted.
 - **play take** plays it from the start, exactly as it went out. The bloom ▾
-  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`0`…`9`,
+  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`0`…`9`, opt-`o`, opt-`v`,
   opt-`c` (clean view), `\` `|` opt-`\`, `?`, `esc`. `.` stops it early.
   Afterwards your session comes back as it was. To print, record the
   playback in your DAW or screen recorder.

@@ -37,15 +37,15 @@ const DIATONIC_NAMES = Array.from({ length: MAX_DIATONIC + 1 }, (_, k) => (k ===
 
 /** One interval by name, with its sign: +P5, -3rd */
 export function ivName(iv: number): string {
-  if (iv === 0) return '·';
+  if (iv === 0) return '.';
   const n = Math.abs(countOf(iv));
   return `${iv < 0 ? '-' : '+'}${isDiatonic(iv) ? DIATONIC_NAMES[n] : CHROMATIC_NAMES[n]}`;
 }
 
-/** A step: its intervals together (-P5-P8), or a dot */
+/** A step: its intervals together (-P5-P8), or a period */
 export function stepName(step: number | number[]): string {
   const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
-  return ivs.length ? ivs.map(ivName).join('') : '·';
+  return ivs.length ? ivs.map(ivName).join('') : '.';
 }
 
 /** A list as written: each chord with the rests after it folded into /N when that's shorter */
@@ -55,7 +55,7 @@ export function formatIntervals(list: (number | number[])[]): string {
   while (i < list.length) {
     const name = stepName(list[i]);
     let j = i + 1;
-    while (j < list.length && stepName(list[j]) === '·') j++;
+    while (j < list.length && stepName(list[j]) === '.') j++;
     const n = j - i;
     if (n >= 3) { out.push(`${name}/${n}`); i = j; }
     else { out.push(name); i++; }

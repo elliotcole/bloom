@@ -1173,6 +1173,25 @@ export class Bloom {
     return this;
   }
 
+  /**
+   * The opposite of shear: some of the outer notes an octave inward, same pitch
+   * class. Only a note more than a tritone from the middle of the range can go
+   * (an octave in brings it nearer the middle rather than across it), so the
+   * range narrows and nothing already central is thrown outward.
+   */
+  gather(share = GESTURE.breeze): this {
+    this.saveNest();
+    const flat = flatNotes(this.notes) as number[];
+    const sorted = [...flat].sort((a, b) => a - b);
+    const mid = (sorted[0] + sorted[sorted.length - 1]) / 2;
+    const outer = flat.map((note, i) => (Math.abs(note - mid) > 6 ? i : -1)).filter(i => i >= 0);
+    const picked = someIndices(outer.length, share);
+    const moving = new Set([...picked].map(k => outer[k]));
+    this.notes = flat.map((note, i) => (moving.has(i) ? note + (note > mid ? -12 : 12) : note));
+    this.restoreNest();
+    return this;
+  }
+
   invert(n = 1): this {
     this.saveNest();
     this.notes = invertChord(flatNotes(this.notes) as number[], n);

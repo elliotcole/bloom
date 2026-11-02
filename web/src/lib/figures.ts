@@ -31,9 +31,9 @@ export const isSlotFigure = (f: Figure): f is { slot: number } => typeof f === '
 export const isRunFigure = (f: Figure): f is FigureStep[] => Array.isArray(f);
 export const isFigure = (f: Figure): boolean => isSlotFigure(f) || (isRunFigure(f) && f.length > 0);
 
-/** One step of a run as written: 1 2 -2 by scale steps, +P5 -m2 by name, · a rest */
+/** One step of a run as written: 1 2 -2 by scale steps, +P5 -m2 by name, . a rest */
 function stepText(s: FigureStep): string {
-  if (s === null) return '·';
+  if (s === null) return '.';
   if (s === 0) return '1';
   if (isDiatonic(s)) { const k = countOf(s); return `${k < 0 ? '-' : ''}${Math.abs(k) + 1}`; }
   return ivName(s);
@@ -82,7 +82,7 @@ export function parseFigures(text: string): { list: Figure[]; error: string | nu
       run = null;
     } else if (run) {
       const s = parseStep(t);
-      if (s === undefined) return { list: [], error: `"${t}" isn't a step (1 2 -2 by the scale, +P5 -m2 by name, · a rest)` };
+      if (s === undefined) return { list: [], error: `"${t}" isn't a step (1 2 -2 by the scale, +P5 -m2 by name, . a rest)` };
       run.push(s);
     } else if (['0', '.', '·', '_'].includes(t)) list.push(0);
     else if (/^@\d+$/.test(t)) list.push({ slot: parseInt(t.slice(1), 10) });

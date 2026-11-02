@@ -2,7 +2,7 @@
 
 export type VizMode =
   | 'flower' | 'field' | 'orbit'
-  | 'tonal' | 'spiral' | 'set' | 'helix' | 'deep' | 'score' | 'orrery';
+  | 'tonal' | 'spiral' | 'set' | 'helix' | 'deep' | 'score' | 'orrery' | 'road' | 'weave';
 
 export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal';
 

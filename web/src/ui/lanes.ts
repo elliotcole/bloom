@@ -191,7 +191,7 @@ export class Lanes {
         } else if (L.key === 'fig') {
           const f = b.figures[li];
           ctx.fillStyle = ink(isFigure(f) ? a : 0.3);
-          ctx.fillText(isFigure(f) ? formatFigure(f) : '·', cx0 + 4, mid);
+          ctx.fillText(isFigure(f) ? formatFigure(f) : '.', cx0 + 4, mid);
         } else {
           const c = b.chans[li];
           ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;

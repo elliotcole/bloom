@@ -151,7 +151,7 @@ function listAsText(b: Bloom, m: ListMode): { text: string; set: (text: string) 
     };
     case 'iv': return {
       // none yet: a dot for each note to type over
-      text: b.hasIntervals() ? formatIntervals(b.intervals) : b.notes.map(() => '·').join(' '),
+      text: b.hasIntervals() ? formatIntervals(b.intervals) : b.notes.map(() => '.').join(' '),
       set: t => { const r = parseIntervals(t); if (r.error) return r.error; b.intervals = r.list; return null; },
     };
   }

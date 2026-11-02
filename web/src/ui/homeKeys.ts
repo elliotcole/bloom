@@ -117,6 +117,17 @@ export const HOME_KEYS: HomeKey[] = [
     code: 'Digit0', alt: true, shift: false, whole: true, name: 'opt-0', label: 'the orrery: each list a ring turning at its own length',
     act: c => { c.state.setVizModeFn?.('orrery'); c.status('view: orrery'); },
   },
+  {
+    code: 'KeyO', alt: true, shift: false, whole: true, name: 'opt-o', label: 'the road: the notes come at you as tiles, what plays next laid out ahead',
+    act: c => { c.state.setVizModeFn?.('road'); c.status('view: road'); },
+  },
+  {
+    code: 'KeyV', alt: true, whole: true, name: 'opt-v', label: 'the weave: the performance as cloth, a row per note, a thread per list (shift: save the cloth as an image)',
+    act: c => {
+      if (c.shift) c.status(c.state.viz?.saveWeave() ? 'saved the weave' : 'nothing to weave');
+      else { c.state.setVizModeFn?.('weave'); c.status('view: weave'); }
+    },
+  },
   { code: 'KeyT', alt: true, shift: false, whole: true, label: 'hold the tuning over every bloom', act: c => c.toggleHold() },
   { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },
@@ -255,7 +266,7 @@ export const HOME_KEYS: HomeKey[] = [
 
   // ─── Pitch ─────────────────────────────────────────────────────────────────
   v('e', 'shear: some an octave outward', b => b.shear(), 'shear'),
-  v('E', 'center range', b => b.compass(48, 72), 'compass 48-72'),
+  v('E', 'gather: some an octave inward', b => b.gather(), 'gather'),
   v('i', 'invert', b => b.invert()),
   v('I', 'invert around mean', b => b.invertMean(), 'invertMean'),
   v('1', 'down semitone', b => b.transpose(-1), 'transpose -1'),
