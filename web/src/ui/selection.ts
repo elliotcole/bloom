@@ -65,10 +65,12 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
     const after = worked[f] as unknown[];
     const ex = extracted[f] as unknown[];
     const fullList = full[f] as unknown[];
-    // untouched: the same values, only grown or cut with the events that came or went
+    // untouched: exactly as lifted out (a key that changed only another list, as pitch mode's a or z
+    // changes only the notes), or the same values grown or cut with the events that came or went
     const common = Math.min(after.length, ex.length);
-    const untouched = after.length - ex.length === kNew - k
-      && JSON.stringify(after.slice(0, common)) === JSON.stringify(ex.slice(0, common));
+    const untouched = JSON.stringify(after) === JSON.stringify(ex)
+      || (after.length - ex.length === kNew - k
+        && JSON.stringify(after.slice(0, common)) === JSON.stringify(ex.slice(0, common)));
     // an untouched list keeps its shape; one in step with the notes follows events that came or went,
     // a phasing one stays as it is (Z fits it)
     if (untouched && (!lengthChanged || fullList.length !== n)) continue;
