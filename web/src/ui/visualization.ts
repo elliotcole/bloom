@@ -1,4 +1,4 @@
-// Bloom visualizer — 9 modes × 5 themes, Canvas 2D
+// Bloom visualizer — 10 modes × 7 themes, Canvas 2D
 
 import { Bloom } from '../core/Bloom';
 import { wrapAt, flatNotes } from '../lib/arrays';
@@ -10,6 +10,7 @@ import { Lanes, LANES_HEIGHT } from './lanes';
 import type { LaneMode } from './lanes';
 import { drawTuningPie, degreeAt } from './tuningPie';
 import type { PieMarks } from './tuningPie';
+import { drawOrreryAt } from './orrery';
 
 /**
  * The bloom with its times as the flow plays them: an inserted figure takes
@@ -2521,6 +2522,19 @@ export class BloomVisualization {
       case 'score':
         drawScoreAt(ctx, 0, 0, W, H, bloom, this.petalFlash, theme, this._showNoteLabels);
         break;
+
+      case 'orrery': {
+        // the lists as written, each at its own length (the looper's display bloom spells them out per cycle)
+        const raw = this._lanesBloom ?? this.bloom!;
+        const playing = this.playheadIndex >= 0 && this._tick >= 0;
+        let progress = 0;
+        if (playing && this._beadActivatedAt > 0 && raw.timeIntervals.length) {
+          const stepMs = beatsToMs(Math.max(0.02, raw.stepAt(this.playheadIndex, this._tick)));
+          progress = Math.min(1, (performance.now() - this._beadActivatedAt) / stepMs);
+        }
+        drawOrreryAt(ctx, cx, cy, minDim * 0.45, raw, this.petalFlash, theme, playing ? this._tick : -1, progress, this._showNoteLabels, hit);
+        break;
+      }
     }
     this._lastHits = _hits;
     _hits = null;

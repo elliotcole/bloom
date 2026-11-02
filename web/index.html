@@ -764,7 +764,7 @@
       <h1>BLOOM</h1>
       <span id="midi-status" class="midi-status">initializing…</span>
       <select id="midi-select"></select>
-      <select id="viz-mode-select" title="visualization mode (opt+1–9)">
+      <select id="viz-mode-select" title="visualization mode (opt+1–9, opt+0 orrery)">
         <option value="deep"   selected>◆ deep</option>
         <option value="field">⊞ field</option>
         <option value="orbit">⊙ orbit</option>
@@ -774,6 +774,7 @@
         <option value="spiral">🌀 spiral</option>
         <option value="helix">⌀ helix</option>
         <option value="flower">✿ flower</option>
+        <option value="orrery">◎ orrery</option>
       </select>
       <button id="reset-camera" title="reset camera view" style="display:none">⊹ reset view</button>
       <button id="console-toggle" title="toggle console (\\)">⊟ console</button>
@@ -895,7 +896,7 @@
 <span class="s-section">
           <span class="s-section-label">take</span>
           <button class="s-btn" id="take-rec" title="arm a take: it starts on the first note that sounds and keeps everything that sounds and shows until you stop it (asks twice); then what's sounding holds 10 s and is let go">arm take</button>
-          <button class="s-btn" id="take-play" title="play the last take from the start, exactly as it went: its notes, tunings, keyboard and picture. The view keys stay yours (opt-1 … 9, opt-c, \ | opt-\); . stops it. The session comes back after">play take</button>
+          <button class="s-btn" id="take-play" title="play the last take from the start, exactly as it went: its notes, tunings, keyboard and picture. The view keys stay yours (opt-0 … 9, opt-c, \ | opt-\); . stops it. The session comes back after">play take</button>
           <button class="s-btn" id="take-save" title="save the last take to a .bloomtake file">save…</button>
           <button class="s-btn" id="take-load" title="load a .bloomtake file as the last take">load…</button>
           <span id="take-status" class="s-note"></span>
@@ -1187,7 +1188,7 @@ playback &amp; garden keys unchanged</div>
 <b>|</b>        note labels
 <b>opt-\</b>    lanes (each list, own cursor)
 <b>opt-c</b>    clean view (esc leaves)
-<b>opt-1 … 9</b> the views   <b>?</b> this help
+<b>opt-1 … 9</b> the views   <b>opt-0</b> orrery   <b>?</b> this help
 <b>perform ▾</b> take: record a whole performance, play it again
           (while it plays: the keys above, . stops)
 <b>opt-e</b>    edit bloom

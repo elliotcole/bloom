@@ -615,7 +615,7 @@ async function main() {
 
   /** What a take playing back leaves free: the view, clean view, the display toggles, help, esc */
   const viewKey = (e: KeyboardEvent) =>
-    (e.altKey && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && e.code === 'KeyC')
+    (e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && e.code === 'KeyC')
     || e.code === 'Backslash' || e.key === '?' || (e.code === 'Escape' && !e.shiftKey);
 
   window.addEventListener('keydown', (e) => {
@@ -632,7 +632,7 @@ async function main() {
     if (takePhase() === 'playing') {
       if (e.key === '.' && !e.altKey && !e.metaKey && !e.ctrlKey) { stopPlaying(); display.setStatus('take stopped'); return; }
       if (!viewKey(e)) {
-        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-1 … 9, opt-c, \\ | opt-\\, ?, esc); . stops it');
+        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-c, \\ | opt-\\, ?, esc); . stops it');
         return;
       }
     }

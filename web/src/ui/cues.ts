@@ -58,6 +58,7 @@ const TIPS = [
   'opt-n name the bloom, give it a colour',
   'drag a box: del deletes, cmd-c cmd-v copy and paste the events',
   'opt-1 … 9 change the view',
+  'opt-0 the orrery: every list a ring, turning at its own length',
   'F freeze lists while you keep playing',
   'T tuning mode · opt-t hold the tuning',
   '5 ↵ add a chord every few notes: -P5/10',
@@ -86,7 +87,7 @@ function situations(c: CueContext): string[] {
 }
 
 /** While a take plays back (perform ▾ → take): only the view is yours */
-export const TAKE_CUE = 'playing the take · opt-1 … 9 view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
+export const TAKE_CUE = 'playing the take · opt-0 … 9 view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
 
 /** What the line says now; `now` turns the tips */
 export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: boolean } {

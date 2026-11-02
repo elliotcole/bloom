@@ -113,6 +113,10 @@ export const HOME_KEYS: HomeKey[] = [
     label: 'change the view',
     act: c => { const mode = VIZ_ORDER[parseInt(c.e.code.slice(5), 10) - 1]; c.state.setVizModeFn?.(mode); c.status(`view: ${mode}`); },
   },
+  {
+    code: 'Digit0', alt: true, shift: false, whole: true, name: 'opt-0', label: 'the orrery: each list a ring turning at its own length',
+    act: c => { c.state.setVizModeFn?.('orrery'); c.status('view: orrery'); },
+  },
   { code: 'KeyT', alt: true, shift: false, whole: true, label: 'hold the tuning over every bloom', act: c => c.toggleHold() },
   { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },

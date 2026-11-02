@@ -683,8 +683,17 @@ nodes sit on a soft disc and the header shows `▣ 4`.
     reset view also resets the drift.
 - **Turning deep and spiral:** two-finger scroll (sideways turns, up and down
   tilts) or opt-drag. A plain drag selects.
-- **Views:** opt-`1`…`9`. The `\` key holds the display toggles: `\`
-  console, `|` note labels, opt-`\` lanes.
+- **Views:** opt-`1`…`9`, and opt-`0` the **orrery**. The `\` key holds the
+  display toggles: `\` console, `|` note labels, opt-`\` lanes.
+- **The orrery (opt-`0`)** shows the lists phasing. Each list is a ring with
+  one cell per entry (the pitches outermost, then the times, the dynamics, the
+  channels, and the intervals and figures when the bloom has them), and each
+  ring has its own hand at tick mod its length, sweeping through the cell that
+  sounds. Lists of 7 and 11 turn at different speeds, so you watch them drift
+  apart and come round together: the moment every hand points up at once is
+  the conjunction, the line at the top flares, and the centre counts the notes
+  until the next one (the lengths' least common multiple). `Z` makes every
+  ring the notes' length, so they turn as one.
 
 ## Takes: perform ▾ → take
 
@@ -703,7 +712,7 @@ tunings, play a keyboard along), and the take keeps it all.
 - **stop take** (click twice). The take really stops: nothing more is played,
   what's sounding holds for 10 seconds and is let go, the pedal lifted.
 - **play take** plays it from the start, exactly as it went out. The bloom ▾
-  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`1`…`9`,
+  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`0`…`9`,
   opt-`c` (clean view), `\` `|` opt-`\`, `?`, `esc`. `.` stops it early.
   Afterwards your session comes back as it was. To print, record the
   playback in your DAW or screen recorder.

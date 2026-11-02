@@ -8,6 +8,7 @@ import {
   drawScoreAt,
   THEMES,
 } from './visualization';
+import { drawOrreryAt } from './orrery';
 import type { VizMode, ThemeId, Theme } from './visualization';
 
 const SLIDE_DURATION = 150; // ms
@@ -246,6 +247,9 @@ export class GardenVisualization {
       case 'deep':
         drawDeepAt(ctx, cx - r, cy - r, d, d, bloom, [], -1, 0, theme, false);
         break;
+      case 'orrery':
+        drawOrreryAt(ctx, cx, cy, r * 0.9, bloom, [], theme);
+        break;
       case 'score':
         drawScoreAt(ctx, cx - r, cy - r, d, d, bloom, [], theme, false, true);
         break;
@@ -345,6 +349,7 @@ export class GardenVisualization {
         case 'spiral': drawSpiralAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'set': drawSetAt(actx, cx, cy, minDim * 0.44, bloom, [], theme); break;
         case 'helix': drawHelixAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
+        case 'orrery': drawOrreryAt(actx, cx, cy, minDim * 0.45, bloom, [], theme); break;
         case 'deep': {
           const asp = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
           const uh = minDim * 0.50;
