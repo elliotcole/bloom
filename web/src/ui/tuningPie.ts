@@ -1,5 +1,5 @@
 // The tuning view's picture: the bloom's tuning as a pie of its twelve notes,
-// C at the top as in the set view. Each slice reaches halfway to its
+// the root (1/1) at the top, whatever the key. Each slice reaches halfway to its
 // neighbours, so its width shows how much room the tuning gives that note, and
 // its rim dot sits at the note's exact pitch (12-TET's places are ticks outside).
 // Slices light up as their pitch class plays; clicking one selects it.
@@ -16,11 +16,15 @@ import { isHeld, soundingRoot, soundingTuning } from '../audio/tuningOut';
 /** Selected degrees (from the root), drawn outlined, the interval as a chord */
 export interface PieMarks { a: number | null; b: number | null }
 
-/** Where each degree sits, in radians (C at the top, clockwise), from the bloom's tuning and root */
+/** Where each degree sits, in radians (the root at the top, clockwise), from the bloom's tuning */
 function angles(bloom: Bloom): number[] {
   const t = editable(soundingTuning(bloom));
-  const off = soundingRoot(bloom) * 100 * t.period / 1200;
-  return t.cents.map(c => ((off + c) / t.period) * Math.PI * 2 - Math.PI / 2);
+  return t.cents.map(c => (c / t.period) * Math.PI * 2 - Math.PI / 2);
+}
+
+/** The theme's text colour made strong enough to read around the pie (the themes' own is faint, for the background) */
+export function legible(color: string): string {
+  return color.replace(/rgba\(([^,]+),([^,]+),([^,]+),\s*([\d.]+)\)/, (_, r, g, b, a) => `rgba(${r},${g},${b},${Math.min(0.92, Math.max(0.75, Number(a) * 3))})`);
 }
 
 /**
@@ -88,7 +92,8 @@ export function drawTuningPie(
     }
   }
 
-  const font = Math.max(9, Math.min(14, R * 0.06));
+  const font = Math.max(11, Math.min(18, R * 0.075));
+  const text = legible(theme.text);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -152,19 +157,19 @@ export function drawTuningPie(
       ctx.stroke();
     }
     const selected = d === marks.a || d === marks.b;
-    const [nx, ny] = at(1.16);
-    ctx.fillStyle = selected || f > 0.3 ? theme.accent : theme.text;
+    const [nx, ny] = at(1.18);
+    ctx.fillStyle = selected || f > 0.3 ? theme.accent : text;
     drawNoteName(ctx, nx, ny, spell(pc), t.alterOff ? {} : alter[d], font * 1.15, selected);
     const dv = dev[pc];
     const [dx, dy] = [nx, ny + font * 1.3];
-    ctx.font = `${font * 0.85}px monospace`;
-    ctx.fillStyle = theme.text;
-    ctx.globalAlpha = 0.7;
+    ctx.font = `${font * 0.9}px monospace`;
+    ctx.fillStyle = text;
+    ctx.globalAlpha = 0.8;
     ctx.fillText(Math.abs(dv) < 0.05 ? '0' : `${dv > 0 ? '+' : '−'}${Math.abs(dv).toFixed(1)}`, dx, dy);
     const ratio = degreeRatio(t, d);
     const [rx, ry] = at(0.74);
-    ctx.font = `${font * 0.85}px monospace`;
-    ctx.globalAlpha = 0.55 + f * 0.45;
+    ctx.font = `${font * 0.9}px monospace`;
+    ctx.globalAlpha = 0.8 + f * 0.2;
     ctx.fillText(readable(ratio) ? ratio : `${t.cents[d].toFixed(0)}¢`, rx, ry);
     ctx.globalAlpha = 1;
   }
@@ -187,11 +192,11 @@ export function drawTuningPie(
   ctx.beginPath();
   ctx.arc(cx, cy, R * 0.3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = theme.text;
+  ctx.fillStyle = text;
   ctx.font = `${font}px monospace`;
   const name = t.name.length > 22 ? `${t.name.slice(0, 21)}…` : t.name;
   ctx.fillText(`${name}${t.edited ? ' *' : ''}`, cx, cy - font * 0.7);
-  ctx.globalAlpha = 0.6;
+  ctx.globalAlpha = 0.8;
   ctx.fillText(`${isHeld() ? 'held · ' : ''}root ${spell(root)}${t.alterOff ? ' · alterations off' : ''}`, cx, cy + font * 0.8);
   ctx.globalAlpha = 1;
 }

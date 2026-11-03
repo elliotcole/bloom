@@ -50,6 +50,7 @@ const TIPS = [
   'l L tilt the line down / up',
   '# $ breeze: some notes a scale step',
   'k K j J choose, slant, lift, reduce the scale',
+  'opt-k key centre: select a note, it becomes the tonic (no pitch moves)',
   'e E shear some an octave outward / gather some inward',
   'w draw curves · W remove doubles',
   '; : clump / flatten chords',

@@ -12,6 +12,8 @@ import type { KeyHandlerState } from './keys';
 import type { IntervalVal } from '../core/Bloom';
 import type { Figure } from '../lib/figures';
 import { formatIntervals } from '../lib/intervals';
+import { spell } from '../lib/numbers';
+import { flatNotes } from '../lib/arrays';
 import { controlChange } from '../audio/midi';
 import { startRecording, stopRecording, isRecording } from '../audio/recorder';
 import {
@@ -304,6 +306,19 @@ export const HOME_KEYS: HomeKey[] = [
 
   // ─── Scale ─────────────────────────────────────────────────────────────────
   v('k', 'choose nearest scale', b => b.chooseScale(), 'chooseScale'),
+  {
+    code: 'KeyK', alt: true, whole: true, name: 'opt-k',
+    label: 'key centre: the selected note becomes the tonic, no pitch moving (none selected: the next note of the scale; shift: the one before)',
+    act: c => {
+      const sel = c.selection();
+      const first = sel.length ? c.b.notes[Math.min(...sel)] : undefined;
+      const pc = first !== undefined
+        ? ((Math.round(Math.min(...(flatNotes([first]) as number[]))) % 12) + 12) % 12
+        : c.b.stepCentre(c.shift ? -1 : 1);
+      c.verb(`centre ${spell(pc)}`, () => c.b.centreOn(pc));
+      c.status(`centre ${spell(pc)}: ${c.b.appliedScale?.name ?? ''}`);
+    },
+  },
   v('K', 'slant scale', b => b.slantScale(), 'slantScale'),
   slot('j', 'lift scale', (b, src) => b.applyScale(src.scale)),
   v('J', 'reduce scale', b => b.reduceScale(), 'reduceScale'),

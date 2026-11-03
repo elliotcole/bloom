@@ -12,6 +12,7 @@ import { drawOrreryAt } from './orrery';
 import { drawRoadAt, roadAhead } from './road';
 import { drawWeaveAt, weaveRows, weavePeriod, fitWeave } from './weave';
 import type { VizMode, ThemeId, Theme } from './visualization';
+import { worldColor, worldHues, worldOf } from './worlds';
 
 const SLIDE_DURATION = 150; // ms
 const ANIM_DURATION = 180;  // ms — save/restore overlay
@@ -161,6 +162,7 @@ export class GardenVisualization {
     const centerX = this._getCurrentSlotCenter(W);
     const cy = H / 2;
     const half = Math.floor(this.visibleCount / 2);
+    const hues = worldHues(garden.slots.map(worldOf));
 
     for (let i = cursor - half - 1; i <= cursor + half + 1; i++) {
       const offsetFromCursor = i - cursor;
@@ -171,7 +173,7 @@ export class GardenVisualization {
       const base = Math.min(slotWidth, H * 0.92);
       const r = isCurrent ? base * 0.44 : base * 0.38;
       const bloom = (i >= 0 && i < garden.slots.length) ? garden.slots[i] : null;
-      this._drawSlot(ctx, cx, cy, r, bloom, isCurrent);
+      this._drawSlot(ctx, cx, cy, r, bloom, isCurrent, slotWidth, H, hues);
     }
 
     // Slot separator lines
@@ -192,8 +194,21 @@ export class GardenVisualization {
     ctx: CanvasRenderingContext2D,
     cx: number, cy: number, r: number,
     bloom: Bloom | null, isCurrent: boolean,
+    cellW = r * 2, cellH = r * 2, hues: Map<string, number> = new Map(),
   ): void {
     const theme = this._theme;
+    const cellX = cx - cellW / 2;
+    const paint = bloom?.color ? SLOT_COLORS[bloom.color] : undefined;
+    const level = bloom ? Math.max(0.1, Math.min(1, bloom.colorLevel)) : 1;
+
+    // its colour (opt-n) washes the whole cell, behind the picture
+    if (bloom && paint) {
+      ctx.save();
+      ctx.fillStyle = paint;
+      ctx.globalAlpha = 0.13 * level;
+      ctx.fillRect(cellX + 1, 0, cellW - 2, cellH);
+      ctx.restore();
+    }
 
     if (!bloom) {
       ctx.save();
@@ -267,30 +282,49 @@ export class GardenVisualization {
 
     ctx.restore();
 
-    // its colour (opt-n) as a ring, its name along the bottom
-    if (bloom.color && SLOT_COLORS[bloom.color]) {
+    // its colour (opt-n) as a ring (a descendant's fades with each save), its name in the top-left corner
+    if (paint) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(cx, cy, r + (isCurrent ? 6 : 1.5), 0, Math.PI * 2);
-      ctx.strokeStyle = SLOT_COLORS[bloom.color];
-      ctx.globalAlpha = Math.max(0.1, Math.min(1, bloom.colorLevel));   // a descendant's colour fades with each save
-      ctx.lineWidth = 2;
+      ctx.arc(cx, cy, r + (isCurrent ? 7 : 3), 0, Math.PI * 2);
+      ctx.strokeStyle = paint;
+      ctx.globalAlpha = level;
+      ctx.lineWidth = 3;
       ctx.stroke();
       ctx.restore();
     }
+    const half = cellW / 2 - 14;   // each corner label gets half the cell
     if (bloom.name) {
       ctx.save();
-      ctx.font = '9px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const label = bloom.name.length > 14 ? `${bloom.name.slice(0, 13)}…` : bloom.name;
-      const w = ctx.measureText(label).width + 8;
-      ctx.fillStyle = theme.bg;
-      ctx.globalAlpha = 0.8;
-      ctx.fillRect(cx - w / 2, cy + r * 0.45, w, 13);
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = SLOT_COLORS[bloom.color] ?? theme.text;
-      ctx.fillText(label, cx, cy + r * 0.45 + 6.5);
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = paint ?? 'rgba(255,255,255,0.8)';
+      const label = fit(ctx, bloom.name, half);
+      if (label) ctx.fillText(label, cellX + 8, 6);
+      ctx.restore();
+    }
+    // its tuning (its world) in the top-right corner: a dot in the tuning's colour, and its name
+    const world = worldOf(bloom);
+    const hue = world !== null ? hues.get(world) : undefined;
+    if (world !== null && hue !== undefined) {
+      ctx.save();
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      const right = cellX + cellW - 8;
+      ctx.fillStyle = worldColor(hue);
+      ctx.beginPath();
+      ctx.arc(right - 4, 12, 4, 0, Math.PI * 2);
+      ctx.fill();
+      const label = fit(ctx, world, half - 14);
+      if (label) ctx.fillText(label, right - 13, 7);
+      // and a thin arc of it along the bottom of the circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 1, Math.PI * 0.2, Math.PI * 0.8);
+      ctx.strokeStyle = worldColor(hue, 0.8);
+      ctx.lineWidth = 2;
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -316,6 +350,7 @@ export class GardenVisualization {
   // ─── Save / Restore overlay animation ────────────────────────────────────
 
   private _runOverlayAnim(bloom: Bloom, mainCanvas: HTMLCanvasElement, direction: 'save' | 'restore'): void {
+    if (document.body.classList.contains('clean')) return;   // the garden is hidden: there's nowhere to fly from or to
     const ac = this.animCanvas;
     const areaEl = this.gardenArea.parentElement!;
     const areaRect = areaEl.getBoundingClientRect();
@@ -437,4 +472,14 @@ export class GardenVisualization {
 
     setTimeout(() => { ac.style.display = 'none'; }, ANIM_DURATION + 40);
   }
+}
+
+/** `text` cut (with …) to fit `width`, or '' when not even three characters would */
+function fit(ctx: CanvasRenderingContext2D, text: string, width: number): string {
+  if (ctx.measureText(text).width <= width) return text;
+  for (let n = text.length - 1; n >= 3; n--) {
+    const cut = `${text.slice(0, n)}…`;
+    if (ctx.measureText(cut).width <= width) return cut;
+  }
+  return '';
 }

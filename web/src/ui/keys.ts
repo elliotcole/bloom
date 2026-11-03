@@ -29,6 +29,7 @@ import {
   hold, heldForBloom, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
 } from '../audio/tuningOut';
 import { spell } from '../lib/numbers';
+import { worldColor, worldHues, worldOf } from './worlds';
 
 // ─── Quantize cycle ───────────────────────────────────────────────────────────
 
@@ -556,6 +557,11 @@ export function createKeyHandler(state: KeyHandlerState) {
       ? `◊ ${held ? 'held: ' : ''}${t?.name ?? '12-TET'}${t?.edited ? '*' : ''} @ ${spell(soundingRoot(state.bloom))}` : '';
     badge.classList.toggle('active', t !== null || held);
     badge.classList.toggle('held', held);
+    // the tuning's colour, as the garden shows it
+    const world = t?.name ?? null;
+    const hue = world === null ? undefined : worldHues([...state.garden.slots.map(worldOf), world]).get(world);
+    badge.style.color = hue === undefined ? '' : worldColor(hue);
+    badge.style.borderColor = hue === undefined ? '' : worldColor(hue, 0.6);
     const sel = document.getElementById('tuning-select') as HTMLSelectElement | null;
     if (sel) sel.value = t?.name ?? '12-TET';
   }
@@ -652,7 +658,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const names = (pcs: number[]) => [...pcs].sort((a, b) => a - b).map(spell).join(' ');
     const notes = s ? names(s.degrees) : '';
     const raga = s?.root !== undefined;
-    const key = s ? (s.root ?? keyRootOf(s.degrees)) : null;
+    const key = s ? (s.root ?? s.tonic ?? keyRootOf(s.degrees)) : null;
     const keyStr = key === null ? 'no key' : `${raga ? 'Sa' : 'key'} ${spell(key)}`;
     const forms = s?.up && s.down ? ` · rising ${names(s.up)}, falling ${names(s.down)} (each note sounds in the form of the step it takes next)` : '';
     badge.textContent = s ? `♮ ${s.name || notes} · ${keyStr}` : '';

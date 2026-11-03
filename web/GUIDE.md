@@ -147,7 +147,8 @@ PATTERNS-GUIDE.md teaches it step by step, with exercises.
 - **Stopping:** `.` stops the loop, the pulsar and the garden's: nothing more starts (a figure's later steps included) and what sounds ends in its own time. With nothing running, `.` is a panic: every note off, now.
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. opt-`del` deletes the slot and the rest close up.
-- **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the name along the bottom of its slot and the colour as a ring; the console shows the name. Both are saved with the garden. A name names one bloom: the first change makes a new, unnamed bloom. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
+- **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the colour as a wash over the slot and a ring round the picture, and the name in the slot's top-left corner; the console shows the name. Both are saved with the garden. A name names one bloom: the first change makes a new, unnamed bloom. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
+- **Tuning colours:** each tuning has a colour of its own, so the garden shows which world each bloom lives in: a dot and the tuning's name in the slot's top-right corner, and an arc of that colour under the picture. The ◊ badge wears the same colour. 12-TET has none. A tuning keeps its colour from session to session, unless two in the garden would share one, when the later one moves to the next free colour.
 - **Launch quantize:** **play ▾** → launch. On, a bloom lifted with `↑` while the loop runs waits for the loop to come round, then starts from its first note with its lists together, so you can't land in the middle of a bloom. Stopping the loop lands it at once.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
@@ -208,8 +209,8 @@ library stays in this browser.
   console's `tuning:` line gives each pitch class's distance from 12-TET in
   cents.
 - **Tuning mode: `T`** opens the tuning view (or click the ◊ badge, or
-  **bloom ▾** → tuning → **edit tuning**); the header shows TUNING. The main area shows the tuning as a pie, C at the top as
-  in the set view. Each note's slice reaches halfway to its neighbours, so its
+  **bloom ▾** → tuning → **edit tuning**); the header shows TUNING. The main area shows the tuning as a pie, the root (1/1) at the top,
+  whatever the key. Each note's slice reaches halfway to its neighbours, so its
   width shows how much room the tuning gives it; the dot on the rim is the
   note's true place, 12-TET's places are faint ticks outside, the root is
   ringed, and each slice shows its ratio inside and its cents from 12-TET
@@ -493,6 +494,16 @@ shape, then one that makes a named scale. Keep pressing to modulate steadily;
 the notice names each step ("sharpward: F → F# · scale G Major"). Slant
 (`K`, at home) now looks on every root and avoids the last few scales it
 visited, so repeated slants wander outward instead of circling.
+
+**Key centre: opt-`k`.** Select a note and press opt-`k`: that note becomes the
+tonic and no pitch moves. The scale is named again around it, from the
+catalogue when one fits (C major's notes on D are D Dorian), or else as the
+set itself, spelled from the tonic (`F# C C#`). With nothing selected, opt-`k`
+moves the centre to the next note up the scale, and opt-shift-`k` to the
+note below, so you can walk the modes by ear. The tuning's root follows the
+centre, so in a just tuning the 1/1 moves to the new tonic and the tuning pie
+turns to put it at the top. A transposition carries the centre along; `k`,
+`K` or another new scale lets it go back to the key signature's.
 
 **Intervals mode (`5`) treats the intervals as a list like the others.**
 

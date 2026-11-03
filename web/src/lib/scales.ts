@@ -15,6 +15,8 @@ export interface Scale {
   down?: number[];
   /** a raga's Sa: the key it sets */
   root?: number;
+  /** a key centre chosen by hand (opt-k): the tonic, in place of the key signature's */
+  tonic?: number;
 }
 
 function scale(degrees: number[], name: string, ppo: number = 12): Scale {
@@ -193,12 +195,29 @@ export function nameScaleDegrees(pcs: number[]): string {
   return '';
 }
 
+/**
+ * The same pitch classes heard around another centre: the catalogue scale
+ * they make on `tonic` (C major's notes on D: D Dorian), or, when none does,
+ * the set itself, named by its notes from the tonic. Ragas aren't offered (a
+ * raga's Sa is its own centre). The tonic joins the set if it wasn't in it.
+ */
+export function centreOn(pcs: number[], tonic: number): Scale {
+  const t = ((tonic % 12) + 12) % 12;
+  const set = [...new Set([...pcs, t].map(d => ((d % 12) + 12) % 12))].sort((a, b) => a - b);
+  const key = set.join(',');
+  const match = ALL_SCALES.find(sc => sc.pitchesPerOctave === 12 && sc.root === undefined && sc.degrees.length === set.length
+    && sc.degrees.map(d => (d + t) % 12).sort((a, b) => a - b).join(',') === key);
+  const fromTonic = [...set].sort((a, b) => ((a - t + 12) % 12) - ((b - t + 12) % 12));
+  return { degrees: set, pitchesPerOctave: 12, name: match ? `${PC_NAMES[t]} ${match.name}` : fromTonic.map(p => PC_NAMES[p]).join(' '), tonic: t };
+}
+
 /** Transpose scale degrees by t semitones (mod 12, sorted); a raga's forms and Sa go with them */
 export function scaleTranspose(s: Scale, t: number): Scale {
   const move = (pcs: number[]) => pcs.map(d => (((d + t) % 12) + 12) % 12).sort((a, b) => a - b);
   const out: Scale = { degrees: move(s.degrees), pitchesPerOctave: s.pitchesPerOctave, name: s.name };
   if (s.up && s.down) { out.up = move(s.up); out.down = move(s.down); }
   if (s.root !== undefined) out.root = (((s.root + t) % 12) + 12) % 12;
+  if (s.tonic !== undefined) out.tonic = (((s.tonic + t) % 12) + 12) % 12;
   return out;
 }
 

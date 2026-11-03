@@ -437,3 +437,41 @@ describe('patterns baked (d)', () => {
     expect(b.velocities).toEqual([80, 60, 70]);
   });
 });
+
+describe('key centre (opt-k)', () => {
+  it('names the same notes again on the new tonic, no pitch moving', () => {
+    const b = bloom([62, 64, 65, 67]).applyScale(SCALES.major);
+    const before = [...b.notes];
+    b.centreOn(2);
+    expect(b.notes).toEqual(before);
+    expect(b.appliedScale!.degrees).toEqual(SCALES.major.degrees);
+    expect(b.appliedScale!.name).toBe('D Dorian');
+    expect(b.keyTuningRoot()).toBe(2);
+  });
+  it('makes a set the catalogue has no name for an explicit one, spelled from the tonic', () => {
+    const b = bloom([60, 61, 66]);
+    b.centreOn(6);
+    expect(b.appliedScale!.degrees).toEqual([0, 1, 6]);
+    expect(b.appliedScale!.name).toBe('F# C C#');
+    expect(b.keyTuningRoot()).toBe(6);
+  });
+  it('moves the tuning root with it', () => {
+    const b = bloom([60, 64, 67]).applyScale(SCALES.major);
+    b.tuning = { name: 'just', cents: Array.from({ length: 12 }, (_, i) => i * 100), period: 1200 };
+    b.centreOn(9).followTuningRoot();
+    expect(b.tuningRoot).toBe(9);
+  });
+  it('steps through the scale from the centre', () => {
+    const b = bloom([60, 64, 67]).applyScale(SCALES.major);
+    expect(b.stepCentre(1)).toBe(2);
+    b.centreOn(11);
+    expect(b.stepCentre(1)).toBe(0);
+    expect(b.stepCentre(-1)).toBe(9);
+  });
+  it('keeps the centre through a transposition', () => {
+    const b = bloom([62, 64, 65]).applyScale(SCALES.major).centreOn(2);
+    b.transpose(2);
+    expect(b.keyTuningRoot()).toBe(4);
+    expect(b.appliedScale!.tonic).toBe(4);
+  });
+});

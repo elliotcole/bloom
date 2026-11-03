@@ -23,7 +23,7 @@ import type { Scale } from '../lib/scales';
 import { bakePattern } from '../lib/patterns';
 import {
   SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
-  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, nameScaleDegrees, pcsKey,
+  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, nameScaleDegrees, pcsKey, centreOn as centreScaleOn,
 } from '../lib/scales';
 
 // ─── Class-level defaults ──────────────────────────────────────────────────────
@@ -1264,7 +1264,7 @@ export class Bloom {
   keyTuningRoot(): number {
     const s = this.appliedScale;
     if (!s) return 0;
-    return s.root ?? keyRootOf(s.degrees) ?? 0;   // a raga's Sa, else the key signature's
+    return s.root ?? s.tonic ?? keyRootOf(s.degrees) ?? 0;   // a raga's Sa, a centre chosen by hand, else the key signature's
   }
 
   /** Move the tuning's root to the bloom's key, unless it was chosen by hand */
@@ -1272,6 +1272,25 @@ export class Bloom {
     if (this.tuning?.root !== undefined && this.tuning.root !== null) { this.tuningRoot = this.tuning.root; return this; }
     this.tuningRoot = this.keyTuningRoot();
     return this;
+  }
+
+  /**
+   * Hear the bloom around another key centre: the scale (or the notes, with
+   * none attached) named again on `pc`, every pitch where it is. The tuning's
+   * root follows (followTuningRoot), so its 1/1 moves to the new centre.
+   */
+  centreOn(pc: number): this {
+    this.appliedScale = centreScaleOn(this.scale.degrees, pc);
+    return this;
+  }
+
+  /** The key centre one step up (1) or down (−1) the scale from where it is now */
+  stepCentre(dir: 1 | -1): number {
+    const degs = this.scale.degrees;
+    const here = this.keyTuningRoot();
+    const ordered = [...degs].sort((a, b) => ((a - here + 12) % 12) - ((b - here + 12) % 12));
+    const at = ordered.indexOf(here);
+    return at < 0 ? ordered[0] : ordered[(at + dir + ordered.length) % ordered.length];
   }
 
   get scale(): Scale {
@@ -1953,7 +1972,10 @@ export class Bloom {
   /** The scale as absolute pitch classes, named after the catalogue when it matches */
   private setScalePcs(pcs: number[]): void {
     const degrees = [...new Set(pcs.map(this.pcOf))].sort((a, b) => a - b);
-    this.appliedScale = { degrees, pitchesPerOctave: 12, name: nameScaleDegrees(degrees) };
+    const tonic = this.appliedScale?.tonic;
+    this.appliedScale = tonic !== undefined && degrees.includes(tonic)
+      ? centreScaleOn(degrees, tonic)   // a centre chosen by hand stays while its note does
+      : { degrees, pitchesPerOctave: 12, name: nameScaleDegrees(degrees) };
   }
 
   /** The nearest pitch to m whose class is in `pcs` (ties broken at random) */
