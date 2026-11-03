@@ -22,6 +22,7 @@ import {
 import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
 import { ScalePicker } from './ui/scalePicker';
+import { PatternPicker } from './ui/patternPicker';
 import { ListTyper } from './ui/listTyper';
 import { spell } from './lib/numbers';
 import { noteOn, noteOff } from './audio/midi';
@@ -505,6 +506,10 @@ async function main() {
   // ─── Typing a list (↵ in a list mode) ────────────────────────────────────────
   const listTyper = new ListTyper(document.getElementById('viz-area') as HTMLElement);
   keyState.typeList = (label, text, commit, fields) => listTyper.open(label, text, commit, fields);
+
+  // ─── Pattern palette (d): presets, or type one, previewed on the list ───────
+  const patternPicker = new PatternPicker();
+  keyState.pickPattern = (title, n, last, bake) => patternPicker.open(title, n, last, bake);
 
   // ─── Scale picker: every scale and raga by name, on a chosen root ───────────
   const scalePicker = new ScalePicker({

@@ -731,6 +731,28 @@
       #scale-picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
       #scale-badge.active { cursor: pointer; }
 
+      /* Pattern palette (ui/patternPicker.ts), styled as the command palette */
+      #pattern-picker {
+        display: none; position: fixed; inset: 0; z-index: 400;
+        background: rgba(0, 0, 0, 0.55);
+        align-items: flex-start; justify-content: center; padding-top: 10vh;
+      }
+      #pattern-picker.open { display: flex; }
+      #pp-box {
+        background: #0c0c18; border: 1px solid #2a2a44; width: min(640px, 92vw);
+        padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px;
+      }
+      .pp-title { font-size: 11px; color: #667; }
+      .pp-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; }
+      #pattern-picker .cp-sug-name { flex: 0 0 120px; }
+      #pattern-picker .pp-spec { flex: 0 0 90px; color: #9ab; white-space: pre; }
+      #pattern-picker .cp-sug-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #pattern-picker .pp-bad .cp-sug-name, #pattern-picker .pp-bad .pp-spec { color: #445; }
+      .pp-note { font-size: 11px; min-height: 14px; }
+      .pp-note--ok { color: #5a9; }
+      .pp-note--warn { color: #c96; }
+      .pp-note--err { color: #a55; }
+
       /* ─── Demo mode toast ───────────────────────────────────────────────────── */
       /* Notice: what the last key did and changed (hidden while the console is open) */
       #notice {
@@ -1035,14 +1057,15 @@
             <div class="hf-body"><b>s</b>      scramble     <b>S</b>    in chunks (how many?)
 <b>R</b>      mirror       <b>9 0</b>  rotate
 <b>u</b>      stutter      <b>U</b>    sputter
-<b>d</b>      braid        <b>D</b>    pyramid
+<b>d</b>      patterns     <b>D</b>    the last again
 <b>Y</b>      spray
 <b>h</b>      thin         <b>H</b>    thicken
 <b>g</b>      gap          <b>G</b>    unGap
 <b>z</b>      drop last
 <b>"</b>      repeat (how many times?)  <b>Z</b> fit to the notes
 <b>a A</b>    add one (in scale / any)
-<b>opt + s S R u U d D</b> the pitches alone</div>
+<b>opt + s S R u U</b> the pitches alone
+<b>opt-d</b>  a pattern on the pitches alone</div>
           </div>
         </div>
 
@@ -1152,7 +1175,7 @@ drag a box: select events — keys
 <span class="hf-only hf-time"><b>}</b>      divide a few long ones (how many?)
 </span><b>9 0</b>    rotate &lt;&lt; &gt;&gt;
 <b>u U</b>    stutter / sputter
-<b>d D</b>    braid / pyramid
+<b>d D</b>    patterns / the last again
 <b>o O</b>    sort up / down
 <b>z a A</b>  drop / add (palette / any)
 <b>" Z</b>    repeat (how many?) / fit to the notes

@@ -20,6 +20,7 @@ import {
   nearestInScale, stepInScale, keyToDegree, degreeToKey,
 } from '../lib/numbers';
 import type { Scale } from '../lib/scales';
+import { bakePattern } from '../lib/patterns';
 import {
   SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
   notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, nameScaleDegrees, pcsKey,
@@ -1765,6 +1766,22 @@ export class Bloom {
     const arr = this.getList(k);
     if (arr.length > 0) this.setList(k, PATTERNS[op](arr));
     return this;
+  }
+
+  /** Whole notes written out by a pattern (lib/patterns: `123 +1`, `1 0,+1`); what's wrong, or null */
+  bakeEvents(spec: string, rng: () => number = Math.random): string | null {
+    const r = bakePattern(this.events(), spec, rng);
+    if (typeof r === 'string') return r;
+    this.setEvents(r.values);
+    return null;
+  }
+
+  /** One list written out by a pattern, the others left where they are; what's wrong, or null */
+  bakeList(k: ListKey, spec: string, rng: () => number = Math.random): string | null {
+    const r = bakePattern(this.getList(k), spec, rng);
+    if (typeof r === 'string') return r;
+    this.setList(k, r.values.map(v => JSON.parse(JSON.stringify(v))));
+    return null;
   }
 
   /** Interlace one list with the same list of another bloom */

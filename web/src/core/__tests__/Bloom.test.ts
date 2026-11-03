@@ -392,3 +392,48 @@ describe('two voices: the length lock', () => {
     expect(new Bloom().import(a).heldDur).toBe(false);
   });
 });
+
+describe('patterns baked (d)', () => {
+  it('bakeEvents writes whole notes out, each keeping its own time and velocity, as braid does', () => {
+    const b = bloom([60, 62, 64, 65], [10, 20, 30, 40], [0.5, 0.25, 1, 2]);
+    const braided = b.clone().braid();
+    expect(b.bakeEvents('123 +1')).toBeNull();
+    expect(b.notes).toEqual(braided.notes);
+    expect(b.notes).toEqual([60, 62, 64, 62, 64, 65]);
+    expect(b.velocities).toEqual([10, 20, 30, 20, 30, 40]);
+    expect(b.timeIntervals).toEqual([0.5, 0.25, 1, 0.25, 1, 2]);
+  });
+  it('bakeEvents leaves a phasing list phasing', () => {
+    const b = bloom([60, 62, 64], [10, 20], [0.5, 0.25, 1]);
+    expect(b.bakeEvents('1 0,+1')).toBeNull();
+    expect(b.notes).toEqual([60, 60, 62, 60, 62, 64]);
+    expect(b.velocities).toEqual([10, 20]);
+  });
+  it('bakeList extends one list alone', () => {
+    const b = bloom([60, 62, 64], [10, 20, 30], [0.5, 0.25, 1]);
+    expect(b.bakeList('vel', '1 +1 |')).toBeNull();
+    expect(b.velocities).toEqual([10, 20, 30, 20, 10]);
+    expect(b.notes).toEqual([60, 62, 64]);
+    expect(b.timeIntervals).toEqual([0.5, 0.25, 1]);
+  });
+  it('copies chords, so changing one copy leaves the others', () => {
+    const b = bloom([[60, 64], 62, 65]);
+    expect(b.bakeList('notes', '11')).toBeNull();
+    (b.notes[0] as number[])[0] = 59;
+    expect(b.notes[1]).toEqual([60, 64]);
+  });
+  it('rolls a wildcard once, from its window', () => {
+    const b = bloom([60, 62, 64, 65]);
+    Math.random = () => 0.99;
+    expect(b.bakeList('notes', '1* +1')).toBeNull();
+    expect(b.notes).toEqual([60, 62, 62, 64, 64, 65]);
+  });
+  it('says what is wrong and changes nothing', () => {
+    const b = bloom([60, 62, 64]);
+    expect(b.bakeEvents('9')).toBe("the list has 3: there's no 9");
+    expect(b.bakeList('vel', '1213 0,+1')).toMatch(/keeps its width/);
+    expect(b.bakeEvents('')).toMatch(/first window/);
+    expect(b.notes).toEqual([60, 62, 64]);
+    expect(b.velocities).toEqual([80, 60, 70]);
+  });
+});

@@ -65,7 +65,7 @@ These move each note together with its time, velocity, channel and interval.
 | `s` | scramble | `S` | scramble in chunks: asks how many (2 up to the notes), cuts the notes into that many runs and reorders the runs, so phrases survive (3 to start; it remembers) |
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
-| `d` | braid | `D` | pyramid |
+| `d` | patterns: the palette (braid, pyramid, … or type your own; see **Patterns**) | `D` | the last pattern again |
 | `Y` | spray | | |
 | `h` | thin: drops some notes, each giving its time to the note before | `H` | thicken: a few of the longest notes (3 at most) each give half their time to a new, softer note a scale step or three away, so new notes land in the gaps and the phrase stays |
 | `g` | gap (rests) | `G` | unGap |
@@ -89,9 +89,43 @@ other edit to the pitches starts the breeze fresh.
 The settings are in `GESTURE` (`breeze`, `breezePull`, `breezeMemory`). In the
 list modes, `#` `$` do the same with a palette step, with the same memory.
 
-**Pitches only**: opt + `s S R u U d D` moves only the pitches.
+**Pitches only**: opt + `s S R u U` moves only the pitches, and opt-`d` opens the pattern palette for the pitches alone (opt-shift-`d`: the last pattern again).
 Rhythm, dynamics and channels stay where they are. To rotate the pitches
 alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
+
+## Patterns (`d`)
+
+`d` opens the pattern palette: braid, pyramid and the other presets, each
+shown with what it would read on your bloom (`123 234 345`) and how long the
+result would be. Type to filter them by name, or type a pattern of your own;
+`↑` `↓` move, `↵` or a click bakes it, `esc` leaves. `D` bakes the last pattern
+again without opening the palette.
+
+At home it writes whole notes out, each keeping its own time, velocity and
+channel (lists phasing against the notes stay phasing). opt-`d` does it to the
+pitches alone. In a list mode it writes out that list alone, so you can
+stretch, say, the velocities into a long patterned list under the same notes.
+
+A pattern is a **first window**, then **how its edges move** each round, then
+**flags**:
+
+- `123 +1` braid (123 234 345) · `1 0,+1` pyramid (1 12 123 …) · `1..n +1,-1`
+  a wedge closing in · `13 +1` thirds · `1213 +1` a sequence · `53124` (no
+  movement) a reordering, played once
+- one number moves both edges; `left,right` moves them apart (`0,+1` grows
+  to the right, `+1,0` shrinks from the left)
+- indices count from 1; `n` is the last, `a..b` a range; a single word is read
+  digit by digit (`123`), and with spaces each word is one index (`1 10 11`)
+- `*` a random note from the window, `**` one from anywhere (rolled once, when
+  it bakes)
+- flags: `r` each window backward, `a` alternate windows backward, `|` there
+  and back, `~` wrap round the end, `x2` each window twice
+- a shape (`13`, `1213`, a `*`) only travels at a fixed width: a window that
+  grows or shrinks reads a plain run
+- it stops when a window would run off the end; past 200 notes the palette
+  warns, and at 500 it cuts the pattern, a whole window at a time
+
+PATTERNS-GUIDE.md teaches it step by step, with exercises.
 
 ## Pitch (home)
 
@@ -354,7 +388,7 @@ through them an entry at a time); `↵` sets them, shift-`↵` loops what you
 typed to the notes' length, `esc` leaves them. The shared verbs mean:
 
 - Length and order: `a` adds a figure already in use, `A` a new one, `z`
-  drops the last; the order keys (`s S R 9 0 u U d D`) as on any list; `o O`
+  drops the last; the order keys (`s S R 9 0 u U`) and patterns (`d D`) as on any list; `o O`
   shorter / longer figures first.
 - The figures themselves: `n` new figures in the same places, `N` new figures
   and places; `m` a step changes in a few, `M` a few are new; `y` every figure
@@ -394,7 +428,7 @@ These only move values around, so they mean exactly the same in every list.
 | `R` | mirror |
 | `9` `0` | rotate ← → |
 | `u` / `U` | stutter / sputter |
-| `d` / `D` | braid / pyramid |
+| `d` / `D` | the pattern palette, baked into this list (it can make the list longer, so it phases) / the last pattern again |
 | `o` / `O` | sort up / down (for velocity: crescendo / decrescendo) |
 | `z` / `a` / `A` | drop last / add one from the palette / add one at random |
 | `"` / `Z` | repeat this list (asks how many times) / fit it to the notes' length (cut or looped round) |

@@ -49,6 +49,8 @@ export interface HomeCtx {
   previewSlot(src: Bloom): void;
   /** ask how many (2 to max), then act; false when there's no line to ask on */
   askCount(label: string, last: number, act: (n: number) => string, max?: number): boolean;
+  /** d: the pattern palette over whole notes ('events') or the pitches alone ('notes'); again: the last pattern, without it */
+  pattern(k: 'events' | 'notes', again: boolean): void;
   /** what the asking keys offered last time */
   memo: { splitSlices: number; repeatTimes: number; chunks: number };
   /** the loop's display: each cycle's lists, as they phase */
@@ -100,7 +102,6 @@ const PITCH_ONLY: Record<string, [PatternOp, PatternOp]> = {
   KeyS: ['scramble', 'shuffle'],
   KeyR: ['mirror', 'mirror'],
   KeyU: ['stutter', 'sputter'],
-  KeyD: ['braid', 'pyramid'],
 };
 
 const v = (key: string | string[], label: string, fn: (b: Bloom, c: HomeCtx) => void, said?: string): HomeKey =>
@@ -137,9 +138,10 @@ export const HOME_KEYS: HomeKey[] = [
   { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },
   {
-    code: Object.keys(PITCH_ONLY), alt: true, name: 'opt + s S R u U d D', label: 'order the pitches alone',
+    code: Object.keys(PITCH_ONLY), alt: true, name: 'opt + s S R u U', label: 'order the pitches alone',
     act: c => { const op = PITCH_ONLY[c.e.code][c.shift ? 1 : 0]; c.verb(`${op} pitches`, () => c.b.patternList('notes', op)); },
   },
+  { code: 'KeyD', alt: true, name: 'opt-d', label: 'a pattern on the pitches alone (shift: the last again)', act: c => c.pattern('notes', c.shift) },
   {
     code: 'KeyP', alt: true, whole: true, name: 'opt-p', label: 'push a save point (shift: pop)',
     act: c => {
@@ -264,8 +266,8 @@ export const HOME_KEYS: HomeKey[] = [
   v('U', 'sputter', b => b.sputter()),
   v('Y', 'spray', b => b.spray()),
   v('R', 'mirror', b => b.mirror()),
-  v('d', 'braid', b => b.braid()),
-  v('D', 'pyramid', b => b.pyramid()),
+  { key: 'd', label: 'patterns: the palette (braid, pyramid, … or type one)', act: c => c.pattern('events', false) },
+  { key: 'D', label: 'the last pattern again', act: c => c.pattern('events', true) },
   v('o', 'sort pitches up', b => b.sortNotes()),
   v('O', 'sort pitches down', b => b.sortNotes(true)),
 

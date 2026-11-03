@@ -62,8 +62,6 @@ const LIST_KEYS: Record<string, ListAction> = {
   '0': { pattern: 'rotate>', label: 'rotate >>' },
   u: { pattern: 'stutter', label: 'stutter' },
   U: { pattern: 'sputter', label: 'sputter' },
-  d: { pattern: 'braid', label: 'braid' },
-  D: { pattern: 'pyramid', label: 'pyramid' },
   o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo', fig: 'shorter figures first' } },
   O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo', fig: 'longer figures first' } },
   z: { verb: 'dropLast', label: 'drop last' },
@@ -219,6 +217,8 @@ export interface KeyHandlerState {
   /** The tuning view (opt-t) */
   /** ↵ in a list mode: type the list (main.ts gives it the line to type on) */
   typeList?: (label: string, text: string, commit: (text: string, complete: boolean, values: string[]) => string | null, fields?: TyperField[]) => void;
+  /** d: the pattern palette over a list of `n`; `bake` writes it out and returns what's wrong, or null */
+  pickPattern?: (title: string, n: number, last: string | null, bake: (spec: string) => string | null) => void;
   /** Two voices: the view of the other voice, drawn dimmed over the main one */
   ghost?: BloomVisualization | null;
   tuningView?: {
@@ -275,11 +275,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     state.typeList(label, String(Math.min(last, hi)), text => {
       const n = Number(text.trim());
       if (!Number.isInteger(n) || n < 2 || n > hi) return `a whole number, 2 to ${hi}`;
-      if (w && !_working && w.sel.every(i => i < state.bloom.notes.length)) {
-        const full = snapshotOf(state.bloom);
-        _working = { ...w, full, extracted: extractSelection(full, w.sel) };
-        state.bloom.import(_working.extracted);
-      }
+      relift(w);
       const msg = act(n);
       status(msg);
       refresh(msg);
@@ -288,6 +284,49 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
+
+  /** The selection a key was working on, lifted out again when its answer comes (the key's own lift has been put back by then) */
+  function relift(w: typeof _working): void {
+    if (!w || _working || !w.sel.every(i => i < state.bloom.notes.length)) return;
+    const full = snapshotOf(state.bloom);
+    _working = { ...w, full, extracted: extractSelection(full, w.sel) };
+    state.bloom.import(_working.extracted);
+  }
+
+  // ─── Patterns (d) ───────────────────────────────────────────────────────────
+  // d opens the palette over what the key reaches (the notes, the pitches alone,
+  // or a list mode's list) and bakes the one chosen; D bakes the last again.
+  let _lastPattern: string | null = null;
+
+  /** d / D on `k` ('events': whole notes). `title` names what's read, `tag` starts what's said */
+  function patternKey(e: KeyboardEvent, k: ListKey | 'events', again: boolean, title: string, tag = ''): void {
+    const bake = (spec: string) => (k === 'events' ? state.bloom.bakeEvents(spec) : state.bloom.bakeList(k, spec));
+    const said = (spec: string) => `${tag}pattern ${spec}`;
+    if (again) {
+      if (!_lastPattern) { status(`${tag}no pattern yet: d opens the palette`); return; }
+      const wrong = bake(_lastPattern);
+      if (wrong) { status(`${tag}${_lastPattern}: ${wrong}`); return; }
+      status(said(_lastPattern));
+      refresh(said(_lastPattern));
+      return;
+    }
+    if (!state.pickPattern) return;
+    e.preventDefault();   // the palette takes focus now: the key mustn't land in it
+    const n = k === 'events' ? state.bloom.notes.length : state.bloom.getList(k).length;
+    const w = _working;
+    state.pickPattern(title, n, _lastPattern, spec => {
+      relift(w);
+      const wrong = bake(spec);
+      if (wrong) {
+        if (_working) { state.bloom.import(_working.full); _working = null; }
+        return wrong;
+      }
+      _lastPattern = spec;
+      status(said(spec));
+      refresh(said(spec));
+      return null;
+    });
+  }
 
   const _redo: { bloom: Bloom; pins: number[] }[] = [];
   const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
@@ -449,7 +488,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (!e.altKey && own(MODE_KEYS, keyChar(e))) return false;
     // in a list mode other than pitch, a key that changes the list's length works on the whole list:
     // a list that isn't per event has no events to select
-    if (_mode && _mode !== 'pitch' && 'zaA"Z{}S'.includes(keyChar(e))) return false;
+    if (_mode && _mode !== 'pitch' && 'zaA"Z{}SdD'.includes(keyChar(e))) return false;
     const home = findHome(e);
     return home ? !home.whole : true;
   }
@@ -968,6 +1007,12 @@ export function createKeyHandler(state: KeyHandlerState) {
       return b.scrambleChunksList(LIST_OF_MODE[m], n) ? `${tag} scrambled in ${n} chunks` : `${tag} nothing to reorder`;
     }, b.getList(LIST_OF_MODE[m]).length)) return true;
 
+    // d opens the pattern palette over this list, D bakes the last pattern again
+    if (ch === 'd' || ch === 'D') {
+      patternKey(e, LIST_OF_MODE[m], ch === 'D', `the ${MODE_NAME[m]} list`, `${tag} `);
+      return true;
+    }
+
     const action = own(LIST_KEYS, ch) ? LIST_KEYS[ch] : undefined;
     if (action) {
       const label = action.labels?.[m] ?? action.label;
@@ -1119,6 +1164,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         }, beatsToMs(src.dur()) + 200);
       },
       askCount: (label, last, act, max) => askCount(e, label, last, act, max),
+      pattern: (k, again) => patternKey(e, k, again, k === 'notes' ? 'the pitches alone' : 'the notes'),
       memo: _memo,
       onLoopCycle: loopCycle,
       voices: { on: () => !!_voices, toggle: toggleVoices, flip: flipVoice, duplicate: duplicateVoice, stopOther: stopOtherVoice },
