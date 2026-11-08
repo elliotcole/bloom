@@ -224,14 +224,32 @@ library stays in this browser.
   another view.
   - **Alterations.** A tuning is a base (12-TET, a .scl, a pasted scale)
     and twelve alterations, one list item per note from the root: how many
-    of each comma the note is raised or lowered by. The commas are HEJI's
-    up to the 11-limit, and the Pythagorean comma: `s` syntonic (81/80), `z`
-    septimal (64/63), `u` undecimal quartertone (33/32), `p` Pythagorean
-    (531441/524288). Moves by the same comma cancel; different ones stay side
-    by side (`+p−s`), so you can watch the drift. The pie writes each note's
-    name with its HEJI accidental (arrows for syntonic commas, the septimal
-    and undecimal signs; HEJI has no sign for the Pythagorean comma, so it's
-    `+p`); the left panel and the console's `alter:` line list them.
+    of each comma the note is raised or lowered by. Fourteen commas,
+    smallest first, so their sizes run about 2–5¢ apart from 4.5¢ to 53¢:
+
+    | id | comma | ratio | ¢ |
+    |---|---|---|---|
+    | `k` | keenanisma | 385/384 | 4.5 |
+    | `n` | neutral third comma | 243/242 | 7.1 |
+    | `t` | tridecimal comma | 169/168 | 10.3 |
+    | `h` | Hunt flat 2 comma | 4131/4096 | 14.7 |
+    | `y` | ptolemisma | 100/99 | 17.4 |
+    | `s` | syntonic comma | 81/80 | 21.5 |
+    | `p` | Pythagorean comma | 531441/524288 | 23.5 |
+    | `z` | septimal comma | 64/63 | 27.3 |
+    | `e` | undecimal diesis | 56/55 | 31.2 |
+    | `j` | jubilisma | 50/49 | 35.0 |
+    | `f` | undecimal fifth tone | 45/44 | 38.9 |
+    | `d` | tridecimal minor diesis | 40/39 | 43.8 |
+    | `q` | septimal quarter tone | 36/35 | 48.8 |
+    | `u` | undecimal quartertone | 33/32 | 53.3 |
+
+    Moves by the same comma cancel; different ones stay side by side
+    (`−s+p`), so you can watch the drift. The pie writes each note's name
+    with its HEJI accidental (arrows for syntonic commas, the septimal and
+    undecimal signs); HEJI has no sign for the others, so they're written as
+    their letters (`+p`, `−2n`). The palette shows each comma's size in
+    cents under it; the left panel and the console's `alter:` line list them.
   - **The alterations palette** at the top chooses the comma. Then, on the
     selected slices or (none selected) every note:
 
@@ -242,6 +260,7 @@ library stays in this browser.
     | `#` `$` | breeze: a few notes a comma down / up |
     | `2` | clear: back to the tuning as it came (alterations gone, and any note moved by **=** or **set** back where the library's copy has it) |
     | `1` | switch all the alterations off (the base sounds; they're kept) and on again; any change to them switches them on |
+    | opt-`k` | key centre: the selected slice becomes 1/1 and turns to the top, every interval kept (none selected: the next slice up; shift: the one below). The tuning is written again from there (its ratios over the new 1/1, the alterations relative to it), and its note becomes the key centre when the root follows the key and the scale has it, else the tuning's root is set to it. The whole tuning moves by that note's distance from 12-TET, since a root sits on its 12-TET place |
 
     `esc` first lets go of the selected slices, then leaves tuning mode; `T` leaves
     too, and a list-mode key (`p` `t` `v` `c` `5` `b`) leaves straight into that mode.

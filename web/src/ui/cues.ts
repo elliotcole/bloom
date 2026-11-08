@@ -34,7 +34,7 @@ const MODE_CUES: Record<CueMode, string> = {
   iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 
-const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · esc home';
+const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
 const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F closes';
 const IDLE_CUE = 'space play · n new · ? all keys';
 

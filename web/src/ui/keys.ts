@@ -2,7 +2,7 @@
 
 import { Bloom } from '../core/Bloom';
 import {
-  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, rotateAlterations, stepAlterations,
+  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, recentre, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, ListVerb, NoteEvent, PatternOp, IntervalVal } from '../core/Bloom';
@@ -26,7 +26,7 @@ import { Notice, snap, sameSnap, describeChange } from './notice';
 import { extractSelection, mergeSelection } from './selection';
 import {
   applyTuning, tuningKey, tuningLibrary, stepTuning, originalTuning,
-  hold, heldForBloom, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
+  hold, heldForBloom, holdRoot, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
 } from '../audio/tuningOut';
 import { spell } from '../lib/numbers';
 import { worldColor, worldHues, worldOf } from './worlds';
@@ -633,6 +633,28 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
+  /**
+   * opt-k in tuning mode: the selected slice becomes 1/1 and turns to the top,
+   * every interval kept (none selected: the next slice up; shift: the one
+   * below). Its note becomes the key centre when the root follows the key and
+   * the scale has it; otherwise the tuning's root is set to it by hand.
+   */
+  function recentreKey(shift: boolean) {
+    const view = state.tuningView!;
+    const own = soundingTuning(state.bloom);
+    if (!own) { status('12-TET: every slice is alike, nothing to turn'); return; }
+    const t = editable(own);
+    const root = soundingRoot(state.bloom);
+    const d = view.picked()[0] ?? (shift ? 11 : 1);
+    const pc = (root + d) % 12;
+    const next = recentre(t, d);
+    const follows = (t.root === undefined || t.root === null) && !(isHeld() && holdRoot() === 'fixed');
+    if (follows && state.bloom.appliedScale?.degrees.includes(pc)) state.bloom.centreOn(pc);
+    else next.root = pc;
+    view.clearPick();
+    commitTuning(next, `1/1 on ${spell(pc)}: ${t.name} turned, every interval kept`);
+  }
+
   /** opt-t: hold the sounding tuning over every bloom, or give each bloom its own back */
   function toggleHold() {
     if (isHeld()) release(); else hold(state.bloom);
@@ -1044,6 +1066,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** Handle a key in tuning mode (the tuning view). Returns true if the key was consumed. */
   function onTuningKey(e: KeyboardEvent): boolean {
     const ch = keyChar(e);
+    if (e.altKey && e.code === 'KeyK') { recentreKey(e.shiftKey); return true; }
     if (e.altKey) return false;   // opt-t holds; views, push / pop as at home
     const helpOpen = document.getElementById('help-full')?.style.display === 'block';
     const leaving = e.code === 'Escape' && !e.shiftKey && !helpOpen && !document.body.classList.contains('clean');
@@ -1064,7 +1087,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     // playback, garden, display and help pass through, as in the list modes
     if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ base · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-t holds · T or esc leaves');
+    status('tuning mode: ] [ base · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-k 1/1 here · opt-t holds · T or esc leaves');
     return true;
   }
 

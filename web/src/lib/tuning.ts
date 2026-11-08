@@ -29,6 +29,8 @@ export interface Tuning {
   edited?: boolean;
   /** how many notes the scale has, when fewer than twelve: the keys share them (see fold) */
   notes?: number;
+  /** recentred (opt-k): the library's degree that is now 1/1, so clearing goes back to the right notes */
+  turn?: number;
 }
 
 /** 12-TET: the tuning a bloom has when it has none */
@@ -282,19 +284,33 @@ export function readCue(vel: number[]): { tuning: Tuning; root: number } | null 
 // by side (+p −s), so the drift stays readable. ] / [ swap the base and keep
 // the alterations; setting a note or pasting a scale makes a new base.
 
-export type CommaId = 'p' | 's' | 'z' | 'u';
+export type CommaId = 'k' | 'n' | 't' | 'h' | 'y' | 's' | 'p' | 'z' | 'e' | 'j' | 'f' | 'd' | 'q' | 'u';
 export type Alteration = Partial<Record<CommaId, number>>;
 
-/** The commas a note can be altered by: HEJI's through the 11-limit, and the Pythagorean comma */
+/**
+ * The commas a note can be altered by, smallest first: HEJI's through the
+ * 11-limit (s z u), the Pythagorean comma, and small-number commas between
+ * them, so the steps run about 2–5¢ apart from 4.5¢ to 53¢
+ */
 export const ALTERATIONS: { id: CommaId; name: string; ratio: Ratio }[] = ([
-  ['p', 'pythagorean comma', 531441, 524288],
+  ['k', 'keenanisma', 385, 384],
+  ['n', 'neutral third comma', 243, 242],
+  ['t', 'tridecimal comma', 169, 168],
+  ['h', 'Hunt flat 2 comma', 4131, 4096],
+  ['y', 'ptolemisma', 100, 99],
   ['s', 'syntonic comma', 81, 80],
+  ['p', 'pythagorean comma', 531441, 524288],
   ['z', 'septimal comma', 64, 63],
+  ['e', 'undecimal diesis', 56, 55],
+  ['j', 'jubilisma', 50, 49],
+  ['f', 'undecimal fifth tone', 45, 44],
+  ['d', 'tridecimal minor diesis', 40, 39],
+  ['q', 'septimal quarter tone', 36, 35],
   ['u', 'undecimal quartertone', 33, 32],
 ] as [CommaId, string, number, number][]).map(([id, name, n, d]) => ({ id, name, ratio: { n: BigInt(n), d: BigInt(d) } }));
 export const commaOf = (id: CommaId) => ALTERATIONS.find(c => c.id === id)!;
 
-/** "+p−s", "+2s", or "" when unaltered */
+/** "−s+p", "+2s", or "" when unaltered (smallest comma first) */
 export function alterText(a: Alteration | undefined): string {
   if (!a) return '';
   return ALTERATIONS.map(({ id }) => {
@@ -387,9 +403,45 @@ export function clearAlterations(t: Tuning, degs: number[], original?: Tuning | 
   const alter = alterationsOf(t);
   for (const d of degs) alter[d] = {};
   if (original === undefined) return withAlterations(t, alter);
-  const out = editable(t), from = editable(original).base!;
+  const out = editable(t), from = editable(t.turn ? recentre(editable(original), t.turn) : original).base!;
   for (const d of degs) { out.base!.cents[d] = from.cents[d]; out.base!.ratios[d] = from.ratios[d]; }
   return withAlterations(out, alter);
+}
+
+/**
+ * opt-k: degree `a` becomes 1/1, every interval kept: the tuning turned so it
+ * starts there (base and alterations both; the new 1/1 unaltered, the others
+ * altered relative to it). Its root moves up `a` semitones to match (the caller's).
+ */
+export function recentre(t: Tuning, a: number): Tuning {
+  a = ((a % 12) + 12) % 12;
+  const out = editable(t);
+  if (a === 0) return out;
+  const { cents, ratios } = out.base!, alter = out.alter!, oct = isOctave(out);
+  const ra = ratios[a] ? parseRatio(ratios[a]!) : null;
+  const order = Array.from({ length: 12 }, (_, i) => (a + i) % 12);
+  out.base = {
+    cents: order.map(j => cents[j] - cents[a] + (j < a ? out.period : 0)),
+    ratios: order.map(j => {
+      if (j === a) return '1/1';
+      const rj = ratios[j] ? parseRatio(ratios[j]!) : null;
+      if (!ra || !rj || (j < a && !oct)) return null;
+      const r = ratioDiv(rj, ra);
+      return ratioStr(j < a ? ratioMul(r, { n: 2n, d: 1n }) : r);
+    }),
+  };
+  out.alter = order.map(j => {
+    const c: Alteration = {};
+    for (const { id } of ALTERATIONS) {
+      const n = (alter[j][id] ?? 0) - (alter[a][id] ?? 0);
+      if (n) c[id] = n;
+    }
+    return c;
+  });
+  const turn = ((t.turn ?? 0) + a) % 12;
+  if (turn) out.turn = turn; else delete out.turn;
+  out.edited = true;
+  return resolve(out);
 }
 
 /** 1 / 2: every alteration moves to the degree a semitone down (−1) or up (1) */

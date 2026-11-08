@@ -359,7 +359,7 @@
       }
       .tv-pal-lbl { color: #778; letter-spacing: 0.5px; margin-right: 6px; }
       .tv-comma {
-        display: flex; align-items: center; gap: 3px; height: 30px; padding: 0 8px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; height: 40px; padding: 0 5px;
         background: transparent; border: 1px solid transparent; border-radius: 3px;
         color: #889; font-family: inherit; font-size: 11px; cursor: pointer;
       }
@@ -368,6 +368,8 @@
       .tv-glyph { font-family: Bravura, serif; font-size: 24px; line-height: 1; position: relative; top: 2px; }
       .tv-glyph.tv-letter { font-family: inherit; font-size: 14px; top: 0; font-style: italic; }
       .tv-id { font-size: 10px; opacity: 0.7; }
+      .tv-sign { display: flex; align-items: center; gap: 3px; height: 24px; }
+      .tv-cents { font-size: 9px; opacity: 0.6; }
       .te-alter { font-size: 11px; color: #aab; word-spacing: 4px; line-height: 1.5; }
       .te-alter.off { opacity: 0.45; text-decoration: line-through; }
       .te-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -1134,6 +1136,8 @@ click a node: pin · drag: select
 <b># $</b>  breeze: a few notes a comma
 <b>2</b>    clear: back to the tuning as it came
 <b>1</b>    alterations off / on
+<b>opt-k</b> the selected slice becomes 1/1, at the top
+      (none: the next; shift: the one before)
 click a slice: select · shift-click: an interval
 the palette above chooses the comma
 <b>opt-t</b> hold the tuning over every bloom

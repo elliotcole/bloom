@@ -13,7 +13,7 @@ import {
   shiftDegree, toScala, toggleAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
-import { PALETTE_GLYPH, loadHeji } from './heji';
+import { LETTER_COMMAS, PALETTE_GLYPH, loadHeji } from './heji';
 import { spell } from '../lib/numbers';
 import type { PieMarks } from './tuningPie';
 import { holdRoot, isHeld, originalTuning, setHoldRoot, soundingRoot, soundingTuning } from '../audio/tuningOut';
@@ -146,7 +146,9 @@ export class TuningEditor {
       ...Array.from({ length: 12 }, (_, pc) => `<option value="${pc}"${t.root === pc ? ' selected' : ''}>${spell(pc)}</option>`)].join('');
     const palette = ALTERATIONS.map(c => `<button class="tv-comma${c.id === this._comma ? ' on' : ''}" data-comma="${c.id}"
         title="${c.name} ${c.ratio.n}/${c.ratio.d} (${centsOfRatio(c.ratio).toFixed(1)}¢): 3 / 4 move notes down / up by it, # / $ breeze">
-        <span class="tv-glyph${c.id === 'p' ? ' tv-letter' : ''}">${PALETTE_GLYPH[c.id]}</span><span class="tv-id">${c.id}</span></button>`).join('');
+        <span class="tv-sign">${LETTER_COMMAS.has(c.id) ? `<span class="tv-glyph tv-letter">${c.id}</span>`
+          : `<span class="tv-glyph">${PALETTE_GLYPH[c.id]}</span><span class="tv-id">${c.id}</span>`}</span>
+        <span class="tv-cents">${centsOfRatio(c.ratio).toFixed(1)}</span></button>`).join('');
     const alterList = alterationsOf(t).map(x => alterText(x) || '0').join(' ');
 
     this._el.innerHTML = `
