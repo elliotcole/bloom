@@ -174,8 +174,8 @@ interface LoopState {
   /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
   lock: { start: number; beats: number } | null;
   pending: Pending;
-  /** Changes waiting for the loop to come round (launch quantize); the loop then starts its lists afresh */
-  atCycle: (() => void)[];
+  /** Changes waiting for the loop to come round (launch quantize), given the tick it had reached; the loop then starts its lists afresh */
+  atCycle: ((tick: number) => void)[];
 }
 
 let _loop: LoopState | null = null;
@@ -322,7 +322,7 @@ export function stopParked(name?: string): boolean {
     if (!s) continue;
     s.stop();
     letGo(s.pending);
-    s.atCycle.splice(0).forEach(fn => fn());
+    s.atCycle.splice(0).forEach(fn => fn(0));
     _parked.delete(k);
     any = true;
   }
@@ -353,10 +353,11 @@ export function parkedDownbeat(): number | undefined {
 /**
  * Run `fn` when the loop next comes round to its first note (launch quantize),
  * the lists starting together from there; at once when nothing is looping.
- * Stopping the loop runs what's waiting.
+ * Stopping the loop runs what's waiting. `fn` is given the tick the loop had
+ * reached (0 when it isn't coming round), so a soft swap can carry lists on.
  */
-export function atNextCycle(fn: () => void): void {
-  if (_loop) _loop.atCycle.push(fn); else fn();
+export function atNextCycle(fn: (tick: number) => void): void {
+  if (_loop) _loop.atCycle.push(fn); else fn(0);
 }
 
 /** Something is waiting for the loop to come round */
@@ -416,7 +417,8 @@ export function startLooper(
       if (noteIdx === 0) {
         if (state.atCycle.length) {   // launch quantize: the held change lands here, its lists from the top
           const fns = state.atCycle.splice(0);
-          fns.forEach(fn => fn());
+          const reached = state.globalTick;
+          fns.forEach(fn => fn(reached));
           state.globalTick = 0;
           if (b.notes.length === 0 || b.velocities.length === 0 || b.timeIntervals.length === 0 || b.chans.length === 0) break;
         }
@@ -483,7 +485,7 @@ export function stopLooper(): void {
     letGo(_loop.pending);
     const waiting = _loop.atCycle.splice(0);
     _loop = null;
-    waiting.forEach(fn => fn());   // what was waiting for the loop lands now
+    waiting.forEach(fn => fn(0));   // what was waiting for the loop lands now (nothing to carry on)
   }
 }
 

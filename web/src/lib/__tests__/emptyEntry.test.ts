@@ -20,3 +20,16 @@ describe('empty entries', () => {
     expect(parseFigures(shown).error).toBeNull();
   });
 });
+
+describe('chords of intervals', () => {
+  it('are written in parentheses and read back, brackets and the old run-together form too', () => {
+    expect(stepName([-7, -12])).toBe('(-P5 -P8)');
+    expect(stepName(7)).toBe('+P5');
+    const shown = formatIntervals([[-7, -12], 0, 0, 0, 4]);
+    expect(shown).toBe('(-P5 -P8)/4 +M3');
+    expect(parseIntervals(shown).list).toEqual([[-7, -12], 0, 0, 0, 4]);
+    expect(parseIntervals('[+3rd +5th] (P5 M3)').list).toEqual(parseIntervals('+3rd+5th +P5+M3').list);
+    expect(parseIntervals('-P5-P8').list).toEqual(parseIntervals('(-P5 -P8)').list);
+    expect(parseIntervals('(-P5 -P8').error).toMatch(/closing/);
+  });
+});

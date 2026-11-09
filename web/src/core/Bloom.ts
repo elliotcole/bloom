@@ -2121,15 +2121,52 @@ export class Bloom {
    * as long. Returns how many were cut and how many looped.
    */
   fitLists(keys: ListKey[] = this.listsInUse()): { cut: number; looped: number } {
-    const n = this.notes.length;
+    return this.fitListsTo(this.notes.length, keys.filter(k => k !== 'notes'));
+  }
+
+  /**
+   * opt-z: each of these lists made `n` long, a longer one cut, a shorter one
+   * looped round, so they come round together whatever the notes do. A list
+   * written folded (P5/6) is its steps one by one, as it's kept.
+   */
+  fitListsTo(n: number, keys: ListKey[]): { cut: number; looped: number } {
     let cut = 0, looped = 0;
     for (const k of keys) {
       const arr = this.getList(k);
-      if (k === 'notes' || !n || !arr.length || arr.length === n) continue;
+      if (n < 1 || !arr.length || arr.length === n) continue;
       if (arr.length > n) cut++; else looped++;
       this.setList(k, Array.from({ length: n }, (_, i) => JSON.parse(JSON.stringify(arr[i % arr.length]))));
     }
     return { cut, looped };
+  }
+
+  /** Each list's length, the notes included (what a soft swap compares) */
+  listLengths(): Record<ListKey, number> {
+    const keys: ListKey[] = ['notes', 'time', 'vel', 'chan', 'iv', 'fig'];
+    return Object.fromEntries(keys.map(k => [k, this.getList(k).length])) as Record<ListKey, number>;
+  }
+
+  /**
+   * shift-↑, a soft swap: each list (not the notes) as long as the one it
+   * replaces carries on from where that one had got to at `tick`, rather
+   * than from its top (turned so the loop, starting again at 0, reads on
+   * from there). A list of a new length starts afresh. Returns the lists carried.
+   */
+  carryLists(before: Record<ListKey, number>, tick: number): ListKey[] {
+    const carried: ListKey[] = [];
+    for (const k of ['time', 'vel', 'chan', 'iv', 'fig'] as ListKey[]) {
+      const arr = this.getList(k), n = arr.length;
+      if (!n || n !== before[k]) continue;
+      carried.push(k);
+      const r = tick % n;
+      if (r) this.setList(k, [...arr.slice(r), ...arr.slice(0, r)]);
+    }
+    return carried;
+  }
+
+  /** The lists that colour the notes (opt-z at home): velocities, channels, and intervals and figures when in use */
+  colourLists(): ListKey[] {
+    return this.listsInUse().filter(k => k !== 'notes' && k !== 'time');
   }
 
   private shapeTimes(verb: ListVerb, amount: number): boolean {

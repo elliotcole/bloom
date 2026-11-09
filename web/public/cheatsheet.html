@@ -165,7 +165,7 @@
       <table class="k">
         <tr><td><kbd>↓</kbd></td><td>save the bloom into the slot</td></tr>
         <tr><td><kbd>opt</kbd><kbd>↓</kbd></td><td>insert it here, the rest slide right</td></tr>
-        <tr><td><kbd>↑</kbd></td><td>lift the slot into the bloom</td></tr>
+        <tr><td><kbd>↑</kbd></td><td>lift the slot (shift: soft swap)</td></tr>
         <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>move · with <kbd>⇧</kbd>, move and play</td></tr>
         <tr><td><kbd>↵</kbd> <kbd>⌫</kbd></td><td>new slot / delete it (⌫ with opt)</td></tr>
         <tr><td><kbd>x</kbd> <kbd>X</kbd></td><td>interlace / blend with the slot</td></tr>
@@ -212,7 +212,7 @@
         <tr><td><kbd>5</kbd></td><td><b>intervals mode</b> (randomize there with <kbd>n</kbd>)</td></tr>
         <tr><td><kbd>6</kbd> <kbd>^</kbd> <kbd>8</kbd></td><td>widen / narrow · reset (nothing added)</td></tr>
         <tr><td><kbd>7</kbd> <kbd>&amp;</kbd></td><td>sparser / denser (a rest more / fewer)</td></tr>
-        <tr><td><kbd>5</kbd> <kbd>↵</kbd></td><td>type them: <code>-P5/10</code>, <code>+3rd+5th</code></td></tr>
+        <tr><td><kbd>5</kbd> <kbd>↵</kbd></td><td>type them: <code>-P5/10</code>, <code>(3rd 5th)</code></td></tr>
         <tr><td><kbd>*</kbd></td><td>bake: chords, a raga's fit, figures</td></tr>
         <tr><td><kbd>b</kbd> <kbd>B</kbd></td><td><b>figures</b> mode · clear</td></tr>
       </table>
@@ -232,7 +232,7 @@
 
   <table class="m">
     <tr><th>key</th><th>verb</th><th>pitch <kbd>p</kbd></th><th>time <kbd>t</kbd></th><th>velocity <kbd>v</kbd></th><th>channels <kbd>c</kbd></th><th>intervals <kbd>5</kbd></th></tr>
-    <tr class="same"><td><kbd>s S R 9 0</kbd><br><kbd>u U d D</kbd></td><td colspan="6">scramble, chunks, mirror, rotate, stutter, sputter, patterns: <b>the same in every list</b>. Changing one list's length makes it phase against the others.</td></tr>
+    <tr class="same"><td><kbd>s S R 9 0</kbd><br><kbd>u U d D</kbd></td><td colspan="6">scramble, chunks, mirror, rotate, stutter, sputter, patterns, opt-<kbd>z</kbd> to n long: <b>the same in every list</b>. Changing one list's length makes it phase against the others.</td></tr>
     <tr class="same"><td><kbd>o O</kbd></td><td>sort up / down</td><td>low → high</td><td>short → long</td><td>crescendo</td><td>low → high</td><td>close → wide</td></tr>
     <tr class="same"><td><kbd>z a A</kbd></td><td>drop last / add</td><td>add in scale / any</td><td colspan="3">add one from the palette / at random</td><td>add a step in use / a fresh one</td></tr>
     <tr><td><kbd>1 2</kbd></td><td>down / up</td><td>semitone</td><td>faster / slower ×1.2</td><td>softer / louder</td><td>channel ∓1</td><td>every interval ∓1</td></tr>
@@ -275,7 +275,7 @@
     </div>
     <div class="idea">
       <h3>Intervals</h3>
-      <p>Each step adds a chord at playback, by name, <b>+ above, − below</b>: <code>-P5</code>, <code>+3rd+5th</code> (in the scale), <code>·</code> nothing. <code>/N</code> spaces it: <code>-P5/10</code> is a fifth below every 10th note. The list cycles at its own length, so it drifts through the notes. <kbd>*</kbd> bakes it.</p>
+      <p>Each step adds a chord at playback, by name, <b>+ above, − below</b>: <code>-P5</code>, <code>(3rd 5th)</code> (in the scale), <code>·</code> nothing. <code>/N</code> spaces it: <code>-P5/10</code> is a fifth below every 10th note. The list cycles at its own length, so it drifts through the notes. <kbd>*</kbd> bakes it.</p>
     </div>
     <div class="idea">
       <h3>Moving through keys</h3>

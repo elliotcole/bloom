@@ -261,21 +261,24 @@ export function createKeyHandler(state: KeyHandlerState) {
   // added before a pin), and undo must put them back on the same events
   const _undo: { bloom: Bloom; pins: number[] }[] = [];
   // what the asking keys offered last time: } (split at home, divide in time mode), " and S
-  const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3 };
+  const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3, fitTo: 8 };
 
   /**
    * Ask how many (2 to `max`, offering the last answer), then do it; `act`
    * returns what to say. A selection the key was working on is lifted out
    * again when the answer comes, so the count applies to those events alone.
    */
-  function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string, max = 16): boolean {
+  /** opt-z: the longest a list can be cut or looped to */
+  const FIT_MAX = 512;
+
+  function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string, max = 16, min = 2): boolean {
     if (!state.typeList) return false;
     e.preventDefault();   // the line takes focus now: the key mustn't land in it
-    const hi = Math.max(2, Math.floor(max));
+    const hi = Math.max(min, Math.floor(max));
     const w = _working;
     state.typeList(label, String(Math.min(last, hi)), text => {
       const n = Number(text.trim());
-      if (!Number.isInteger(n) || n < 2 || n > hi) return `a whole number, 2 to ${hi}`;
+      if (!Number.isInteger(n) || n < min || n > hi) return `a whole number, ${min} to ${hi}`;
       relift(w);
       const msg = act(n);
       status(msg);
@@ -887,6 +890,16 @@ export function createKeyHandler(state: KeyHandlerState) {
       refresh(msg);
       return true;
     }
+    // opt-z cuts or loops this list to a length it asks for, as Z fits it to the notes
+    if (e.altKey && !e.shiftKey && e.code === 'KeyZ') {
+      const k = LIST_OF_MODE[m];
+      if (k === 'notes') { status(`${tag} opt-z fits the other lists to a length; the notes are what they fit against`); return true; }
+      return askCount(e, `${MODE_NAME[m]} list, how long:`, _memo.fitTo, n => {
+        _memo.fitTo = n;
+        const { cut, looped } = b.fitListsTo(n, [k]);
+        return `${tag} ${cut ? 'cut' : looped ? 'looped round' : 'already'} to ${n}: ${listAsText(b, m).text}`;
+      }, FIT_MAX, 1) || true;
+    }
     if (e.altKey) return false;   // all other opt combos keep their home meaning
 
     if (e.code === 'Escape' && !e.shiftKey) {
@@ -1192,7 +1205,7 @@ export function createKeyHandler(state: KeyHandlerState) {
           state.viz?.setBloom(state.bloom);
         }, beatsToMs(src.dur()) + 200);
       },
-      askCount: (label, last, act, max) => askCount(e, label, last, act, max),
+      askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
       pattern: (k, again) => patternKey(e, k, again, k === 'notes' ? 'the pitches alone' : 'the notes'),
       memo: _memo,
       onLoopCycle: loopCycle,

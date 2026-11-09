@@ -45,6 +45,7 @@ const TIPS = [
   '- = calm / intensify',
   '{ } merge / split a note (} asks into how many)',
   '" repeat every list (how many times?) · Z fit them to the notes',
+  'opt-z: velocities, channels, intervals and figures to one length, coming round together',
   '( ) pivot on the highest / loudest note',
   '[ ] step the scale flatward / sharpward',
   'l L tilt the line down / up',
@@ -73,6 +74,7 @@ const TIPS = [
   'b or 5 ↵ tab: vel % — how loud figures or added notes are against their note',
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
+  'shift-↑ while looping: a soft swap, the lists of the same length carry on',
   'opt-tab two voices: a second bloom looping beside the first, tab moves the focus',
 ];
 const TIP_EVERY_MS = 30_000;

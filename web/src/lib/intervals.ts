@@ -1,8 +1,9 @@
 // Intervals as musicians name them. Each interval carries its own kind:
 // chromatic (m3, P5, … counted in semitones) or diatonic (3rd, 5th, … counted
 // in steps of the bloom's scale). A step of the intervals list is a chord: its
-// intervals written one after another, the sign of each saying above (+) or
-// below (−): -P5-P8, +3rd+5th, -P5+M3. A step adding nothing is a dot. A bare
+// intervals in parentheses (or brackets), the sign of each saying above (+) or
+// below (−): (-P5 -P8), [+3rd +5th], (-P5 +M3); one interval needs none (-P5),
+// and the old run-together -P5-P8 still reads. A step adding nothing is a dot. A bare
 // number counts in the scale, as musicians name it: -5 is the 5th below.
 //
 // Stored as plain numbers so lists stay JSON and the list verbs stay simple: a
@@ -42,10 +43,10 @@ export function ivName(iv: number): string {
   return `${iv < 0 ? '-' : '+'}${isDiatonic(iv) ? DIATONIC_NAMES[n] : CHROMATIC_NAMES[n]}`;
 }
 
-/** A step: its intervals together (-P5-P8), or a period */
+/** A step: one interval (-P5), a chord in parentheses ((-P5 -P8)), or a period */
 export function stepName(step: number | number[]): string {
   const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
-  return ivs.length ? ivs.map(ivName).join('') : '.';
+  return ivs.length > 1 ? `(${ivs.map(ivName).join(' ')})` : ivs.length ? ivName(ivs[0]) : '.';
 }
 
 /** A list as written: each chord with the rests after it folded into /N when that's shorter */
@@ -78,16 +79,23 @@ export function parseInterval(word: string): number | null {
 }
 
 /**
- * Read a list as written: steps separated by spaces; a step is intervals each
- * with its sign (the first may go without, meaning above), or `.` / `·` / `0`
- * for nothing; `/N` after a step fills with rests until that step's group is N
- * steps long. "-P5/10" is a fifth below every tenth note.
+ * Read a list as written: steps separated by spaces; a step is an interval
+ * with its sign (none: above), a chord of them in parentheses or brackets
+ * ((-P5 -P8), [+3rd +5th], or run together, -P5-P8), or `.` / `·` / `0` for
+ * nothing; `/N` after a step fills with rests until that step's group is N
+ * steps long. "-P5/10" is a fifth below every tenth note, "(-P5 -P8)/4" the
+ * chord every fourth.
  */
 export function parseIntervals(text: string): { list: (number | number[])[]; error: string | null } {
   const list: (number | number[])[] = [];
-  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (/[([][^)\]]*$/.test(text)) return { list: [], error: 'a chord opened with ( or [ needs closing' };
+  // a chord in brackets is one word, its spaces and all
+  const words = (text.trim().match(/[([][^)\]]*[)\]]\S*|\S+/g) ?? [])
+    .map(w => w.replace(/^[([]([^)\]]*)[)\]]/, (_, inner: string) => inner.trim().split(/\s+/).filter(Boolean)
+      .map(x => (/^[+-]/.test(x) ? x : `+${x}`)).join('')));
   if (!words.length) return { list: [0], error: null };
   for (const raw of words) {
+    if (/[()[\]]/.test(raw)) return { list: [], error: `"${raw}": a chord is (-P5 -P8) or [-P5 -P8]` };
     const [stepText, every, ...extra] = raw.split('/');
     if (extra.length) return { list: [], error: `"${raw}": one /N per step` };
     let step: number | number[];

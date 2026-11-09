@@ -49,12 +49,12 @@ export interface HomeCtx {
   play(bloom: Bloom, msg?: string): void;
   /** play the slot, the picture showing it meanwhile */
   previewSlot(src: Bloom): void;
-  /** ask how many (2 to max), then act; false when there's no line to ask on */
-  askCount(label: string, last: number, act: (n: number) => string, max?: number): boolean;
+  /** ask how many (min, 2 unless given, to max), then act; false when there's no line to ask on */
+  askCount(label: string, last: number, act: (n: number) => string, max?: number, min?: number): boolean;
   /** d: the pattern palette over whole notes ('events') or the pitches alone ('notes'); again: the last pattern, without it */
   pattern(k: 'events' | 'notes', again: boolean): void;
   /** what the asking keys offered last time */
-  memo: { splitSlices: number; repeatTimes: number; chunks: number };
+  memo: { splitSlices: number; repeatTimes: number; chunks: number; fitTo: number };
   /** the loop's display: each cycle's lists, as they phase */
   onLoopCycle(vel: number[], time: number[], chan: number[], iv: IntervalVal[], fig: Figure[]): void;
   leaveListMode(): void;
@@ -91,6 +91,7 @@ export interface HomeKey {
   act: (c: HomeCtx) => void;
 }
 
+const LIST_NAME: Record<string, string> = { time: 'times', vel: 'velocities', chan: 'channels', iv: 'intervals', fig: 'figures' };
 /** play ▾ → launch: a lifted bloom waits for the loop to come round */
 const launchQuantized = (): boolean => (document.getElementById('launch-quantize') as HTMLInputElement | null)?.checked ?? false;
 
@@ -238,6 +239,16 @@ export const HOME_KEYS: HomeKey[] = [
       c.b.repeatLists(n);
       return `every list repeated ${n} times: ${c.b.notes.length} notes`;
     }),
+  },
+  {
+    code: 'KeyZ', alt: true, whole: true, name: 'opt-z',
+    label: 'cut or loop the velocity, channel, interval and figure lists to a length (asks): they come round together against the notes',
+    act: c => c.askCount('velocities, channels, intervals, figures: how long:', c.memo.fitTo, n => {
+      c.memo.fitTo = n;
+      const { cut, looped } = c.b.fitListsTo(n, c.b.colourLists());
+      const did = [cut && `${cut} cut`, looped && `${looped} looped`].filter(Boolean).join(', ');
+      return did ? `${did} to ${n}: they come round together every ${n} notes` : `every one is ${n} long already`;
+    }, 512, 1),
   },
   {
     key: 'Z', whole: true, label: 'fit every list to the notes',
@@ -427,26 +438,32 @@ export const HOME_KEYS: HomeKey[] = [
     act: c => { c.g.insertEmpty(); c.status(`inserted slot [${c.g.index}]`); c.refresh(`inserted [${c.g.index}]`); },
   },
   {
-    code: 'ArrowUp', whole: true, label: 'lift the slot into the bloom',
+    code: 'ArrowUp', whole: true, label: 'lift the slot into the bloom (shift: a soft swap, the lists carrying on)',
     act: c => {
       const lifted = c.g.lift();
       if (!lifted) { c.status('nothing here'); return; }
       const index = c.g.index;
-      const land = () => {
+      // shift, a soft swap: while the loop runs the bloom waits for it to come round,
+      // and every list as long as the one it replaces carries on from where that had got to
+      const soft = c.shift && isLooping();
+      const land = (tick: number) => {
+        const before = c.b.listLengths();
         c.state.gardenViz?.animateRestore(lifted, document.getElementById('bloom-canvas') as HTMLCanvasElement);
         c.b.import(lifted);
+        const carried = soft ? c.b.carryLists(before, tick) : [];
         if (isLooping()) updateLooper(c.b);
         if (isPulsing()) updatePulsar(c.b);
         c.clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
         c.clearSelection();
-        c.status(`lifted [${index}]`);
-        c.refresh(`lifted [${index}]`, false);
+        const msg = soft ? `soft swap [${index}]${carried.length ? `: ${carried.map(k => LIST_NAME[k]).join(', ')} carry on` : ': no list the same length, all from the top'}` : `lifted [${index}]`;
+        c.status(msg);
+        c.refresh(msg, false);
       };
-      // launch quantize (play ▾): while the loop runs, the lifted bloom starts when it next comes round
-      if (isLooping() && launchQuantized()) {
+      // launch quantize (play ▾), or a soft swap: while the loop runs, the lifted bloom starts when it next comes round
+      if (isLooping() && (soft || launchQuantized())) {
         atNextCycle(land);
-        c.status(`lifted [${index}] · starts when the loop comes round`);
-      } else land();
+        c.status(`${soft ? 'soft swap' : 'lifted'} [${index}] · starts when the loop comes round`);
+      } else land(0);
     },
   },
   {

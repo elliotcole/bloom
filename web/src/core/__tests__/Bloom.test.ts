@@ -232,6 +232,23 @@ describe('fitLists', () => {
   });
 });
 
+describe('fitListsTo (opt-z)', () => {
+  it('cuts or loops the colouring lists to n, the notes and times left alone', () => {
+    const b = bloom([60, 62, 64, 65, 67, 69, 71, 72, 74, 76], [80, 40, 60], [0.25, 0.5]);
+    b.chans = [1, 2, 3, 4, 5, 6, 7];
+    b.intervals = [7, 0, 0, 0, 0, 0];   // P5/6, kept one step at a time
+    expect(b.colourLists()).toEqual(['vel', 'chan', 'iv']);
+    expect(b.fitListsTo(4, b.colourLists())).toEqual({ cut: 2, looped: 1 });
+    expect(b.velocities).toEqual([80, 40, 60, 80]);
+    expect(b.chans).toEqual([1, 2, 3, 4]);
+    expect(b.intervals).toEqual([7, 0, 0, 0]);
+    expect(b.notes).toHaveLength(10);
+    expect(b.timeIntervals).toEqual([0.25, 0.5]);
+    expect(b.fitListsTo(1, ['vel'])).toEqual({ cut: 1, looped: 0 });
+    expect(b.velocities).toEqual([80]);
+  });
+});
+
 describe('mergeList', () => {
   it('adds two durations, keeps the first of two velocities, and the lists get one shorter', () => {
     const b = bloom([60, 62, 64], [80, 40, 60], [0.25, 0.25, 0.5]);

@@ -71,6 +71,7 @@ These move each note together with its time, velocity, channel and interval.
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |
+| | | opt-`z` | fit to a length: asks how long, then the velocity, channel, interval and figure lists are cut or looped round to it, so they come round together against a long bloom (the notes and times keep their own lengths). A list written folded, `P5/6`, counts its steps one by one |
 
 If the lists are phasing, they go on phasing: a whole-note move carries along
 the lists that are in step with the notes (as long as they are) and leaves the
@@ -150,6 +151,7 @@ PATTERNS-GUIDE.md teaches it step by step, with exercises.
 - **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the colour as a wash over the slot and a ring round the picture, and the name in the slot's top-left corner; the console shows the name. Both are saved with the garden. A name names one bloom: the first change makes a new, unnamed bloom. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
 - **Tuning colours:** each tuning has a colour of its own, so the garden shows which world each bloom lives in: a dot and the tuning's name in the slot's top-right corner, and an arc of that colour under the picture. The ◊ badge wears the same colour. 12-TET has none. A tuning keeps its colour from session to session, unless two in the garden would share one, when the later one moves to the next free colour.
 - **Launch quantize:** **play ▾** → launch. On, a bloom lifted with `↑` while the loop runs waits for the loop to come round, then starts from its first note with its lists together, so you can't land in the middle of a bloom. Stopping the loop lands it at once.
+- **Soft swap: shift-`↑`.** While the loop runs, the lifted bloom always waits for the loop to come round (launch on or off), and every list as long as the one it replaces carries on from where that one had got to instead of starting again: a 6-step accent pattern over a 5-note bloom runs straight on through the swap, mutated notes and all. A list of a new length starts from its top, and so do the notes. A plain `↑` still starts everything from the top. A carried list is shown turned to where it is (as `9` `0` would turn it), so saving keeps it there.
 - **Blending with the selected garden slot:** `x` interlace, `X` blend, `f` lift shape, `C` cast.
 - **Intervals:** `5` enters intervals mode (`↵` there to type them); at home `6` `^` widen / narrow (with none set, `6` starts a fifth below every fourth note), `7` `&` sparser / denser, `8` reset, `*` bake into notes (with a raga attached, it also writes the notes as they sound; with figures, those too). See **Intervals** below.
 - **Figures:** `b` enters figures mode (`↵` there types them), `B` clears them. See **Figures** below.
@@ -452,6 +454,7 @@ These only move values around, so they mean exactly the same in every list.
 | `o` / `O` | sort up / down (for velocity: crescendo / decrescendo) |
 | `z` / `a` / `A` | drop last / add one from the palette / add one at random |
 | `"` / `Z` | repeat this list (asks how many times) / fit it to the notes' length (cut or looped round) |
+| opt-`z` | cut or loop this list to a length (asks how long, 1 or more): `P5/6` is six steps, so 4 gives `P5 . . .` |
 
 Changing one list's length makes it phase against the notes. That's often the
 point: stutter only the velocities and the accent pattern drifts.
@@ -538,10 +541,12 @@ above (+) or below (−):
 A bare number is the diatonic one, as musicians count: `-5` is `-5th`, `8` is
 `8ve`. Chromatic intervals go by name only.
 
-A step can hold any number of them, of either kind: `-P5`, `+3rd+5th` (a
-triad above, in the scale), `-P5-P8+M3`. `/N` after a step fills the rest of
-N steps with nothing, so `-P5/10` is a fifth below every tenth note, and
-`-P5/10 +3rd+5th/7` is the one, then the other, 17 steps in all. The list
+A step can hold any number of them, of either kind: one alone is `-P5`; a
+chord goes in parentheses (or brackets), `(+3rd +5th)` a triad above in the
+scale, `(-P5 -P8 +M3)`, a sign on each (none: above). The old run-together
+`+3rd+5th` still reads. `/N` after a step fills the rest of N steps with
+nothing, so `-P5/10` is a fifth below every tenth note, and
+`-P5/10 (+3rd +5th)/7` is the one, then the other, 17 steps in all. The list
 cycles at its own length, so it drifts through the notes in the loop and the
 pulsar, like any list of another length.
 
