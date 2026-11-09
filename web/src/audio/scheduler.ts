@@ -2,6 +2,7 @@
 
 import { Bloom } from '../core/Bloom';
 import { applyTuning } from './tuningOut';
+import { after, every } from './clock';
 import type { IntervalVal, Sound } from '../core/Bloom';
 import type { Figure } from '../lib/figures';
 import type { MidiOutput } from './midi';
@@ -162,7 +163,7 @@ const LOOKAHEAD_MS = 100;
 interface LoopState {
   bloom: Bloom;
   out: MidiOutput;
-  intervalId: ReturnType<typeof setInterval>;
+  stop: () => void;
   nextEventTime: number; // ms absolute
   /** Persistent counter across loop boundaries — each list wraps at its own length */
   globalTick: number;
@@ -319,7 +320,7 @@ export function stopParked(name?: string): boolean {
   for (const k of names) {
     const s = _parked.get(k);
     if (!s) continue;
-    clearInterval(s.intervalId);
+    s.stop();
     letGo(s.pending);
     s.atCycle.splice(0).forEach(fn => fn());
     _parked.delete(k);
@@ -386,7 +387,7 @@ export function startLooper(
   const state: LoopState = {
     bloom,
     out,
-    intervalId: 0 as unknown as ReturnType<typeof setInterval>,
+    stop: () => {},
     nextEventTime: Math.max(performance.now(), startAt ?? 0),
     globalTick: 0,
     onNoteOn,
@@ -397,7 +398,7 @@ export function startLooper(
     atCycle: [],
   };
 
-  state.intervalId = setInterval(() => {
+  state.stop = every(TICK_MS, () => {
     const now = performance.now();
     const lookahead = hidden() ? LOOKAHEAD_HIDDEN_MS : LOOKAHEAD_MS;
     const horizon = now + lookahead;
@@ -466,7 +467,7 @@ export function startLooper(
       }
       state.nextEventTime += beatsToMs(time);
     }
-  }, TICK_MS);
+  });
 
   _loop = state;
 }
@@ -478,7 +479,7 @@ export function updateLooper(bloom: Bloom): void {
 /** Stop the loop: nothing more starts (a figure's later steps included); what sounds is released on time */
 export function stopLooper(): void {
   if (_loop) {
-    clearInterval(_loop.intervalId);
+    _loop.stop();
     letGo(_loop.pending);
     const waiting = _loop.atCycle.splice(0);
     _loop = null;
@@ -497,7 +498,7 @@ interface PulsarState {
   out: MidiOutput;
   rateBeats: number;
   /** the next fire, set afresh each time at the tempo of the moment */
-  timeoutId: Timer | null;
+  cancelNext: (() => void) | null;
   nextAt: number;
   onNoteOn?: (index: number, tick: number) => void;
   onFire?: () => void;
@@ -522,7 +523,7 @@ export function startPulsar(
     bloom,
     out,
     rateBeats,
-    timeoutId: null,
+    cancelNext: null,
     nextAt: performance.now(),
     onNoteOn,
     onFire,
@@ -538,7 +539,7 @@ export function startPulsar(
     onFire?.();
     // from the time it was due, not the time it ran, so the pulse doesn't drift
     p.nextAt += beatsToMs(p.rateBeats);
-    p.timeoutId = setTimeout(fire, Math.max(0, p.nextAt - performance.now()));
+    p.cancelNext = after(Math.max(0, p.nextAt - performance.now()), fire);
   };
 
   _pulsar = state;
@@ -561,7 +562,7 @@ export function getPulsarRate(): number {
 
 export function stopPulsar(): void {
   if (_pulsar) {
-    if (_pulsar.timeoutId !== null) clearTimeout(_pulsar.timeoutId);
+    _pulsar.cancelNext?.();
     _pulsar.cancelLastPlay?.();
     _pulsar = null;
   }
@@ -587,7 +588,7 @@ interface GardenLoopState {
   slots: (Bloom | null)[];  // live reference — changes take effect next cycle
   out: MidiOutput;
   slotIndex: number;
-  timeoutId: Timer | null;
+  cancelNext: (() => void) | null;
   nextAt: number;
   cancelCurrent: (() => void) | null;
   onNoteOn?: (index: number) => void;
@@ -607,7 +608,7 @@ export function startGardenLooper(
     slots,
     out,
     slotIndex: 0,
-    timeoutId: null,
+    cancelNext: null,
     nextAt: performance.now(),
     cancelCurrent: null,
     onNoteOn,
@@ -630,7 +631,7 @@ export function startGardenLooper(
     state.slotIndex = (state.slotIndex + 1) % Math.max(1, state.slots.length);
     // from when this slot was due, not when it ran, so the garden doesn't drift
     state.nextAt += durMs;
-    state.timeoutId = setTimeout(scheduleNext, Math.max(0, state.nextAt - performance.now()));
+    state.cancelNext = after(Math.max(0, state.nextAt - performance.now()), scheduleNext);
   };
 
   scheduleNext();
@@ -638,7 +639,7 @@ export function startGardenLooper(
 
 export function stopGardenLooper(): void {
   if (_gardenLoop) {
-    if (_gardenLoop.timeoutId !== null) clearTimeout(_gardenLoop.timeoutId);
+    _gardenLoop.cancelNext?.();
     _gardenLoop.cancelCurrent?.();
     _gardenLoop = null;
   }
@@ -655,7 +656,7 @@ interface GardenPulsarState {
   out: MidiOutput;
   slotIndex: number;
   rateBeats: number;
-  intervalId: ReturnType<typeof setInterval>;
+  stop: () => void;
   cancelCurrent: (() => void) | null;
   onNoteOn?: (index: number) => void;
 }
@@ -676,7 +677,7 @@ export function startGardenPulsar(
     out,
     slotIndex: 0,
     rateBeats,
-    intervalId: 0 as unknown as ReturnType<typeof setInterval>,
+    stop: () => {},
     cancelCurrent: null,
     onNoteOn,
   };
@@ -692,13 +693,13 @@ export function startGardenPulsar(
     state.slotIndex = (state.slotIndex + 1) % Math.max(1, state.slots.length);
   };
 
-  state.intervalId = setInterval(fire, beatsToMs(rateBeats));   // a fixed pulse: setPulsarRate restarts it
+  state.stop = every(beatsToMs(rateBeats), fire);   // a fixed pulse: setPulsarRate restarts it
   fire(); // fire immediately
 }
 
 export function stopGardenPulsar(): void {
   if (_gardenPulsar) {
-    clearInterval(_gardenPulsar.intervalId);
+    _gardenPulsar.stop();
     _gardenPulsar.cancelCurrent?.();
     _gardenPulsar = null;
   }

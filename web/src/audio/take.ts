@@ -17,6 +17,7 @@ import type { BloomJSON } from '../io/garden-io';
 import { setMidiTap, onMidiMessage } from './midi';
 import type { MidiOutput } from './midi';
 import { setTuningTap, tuningNow, setReplaying, replayHelper, replayPiano } from './tuningOut';
+import { every } from './clock';
 
 const HOLD_MS = 10_000;        // what's sounding at the stop rings this long
 const DELAY_MS = 40;           // a replay sends each message this far ahead of its time
@@ -281,7 +282,7 @@ export function finish(f: TakeFile, end: number): TakeFile {
 
 // ─── Playing a take ───────────────────────────────────────────────────────────
 
-let _play: { T0: number; timer: ReturnType<typeof setInterval>; gen: number } | null = null;
+let _play: { T0: number; stop: () => void; gen: number } | null = null;
 let _gen = 0;
 
 /** Play the last take from the start; false if there's none */
@@ -337,7 +338,7 @@ export function playTake(): boolean {
     }
     if (i >= ev.length && now > take.length + DELAY_MS + 50) stopPlaying();
   };
-  _play = { T0, timer: setInterval(tick, 5), gen };
+  _play = { T0, stop: every(5, tick), gen };
   tick();
   host.changed();
   return true;
@@ -345,7 +346,7 @@ export function playTake(): boolean {
 
 export function stopPlaying(): void {
   if (!_play) return;
-  clearInterval(_play.timer);
+  _play.stop();
   _play = null;
   _gen++;
   const out = _host?.out();
