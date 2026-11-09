@@ -19,6 +19,8 @@ import type { VizMode } from './theme';
 import { findHome, keyChar } from './homeKeys';
 import type { HomeCtx } from './homeKeys';
 import { autosaveGarden } from '../io/garden-io';
+import { onScreenSlot } from './onScreen';
+import type { OnScreen } from './onScreen';
 import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
@@ -700,6 +702,9 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (tk !== _ownTuning) { _ownTuning = tk; applyTuning(state.bloom); updateTuningBadge(); }
   }
 
+  /** The garden slot the bloom on screen came from (marked in the garden) */
+  let _onScreen: OnScreen = { slot: null, same: false };
+
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
     // Cancel any in-progress garden preview
@@ -716,7 +721,11 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
-    if (state.gardenViz) state.gardenViz.update(state.garden);
+    if (state.gardenViz) {
+      _onScreen = onScreenSlot(state.bloom, state.garden.slots, _onScreen.slot, state.garden.cursor);
+      state.gardenViz.update(state.garden);
+      state.gardenViz.setOnScreen(_onScreen);
+    }
     if (state.display) state.display.update(state.bloom, state.garden, msg);
     updateLooper(state.bloom);
     updatePulsar(state.bloom);

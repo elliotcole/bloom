@@ -1,5 +1,6 @@
 // Garden carousel — miniature bloom visualizations for each garden slot
 
+import type { OnScreen } from './onScreen';
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import {
@@ -88,6 +89,10 @@ export class GardenVisualization {
 
   setMode(mode: VizMode): void { this._mode = mode; }
 
+  /** The slot the bloom on screen came from, and whether it's still that slot (see onScreen.ts) */
+  setOnScreen(o: OnScreen): void { this._onScreen = o; }
+  private _onScreen: OnScreen = { slot: null, same: false };
+
   setTheme(id: ThemeId): void { this._theme = THEMES[id] ?? THEMES.dark; }
 
   animateSlide(direction: 'left' | 'right'): void {
@@ -174,7 +179,11 @@ export class GardenVisualization {
       const r = isCurrent ? base * 0.44 : base * 0.38;
       const bloom = (i >= 0 && i < garden.slots.length) ? garden.slots[i] : null;
       this._drawSlot(ctx, cx, cy, r, bloom, isCurrent, slotWidth, H, hues);
+      if (bloom && bloom === this._onScreen.slot) this._drawOnScreen(ctx, cx - slotWidth / 2 + 8, H - 9);
     }
+    // the slot on screen scrolled out of view: a chevron at that edge points to it
+    const at = this._onScreen.slot ? garden.slots.indexOf(this._onScreen.slot) : -1;
+    if (at >= 0 && Math.abs(at - cursor) > half) this._drawOnScreenEdge(ctx, at < cursor ? 'left' : 'right', W, cy);
 
     // Slot separator lines
     ctx.strokeStyle = theme.grid;
@@ -338,6 +347,37 @@ export class GardenVisualization {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  /**
+   * The slot on screen, in its bottom-left corner: a filled dot and "on screen"
+   * while the bloom is still the slot, a hollow one and "from here" once changed
+   */
+  private _drawOnScreen(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + 3, y, 3, 0, Math.PI * 2);
+    ctx.strokeStyle = ctx.fillStyle = this._theme.accent;
+    ctx.lineWidth = 1.2;
+    if (this._onScreen.same) ctx.fill(); else ctx.stroke();
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this._onScreen.same ? 'on screen' : 'from here', x + 10, y);
+    ctx.restore();
+  }
+
+  private _drawOnScreenEdge(ctx: CanvasRenderingContext2D, side: 'left' | 'right', W: number, cy: number): void {
+    const x = side === 'left' ? 7 : W - 7, d = side === 'left' ? 1 : -1;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + d * 4, cy - 6);
+    ctx.lineTo(x, cy);
+    ctx.lineTo(x + d * 4, cy + 6);
+    ctx.strokeStyle = this._theme.accent;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private _getCurrentSlotCenter(fallbackW: number): number {
