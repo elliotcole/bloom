@@ -3,10 +3,10 @@
 // have had their say. One entry per key, so the docs can be checked against
 // it (ui/__tests__/homeKeys.test.ts) and a key's behaviour is in one place.
 
+import type { ShiftKey } from '../audio/playhead';
 import { Bloom } from '../core/Bloom';
 import type { Tuning } from '../lib/tuning';
 import type { Garden } from '../garden';
-import type { PatternOp } from '../core/Bloom';
 import type { VizMode } from './theme';
 import type { KeyHandlerState } from './keys';
 import type { IntervalVal } from '../core/Bloom';
@@ -15,6 +15,8 @@ import { formatIntervals } from '../lib/intervals';
 import { spell } from '../lib/numbers';
 import { flatNotes } from '../lib/arrays';
 import { controlChange } from '../audio/midi';
+import { keepsName } from './onScreen';
+import type { OnScreen } from './onScreen';
 import { startRecording, stopRecording, isRecording } from '../audio/recorder';
 import {
   startLooper, stopLooper, isLooping, updateLooper, atNextCycle, isParkedLooping,
@@ -39,6 +41,8 @@ export interface HomeCtx {
   alt: boolean;
   b: Bloom;
   g: Garden;
+  /** The slot the bloom on screen came from, and whether it's still that slot (onScreen.ts) */
+  onScreen: () => OnScreen;
   state: KeyHandlerState;
   status(msg: string): void;
   refresh(msg?: string, hold?: boolean): void;
@@ -51,8 +55,8 @@ export interface HomeCtx {
   previewSlot(src: Bloom): void;
   /** ask how many (min, 2 unless given, to max), then act; false when there's no line to ask on */
   askCount(label: string, last: number, act: (n: number) => string, max?: number, min?: number): boolean;
-  /** d: the pattern palette over whole notes ('events') or the pitches alone ('notes'); again: the last pattern, without it */
-  pattern(k: 'events' | 'notes', again: boolean): void;
+  /** d: the pattern palette over whole notes; again: the last pattern, without it (the pitches alone: d in pitch mode) */
+  pattern(again: boolean): void;
   /** what the asking keys offered last time */
   memo: { splitSlices: number; repeatTimes: number; chunks: number; fitTo: number };
   /** the loop's display: each cycle's lists, as they phase */
@@ -100,13 +104,6 @@ export const BLOOM_COLORS = ['none', 'red', 'orange', 'yellow', 'green', 'blue',
 
 const VIZ_ORDER: VizMode[] = ['deep', 'field', 'orbit', 'score', 'tonal', 'set', 'spiral', 'helix', 'flower'];
 
-// opt + an order key: the pitches alone, over the rhythm, dynamics and channels that stay put
-const PITCH_ONLY: Record<string, [PatternOp, PatternOp]> = {
-  KeyS: ['scramble', 'shuffle'],
-  KeyR: ['mirror', 'mirror'],
-  KeyU: ['stutter', 'sputter'],
-};
-
 const v = (key: string | string[], label: string, fn: (b: Bloom, c: HomeCtx) => void, said?: string): HomeKey =>
   ({ key, label, act: c => c.verb(label, () => fn(c.b, c), said) });
 const slot = (key: string, label: string, fn: (b: Bloom, src: Bloom) => void, said?: string): HomeKey =>
@@ -140,11 +137,6 @@ export const HOME_KEYS: HomeKey[] = [
   { code: 'KeyX', alt: true, shift: false, whole: true, name: 'opt-x', label: 'two voices: copy the focused voice into the other (in step, if both loop)', act: c => c.voices.duplicate() },
   { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },
-  {
-    code: Object.keys(PITCH_ONLY), alt: true, name: 'opt + s S R u U', label: 'order the pitches alone',
-    act: c => { const op = PITCH_ONLY[c.e.code][c.shift ? 1 : 0]; c.verb(`${op} pitches`, () => c.b.patternList('notes', op)); },
-  },
-  { code: 'KeyD', alt: true, name: 'opt-d', label: 'a pattern on the pitches alone (shift: the last again)', act: c => c.pattern('notes', c.shift) },
   {
     code: 'KeyP', alt: true, whole: true, name: 'opt-p', label: 'push a save point (shift: pop)',
     act: c => {
@@ -279,8 +271,8 @@ export const HOME_KEYS: HomeKey[] = [
   v('U', 'sputter', b => b.sputter()),
   v('Y', 'spray', b => b.spray()),
   v('R', 'mirror', b => b.mirror()),
-  { key: 'd', label: 'patterns: the palette (braid, pyramid, … or type one)', act: c => c.pattern('events', false) },
-  { key: 'D', label: 'the last pattern again', act: c => c.pattern('events', true) },
+  { key: 'd', label: 'patterns: the palette (braid, pyramid, … or type one)', act: c => c.pattern(false) },
+  { key: 'D', label: 'the last pattern again', act: c => c.pattern(true) },
   v('o', 'sort pitches up', b => b.sortNotes()),
   v('O', 'sort pitches down', b => b.sortNotes(true)),
 
@@ -374,7 +366,7 @@ export const HOME_KEYS: HomeKey[] = [
       c.b.resolveFixed();
       const joining = !isLooping() && c.voices.on() && isParkedLooping();
       if (!isLooping()) {
-        startLooper(c.b, c.state.out!, (idx, tick) => c.state.viz?.activateNote(idx, tick), c.onLoopCycle);   // two voices: on the other's downbeat
+        startLooper(c.b, c.state.out!, (idx, tick, shift) => c.state.viz?.activateNote(idx, tick, shift), c.onLoopCycle);   // two voices: on the other's downbeat
       }
       updateLooper(c.b);
       c.status(joining ? 'looping, from the other voice\'s next downbeat' : 'looping');
@@ -446,11 +438,12 @@ export const HOME_KEYS: HomeKey[] = [
       // shift, a soft swap: while the loop runs the bloom waits for it to come round,
       // and every list as long as the one it replaces carries on from where that had got to
       const soft = c.shift && isLooping();
-      const land = (tick: number) => {
+      const land = (tick: number, at?: (k: ShiftKey) => number) => {
         const before = c.b.listLengths();
         c.state.gardenViz?.animateRestore(lifted, document.getElementById('bloom-canvas') as HTMLCanvasElement);
         c.b.import(lifted);
-        const carried = soft ? c.b.carryLists(before, tick) : [];
+        // a soft swap: each list carries on from its own place
+        const carried = soft ? c.b.carryLists(before, at ? k => at(k as ShiftKey) : tick) : [];
         if (isLooping()) updateLooper(c.b);
         if (isPulsing()) updatePulsar(c.b);
         c.clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)
@@ -555,6 +548,8 @@ export const HOME_KEYS: HomeKey[] = [
 const COLOR_FADE = 0.7;
 
 function saveSlot(c: HomeCtx, insert: boolean): void {
+  // a name names one bloom: changed and saved into another slot, it's a new one, unnamed (its colour stays)
+  if (c.b.name && !keepsName(c.onScreen(), c.g.current, insert)) c.b.name = '';
   // a named bloom is an anchor and keeps its colour whole; a descendant's dims with each save
   if (!c.b.name && c.b.color) c.b.colorLevel = Math.max(0.1, Math.round(c.b.colorLevel * COLOR_FADE * 1000) / 1000);
   if (insert) c.g.insert(c.b); else c.g.save(c.b);

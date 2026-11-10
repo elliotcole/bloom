@@ -90,9 +90,8 @@ other edit to the pitches starts the breeze fresh.
 The settings are in `GESTURE` (`breeze`, `breezePull`, `breezeMemory`). In the
 list modes, `#` `$` do the same with a palette step, with the same memory.
 
-**Pitches only**: opt + `s S R u U` moves only the pitches, and opt-`d` opens the pattern palette for the pitches alone (opt-shift-`d`: the last pattern again).
-Rhythm, dynamics and channels stay where they are. To rotate the pitches
-alone, use pitch mode: `p` then `9` `0` (opt + digits already change the view).
+**Pitches only**: go into pitch mode (`p`). There `s S R u U 9 0 d D` move
+only the pitches; rhythm, dynamics and channels stay where they are.
 
 ## Patterns (`d`)
 
@@ -103,8 +102,8 @@ result would be. Type to filter them by name, or type a pattern of your own;
 again without opening the palette.
 
 At home it writes whole notes out, each keeping its own time, velocity and
-channel (lists phasing against the notes stay phasing). opt-`d` does it to the
-pitches alone. In a list mode it writes out that list alone, so you can
+channel (lists phasing against the notes stay phasing). In a list mode it
+writes out that list alone (in pitch mode, the pitches alone), so you can
 stretch, say, the velocities into a long patterned list under the same notes.
 
 A pattern is a **first window**, then **how its edges move** each round, then
@@ -148,8 +147,8 @@ PATTERNS-GUIDE.md teaches it step by step, with exercises.
 - **Stopping:** `.` stops the loop, the pulsar and the garden's: nothing more starts (a figure's later steps included) and what sounds ends in its own time. With nothing running, `.` is a panic: every note off, now.
 
 - **Saving into the garden:** `↓` saves the bloom into the selected slot, replacing what was there; opt-`↓` inserts it before that slot instead; shift-`↓` inserts an empty slot there. opt-`del` deletes the slot and the rest close up.
-- **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the colour as a wash over the slot and a ring round the picture, and the name in the slot's top-left corner; the console shows the name. Both are saved with the garden. A name names one bloom: the first change makes a new, unnamed bloom. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
-- **The slot on screen:** the garden marks the slot the bloom on screen came from, in its bottom-left corner: a filled dot and *on screen* while the bloom is still exactly that slot (renaming it aside), a hollow one and *from here* once you've changed it. When that slot has scrolled out of view, a chevron at that edge of the strip points to it. Saving or lifting moves the mark; deleting the slot takes it away.
+- **Naming:** opt-`n` names the bloom and gives it a colour (none, red, orange, yellow, green, blue, violet; the first letter picks). The garden shows the colour as a wash over the slot and a ring round the picture, and the name in the slot's top-left corner; the console shows the name. Both are saved with the garden. A name names one bloom, and stays through changes: saved back into the slot it came from, it keeps its name; saved changed into any other slot (or inserted), it's a new bloom, unnamed. Saved unchanged anywhere, it keeps it. The colour carries on to its descendants and fades a step with each save into the garden, so a journey away from an anchor shows how far it has gone; naming again makes a new anchor at full colour.
+- **The slot on screen:** the garden marks the slot the bloom on screen came from, in its bottom-left corner: a filled dot and *on screen* while the bloom is still exactly that slot (renaming it aside), a hollow one and *from here* once you've changed it. While it loops or pulses the mark says *looping* (*looping, changed* once changed) and the dot breathes. When that slot has scrolled out of view, a chevron at that edge of the strip points to it. Saving or lifting moves the mark; deleting the slot takes it away.
 - **Tuning colours:** each tuning has a colour of its own, so the garden shows which world each bloom lives in: a dot and the tuning's name in the slot's top-right corner, and an arc of that colour under the picture. The ◊ badge wears the same colour. 12-TET has none. A tuning keeps its colour from session to session, unless two in the garden would share one, when the later one moves to the next free colour.
 - **Launch quantize:** **play ▾** → launch. On, a bloom lifted with `↑` while the loop runs waits for the loop to come round, then starts from its first note with its lists together, so you can't land in the middle of a bloom. Stopping the loop lands it at once.
 - **Soft swap: shift-`↑`.** While the loop runs, the lifted bloom always waits for the loop to come round (launch on or off), and every list as long as the one it replaces carries on from where that one had got to instead of starting again: a 6-step accent pattern over a 5-note bloom runs straight on through the swap, mutated notes and all. A list of a new length starts from its top, and so do the notes. A plain `↑` still starts everything from the top. A carried list is shown turned to where it is (as `9` `0` would turn it), so saving keeps it there.
@@ -220,7 +219,9 @@ library stays in this browser.
   outside. Slices light up as their notes play. The controls sit either
   side: the selected note on the left, the whole tuning on the right.
   In tuning mode `]` `[` step through the tunings (a new base: the
-  alterations stay), the alteration keys below work, and playback, garden,
+  alterations stay), and `l` opens a menu of them: type to filter, ↑↓ and `↵`
+  (or a click) choose one, so in performance you go straight to it without
+  sounding the ones between; the alteration keys below work, and playback, garden,
   display and view keys work as at home; other keys only show a hint. `p` `t`
   `v` `c` `5` switch straight to that list mode, as between list modes (and
   `T` from a list mode switches here). `T` or `esc` leaves, as does choosing
@@ -464,7 +465,7 @@ point: stutter only the velocities and the accent pattern drifts.
 
 | key | verb | time | velocity | channels |
 |---|---|---|---|---|
-| `1` `2` | down / up | faster / slower (×1.2) | softer / louder | shift ∓1 |
+| `1` `2` | fine down / up | a little faster / slower (×1.05) | a little softer / louder (∓3) | shift ∓1 |
 | `!` `@` | big down / up | double / half time | much softer / louder | — |
 | `3` `4` | one palette step | next shorter / longer duration you use | next level you use | next channel in use |
 | `#` `$` | breeze | as `3` `4`, for some notes only | | |
@@ -473,6 +474,7 @@ point: stutter only the velocities and the accent pattern drifts.
 | `i` / `I` | invert / around the middle | longest ↔ shortest | loud ↔ quiet | across the range / around the most-used |
 | `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
+| `n` / `N` | new list | new times from the palette | new dynamics | from the channels in use / any channel |
 
 **Merge: `{`** (as `{` merges two notes at home): a few pairs of neighbours
 (about a fifth of the list, as `}` divides; at least one) each become one, the
@@ -733,7 +735,10 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   velocity, channels, intervals, figures), each at its own length (×n). The time lane is drawn to
   scale. While playing, each lane has its own cursor, which cycles at that
   list's length, so you can watch lists of different lengths drift against
-  each other. The lane for the
+  each other. Every value wears a coloured chit, equal values one colour,
+  so a list's pattern shows at a glance: pitches by pitch class, times and
+  velocities cool to warm (short to long, soft to loud), channels by channel,
+  intervals and figures a colour each. The lane for the
   current list mode is lit amber, a frozen list shows ❄, recently breezed
   values glow, and whatever the last key changed is boxed for a moment. The
   setting is remembered.

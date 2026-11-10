@@ -9,6 +9,8 @@ import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
 import { timebase } from './clockSync';
+import { follow, playedView, seenOf, NO_SHIFT } from './playhead';
+import type { Place, Shift, ShiftKey } from './playhead';
 
 type Timer = ReturnType<typeof setTimeout>;
 
@@ -167,15 +169,32 @@ interface LoopState {
   nextEventTime: number; // ms absolute
   /** Persistent counter across loop boundaries — each list wraps at its own length */
   globalTick: number;
-  onNoteOn?: (index: number, tick: number) => void;
+  onNoteOn?: LoopNoteOn;
   /** Called at the start of every notes cycle with the effective vel/time/chan/intervals/figures arrays for that cycle */
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void;
   onLoop?: () => void;
   /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
   lock: { start: number; beats: number } | null;
   pending: Pending;
-  /** Changes waiting for the loop to come round (launch quantize), given the tick it had reached; the loop then starts its lists afresh */
-  atCycle: ((tick: number) => void)[];
+  /** Changes waiting for the loop to come round (launch quantize), given the tick it had reached and each list's place; the loop then starts its lists afresh */
+  atCycle: CycleFn[];
+  /** Each list's place apart from the notes', kept through edits (playhead.ts), and the lists as last seen */
+  shift: Shift;
+  seen: Place['seen'];
+}
+
+/** A loop's note lighting: its index, the tick, and where the other lists are from the tick (playhead.ts) */
+export type LoopNoteOn = (index: number, tick: number, shift?: Shift) => void;
+
+type CycleFn = (tick: number, at: (k: ShiftKey) => number) => void;
+
+/** The bloom as a loop reads it, its lists at their places */
+const played = (s: LoopState): Bloom => playedView(s.bloom, s.shift);
+
+/** The loop keeps its place in every list through a change to the bloom */
+function keepPlace(s: LoopState): void {
+  const p = follow({ tick: s.globalTick, shift: s.shift, seen: s.seen }, s.bloom);
+  s.globalTick = p.tick; s.shift = p.shift; s.seen = p.seen;
 }
 
 let _loop: LoopState | null = null;
@@ -201,7 +220,7 @@ export function beatsToDownbeat(b: Bloom, tick: number): number {
 
 /** When a loop next starts its notes again, in ms */
 function downbeatOf(s: LoopState): number {
-  return s.nextEventTime + beatsToMs(beatsToDownbeat(s.bloom, s.globalTick));
+  return s.nextEventTime + beatsToMs(beatsToDownbeat(played(s), s.globalTick));
 }
 
 /** Beats of one pass of the notes starting at `tick` (a tick on the first note), the other lists read where they are */
@@ -262,7 +281,7 @@ export function nextMeeting(): { inMs: number; inStep: boolean } | null {
   const other = _parked.values().next();
   if (!_loop || other.done) return null;
   const now = performance.now();
-  const view = (s: LoopState): LoopView => ({ bloom: s.bloom, tick: s.globalTick, inBeats: Math.max(0, s.nextEventTime - now) / beatsToMs(1) });
+  const view = (s: LoopState): LoopView => ({ bloom: played(s), tick: s.globalTick, inBeats: Math.max(0, s.nextEventTime - now) / beatsToMs(1) });
   const a = view(_loop), b = view(other.value);
   const beats = meetingIn(a, b);
   if (beats === null) return null;
@@ -273,10 +292,11 @@ export function nextMeeting(): { inMs: number; inStep: boolean } | null {
 }
 
 /** Set the focused loop aside under `name`, still playing; its notes now light `onNoteOn` */
-export function parkLooper(name: string, bloom: Bloom, onNoteOn?: (index: number, tick: number) => void): boolean {
+export function parkLooper(name: string, bloom: Bloom, onNoteOn?: LoopNoteOn): boolean {
   stopParked(name);
   if (!_loop) return false;
   _loop.bloom = bloom;
+  keepPlace(_loop);
   _loop.onNoteOn = onNoteOn;
   _loop.onCycleUpdate = undefined;
   _loop.onLoop = undefined;
@@ -289,7 +309,7 @@ export function parkLooper(name: string, bloom: Bloom, onNoteOn?: (index: number
 export function unparkLooper(
   name: string,
   bloom: Bloom,
-  onNoteOn?: (index: number, tick: number) => void,
+  onNoteOn?: LoopNoteOn,
   onCycleUpdate?: LoopState['onCycleUpdate'],
   onLoop?: () => void,
 ): boolean {
@@ -298,6 +318,7 @@ export function unparkLooper(
   _parked.delete(name);
   stopLooper();
   Object.assign(s, { bloom, onNoteOn, onCycleUpdate, onLoop });
+  keepPlace(s);
   _loop = s;
   return true;
 }
@@ -305,7 +326,7 @@ export function unparkLooper(
 /** The bloom a parked loop plays from now on */
 export function setParkedBloom(name: string, bloom: Bloom): void {
   const s = _parked.get(name);
-  if (s) s.bloom = bloom;
+  if (s) { s.bloom = bloom; keepPlace(s); }
 }
 
 /** A loop parked under `name` (any, when no name) is playing */
@@ -322,7 +343,7 @@ export function stopParked(name?: string): boolean {
     if (!s) continue;
     s.stop();
     letGo(s.pending);
-    s.atCycle.splice(0).forEach(fn => fn(0));
+    s.atCycle.splice(0).forEach(fn => fn(0, () => 0));
     _parked.delete(k);
     any = true;
   }
@@ -334,7 +355,7 @@ export function stopParked(name?: string): boolean {
  * next downbeat, so the two run in step: duplicating a voice into the other.
  * At once when nothing is looping.
  */
-export function startParkedInStep(name: string, bloom: Bloom, out: MidiOutput, onNoteOn?: (index: number, tick: number) => void): void {
+export function startParkedInStep(name: string, bloom: Bloom, out: MidiOutput, onNoteOn?: LoopNoteOn): void {
   stopParked(name);
   const focused = _loop;
   const at = focused ? downbeatOf(focused) : undefined;
@@ -356,8 +377,8 @@ export function parkedDownbeat(): number | undefined {
  * Stopping the loop runs what's waiting. `fn` is given the tick the loop had
  * reached (0 when it isn't coming round), so a soft swap can carry lists on.
  */
-export function atNextCycle(fn: (tick: number) => void): void {
-  if (_loop) _loop.atCycle.push(fn); else fn(0);
+export function atNextCycle(fn: CycleFn): void {
+  if (_loop) _loop.atCycle.push(fn); else fn(0, () => 0);
 }
 
 /** Something is waiting for the loop to come round */
@@ -375,7 +396,7 @@ function buildCycleSlice<T>(
 export function startLooper(
   bloom: Bloom,
   out: MidiOutput,
-  onNoteOn?: (index: number, tick: number) => void,
+  onNoteOn?: LoopNoteOn,
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void,
   onLoop?: () => void,
   /** when to start, in ms: two voices start the second loop on the first one's downbeat */
@@ -397,6 +418,8 @@ export function startLooper(
     lock: null,
     pending: newPending(),
     atCycle: [],
+    shift: { ...NO_SHIFT },
+    seen: seenOf(bloom),
   };
 
   state.stop = every(TICK_MS, () => {
@@ -405,7 +428,7 @@ export function startLooper(
     const horizon = now + lookahead;
 
     while (state.nextEventTime < horizon) {
-      const b = state.bloom;
+      let b = played(state);
       // wrapAt throws on empty arrays — bail if any parallel array is empty
       if (b.notes.length === 0 || b.velocities.length === 0
         || b.timeIntervals.length === 0 || b.chans.length === 0) break;
@@ -417,9 +440,12 @@ export function startLooper(
       if (noteIdx === 0) {
         if (state.atCycle.length) {   // launch quantize: the held change lands here, its lists from the top
           const fns = state.atCycle.splice(0);
-          const reached = state.globalTick;
-          fns.forEach(fn => fn(reached));
+          const reached = state.globalTick, shift = state.shift;
+          fns.forEach(fn => fn(reached, k => reached + shift[k]));
           state.globalTick = 0;
+          state.shift = { ...NO_SHIFT };
+          state.seen = seenOf(state.bloom);
+          b = state.bloom;
           if (b.notes.length === 0 || b.velocities.length === 0 || b.timeIntervals.length === 0 || b.chans.length === 0) break;
         }
         // a running clock (Live playing): the cycle starts on its next beat and follows it
@@ -456,8 +482,8 @@ export function startLooper(
       });
 
       // Fire visual callback at actual note-on time
-      const idxSnap = noteIdx, tickSnap = state.globalTick;
-      const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap); }, Math.max(0, atMs - now));
+      const idxSnap = noteIdx, tickSnap = state.globalTick, shiftSnap = state.shift;
+      const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap, shiftSnap); }, Math.max(0, atMs - now));
       state.pending.visual.add(v);
 
       state.globalTick++;
@@ -475,7 +501,7 @@ export function startLooper(
 }
 
 export function updateLooper(bloom: Bloom): void {
-  if (_loop) _loop.bloom = bloom;
+  if (_loop) { _loop.bloom = bloom; keepPlace(_loop); }
 }
 
 /** Stop the loop: nothing more starts (a figure's later steps included); what sounds is released on time */
@@ -485,7 +511,7 @@ export function stopLooper(): void {
     letGo(_loop.pending);
     const waiting = _loop.atCycle.splice(0);
     _loop = null;
-    waiting.forEach(fn => fn(0));   // what was waiting for the loop lands now (nothing to carry on)
+    waiting.forEach(fn => fn(0, () => 0));   // what was waiting for the loop lands now (nothing to carry on)
   }
 }
 

@@ -12,6 +12,7 @@ import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import { isFigure } from '../lib/figures';
 import type { Theme } from './theme';
+import type { Shift } from '../audio/playhead';
 
 export type RingKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 export interface Ring { key: RingKey; name: string; len: number }
@@ -84,6 +85,8 @@ export function drawOrreryAt(
   progress = 0,
   showLabels = false,
   hit?: Hit,
+  /** where each list is from the tick, for a loop that kept its place through edits */
+  shift?: Shift,
 ): void {
   const b = bloom.sounding();   // a raga's notes as they sound
   const R = rings(b);
@@ -123,7 +126,8 @@ export function drawOrreryAt(
     const L = ring.len;
     const cell = (Math.PI * 2) / L;
     const g = Math.min(0.03, cell * 0.2);   // the gap between cells
-    const cur = playing ? tick % L : -1;
+    const rt = tick + (ring.key === 'notes' ? 0 : shift?.[ring.key] ?? 0);   // this ring's own place
+    const cur = playing ? rt % L : -1;
 
     // the ring's faint track, and its name at the top
     arc(ctx, cx, cy, rm, 0, Math.PI * 2, 0.75, ink(0.07));
@@ -139,7 +143,7 @@ export function drawOrreryAt(
           const f = flash[i] ?? 0;
           const am = (a0 + a1) / 2;
           const chord = flatNotes([b.notes[i]]) as number[];
-          const vel = vels.length ? vels[(playing ? tick - (tick % n) + i : i) % vels.length] ?? 90 : 90;
+          const vel = vels.length ? vels[(playing ? tick - (tick % n) + i + (shift?.vel ?? 0) : i) % vels.length] ?? 90 : 90;
           chord.forEach((p, ci) => {
             const h = hi > lo ? (p - lo) / (hi - lo) : 0.5;
             const rr = r0 + 4 + h * (w - 8);
@@ -198,7 +202,7 @@ export function drawOrreryAt(
     }
 
     // the hand: a radial line across the band, a bead at its outer edge
-    const ha = TOP + handAngle(L, tick, progress);
+    const ha = TOP + handAngle(L, rt, progress);
     const alpha = playing ? 0.9 : 0.3;
     ctx.beginPath();
     ctx.moveTo(cx + Math.cos(ha) * (r0 - gap * 0.4), cy + Math.sin(ha) * (r0 - gap * 0.4));

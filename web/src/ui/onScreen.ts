@@ -27,3 +27,12 @@ export function onScreenSlot(live: Bloom, slots: (Bloom | null)[], was: Bloom | 
   }
   return was && slots.includes(was) ? { slot: was, same: false } : { slot: null, same: false };
 }
+
+/**
+ * Whether a named bloom keeps its name when saved over `target` (inserting
+ * when `insert`): unchanged it does anywhere, changed only back into the slot
+ * it came from. Saved changed into another slot it's a new bloom, unnamed.
+ */
+export function keepsName(o: OnScreen, target: Bloom | null, insert: boolean): boolean {
+  return o.same || (!insert && o.slot !== null && target === o.slot);
+}

@@ -405,6 +405,7 @@
       /* in a list mode, the lines for that mode alone */
       .hf-only { display: none; }
       body[data-list-mode="pitch"] .hf-pitch, body[data-list-mode="time"] .hf-time,
+      body[data-list-mode="chan"] .hf-chan,
       body[data-list-mode="iv"] .hf-iv, body[data-list-mode="fig"] .hf-fig { display: inline; }
 
       /* Main canvas area — flex column: viz on top, garden on bottom */
@@ -713,14 +714,14 @@
       #list-typer .lt-choice span { color: #556; padding: 1px 5px; }
       #list-typer .lt-choice span.on { color: #9ab; background: #1a1f36; }
 
-      /* Scale picker (ui/scalePicker.ts), styled as the command palette */
-      #scale-picker {
+      /* Scale and tuning pickers (ui/scalePicker.ts, ui/tuningPicker.ts), styled as the command palette */
+      #scale-picker, #tuning-picker {
         display: none; position: fixed; inset: 0; z-index: 400;
         background: rgba(0, 0, 0, 0.55);
         align-items: flex-start; justify-content: center; padding-top: 10vh;
       }
-      #scale-picker.open { display: flex; }
-      #sp-box {
+      #scale-picker.open, #tuning-picker.open { display: flex; }
+      #sp-box, #tuning-picker .picker-box {
         background: #0c0c18; border: 1px solid #2a2a44; width: min(560px, 92vw);
         padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px;
       }
@@ -729,8 +730,8 @@
       .sp-root select { background: #07070f; color: #9ab; border: 1px solid #252540; font-family: inherit; }
       .sp-list { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; }
       .sp-group { font-size: 9px; color: #445; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 8px 2px; }
-      #scale-picker .cp-sug-name { flex: 0 0 190px; }
-      #scale-picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
+      #scale-picker .cp-sug-name, #tuning-picker .cp-sug-name { flex: 0 0 190px; }
+      #scale-picker .cp-sug.current .cp-sug-name::after, #tuning-picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
       #scale-badge.active { cursor: pointer; }
 
       /* Pattern palette (ui/patternPicker.ts), styled as the command palette */
@@ -1050,7 +1051,7 @@
           </div>
           <div class="hf-sec">
             <div class="hf-h">Gestures (whole bloom)</div>
-            <div class="hf-body"><b>-</b>      calm         <b>=</b>    intensify
+            <div class="hf-body"><b>-</b>      calm         <b>= +</b>  intensify
 <b>'</b>      vary
 <b>{ }</b>    merge / split (asks how many)</div>
           </div>
@@ -1067,8 +1068,7 @@
 <b>"</b>      repeat (how many times?)  <b>Z</b> fit to the notes
 <b>opt-z</b>  vel, chan, iv, fig lists to a length (how long?)
 <b>a A</b>    add one (in scale / any)
-<b>opt + s S R u U</b> the pitches alone
-<b>opt-d</b>  a pattern on the pitches alone</div>
+pitches alone: in pitch mode (p)</div>
           </div>
         </div>
 
@@ -1132,6 +1132,7 @@ click a node: pin · drag: select
           <div class="hf-sec" id="hf-tuning-sec">
             <div class="hf-h">Tuning mode (T or esc leaves)</div>
             <div class="hf-body"><b>] [</b>  next / previous tuning
+<b>l</b>    the tunings menu: pick one
 <b>9 0</b>  rotate the alterations
 <b>3 4</b>  a comma down / up
 <b># $</b>  breeze: a few notes a comma
@@ -1187,7 +1188,7 @@ drag a box: select events — keys
 <b>" Z</b>    repeat (how many?) / fit to the notes
 <b>opt-z</b> cut or loop to a length (how long?)
 
-<b>1 2</b>    down / up
+<b>1 2</b>    down / up (time, velocity: a little)
 <b>! @</b>    octave · double / half time · much softer / louder
 <b>3 4</b>    one palette (scale) step down / up
 <b># $</b>    breeze: some values a step
@@ -1201,7 +1202,8 @@ drag a box: select events — keys
 <b>h H</b>    fewer / more distinct values
 <b>q Q</b>    quantize / set grid or levels
 <b>n</b>      new list
-<span class="hf-only hf-pitch">
+<span class="hf-only hf-chan"><b>N</b>      new list, any channel (n: the ones in use)
+</span><span class="hf-only hf-pitch">
 every pitch key from home works here too:
 <b>( ) [ ] k K j J e E</b>; <b>q</b> snaps to the scale
 </span><span class="hf-only hf-iv">

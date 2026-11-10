@@ -2,7 +2,7 @@
 
 Braid and pyramid look like two different tricks. They are one machine. This guide teaches that machine from the ground up, a step at a time, with exercises. Every example below was run through the real code (`src/lib/patterns.ts`), so the answers are what Bloom will play.
 
-> **Where this stands (2 Nov 2026).** `d` opens the palette: the presets, a box to type your own, and a live preview of the indices and the length. `↵` bakes, `D` bakes the last one again, opt-`d` works on the pitches alone, and in a list mode `d` writes out that list. Everything below can be tried there.
+> **Where this stands (2 Nov 2026).** `d` opens the palette: the presets, a box to type your own, and a live preview of the indices and the length. `↵` bakes, `D` bakes the last one again, and in a list mode `d` writes out that list (in pitch mode, the pitches alone). Everything below can be tried there.
 
 ---
 

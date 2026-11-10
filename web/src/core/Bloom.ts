@@ -146,6 +146,9 @@ export const GESTURE = {
 };
 
 const MIN_TIME = 0.02;
+// 1 2 in time and velocity mode fine-tune: 5% faster / slower, 3 softer / louder
+const FINE_TIME = 1.05;
+const FINE_VEL = 3;
 const roundTime = (t: number): number => Math.round(t * 1e6) / 1e6;
 const clampVel = (v: number): number => Math.max(1, Math.min(127, Math.round(v)));
 const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -1667,6 +1670,14 @@ export class Bloom {
     return this;
   }
 
+  /** A fresh channel list drawn from the channels in use, as n in scale draws new pitches from the scale */
+  renewChansInUse(): this {
+    const pal = this.chanPalette();
+    if (pal.length === 0) return this.newChans();
+    this.chans = Array.from({ length: this.chans.length || this.notes.length }, () => pick(pal));
+    return this;
+  }
+
   /** Move every chan to the next/previous channel in the palette — the diatonic shift */
   dShiftChans(n = 1): this {
     const pal = this.chanPalette();
@@ -1864,7 +1875,8 @@ export class Bloom {
     if (verb === 'tiltDown' || verb === 'tiltUp') return this.tiltList(k, verb === 'tiltUp' ? 1 : -1);
     if (k === 'notes') return this.shapePitch(verb, amount);
     // only pitch has a key to leave; elsewhere N is n
-    if (verb === 'renewWild' && k !== 'iv') verb = 'renew';   // intervals: n keeps where, N doesn't
+    // intervals: n keeps where, N doesn't; channels: n draws on the ones in use, N on any
+    if (verb === 'renewWild' && k !== 'iv' && k !== 'chan') verb = 'renew';
     if (k === 'time') return this.shapeTimes(verb, amount);
     if (k === 'vel') return this.shapeVels(verb, amount);
     if (k === 'iv') return this.shapeIntervals(verb, amount);
@@ -2152,13 +2164,13 @@ export class Bloom {
    * than from its top (turned so the loop, starting again at 0, reads on
    * from there). A list of a new length starts afresh. Returns the lists carried.
    */
-  carryLists(before: Record<ListKey, number>, tick: number): ListKey[] {
+  carryLists(before: Record<ListKey, number>, tick: number | ((k: ListKey) => number)): ListKey[] {
     const carried: ListKey[] = [];
     for (const k of ['time', 'vel', 'chan', 'iv', 'fig'] as ListKey[]) {
       const arr = this.getList(k), n = arr.length;
       if (!n || n !== before[k]) continue;
       carried.push(k);
-      const r = tick % n;
+      const r = (typeof tick === 'number' ? tick : tick(k)) % n;
       if (r) this.setList(k, [...arr.slice(r), ...arr.slice(0, r)]);
     }
     return carried;
@@ -2188,8 +2200,8 @@ export class Bloom {
         return others.length ? pick(others) : t * pick([0.5, 2]);
       }); break;
       case 'mutateWild': this.mutateTime(); break;
-      case 'nudgeDown': this.faster(); break;
-      case 'nudgeUp': this.slower(); break;
+      case 'nudgeDown': this.faster(FINE_TIME); break;
+      case 'nudgeUp': this.slower(FINE_TIME); break;
       case 'octaveDown': this.scaleTimes(0.5); break;
       case 'octaveUp': this.scaleTimes(2); break;
       case 'stepDown': set(t => this.stepTime(t, -1, pal)); break;
@@ -2279,8 +2291,8 @@ export class Bloom {
     switch (verb) {
       case 'mutate': set(v => (coin(0.5) ? v + rrand(-10, 10) : v)); break;
       case 'mutateWild': set(v => v + rrand(-30, 30)); break;
-      case 'nudgeDown': this.softer(); break;
-      case 'nudgeUp': this.louder(); break;
+      case 'nudgeDown': set(v => v - FINE_VEL); break;
+      case 'nudgeUp': set(v => v + FINE_VEL); break;
       case 'octaveDown': set(v => Math.max(20, v / 1.5)); break;
       case 'octaveUp': set(v => v * 1.5); break;
       case 'stepDown': set(v => this.stepVel(v, -1, pal)); break;
@@ -2363,7 +2375,8 @@ export class Bloom {
       case 'fewer': this.thinChanPalette(); break;
       case 'more': this.thickenChanPalette(); break;
       case 'quantize': this.quantizeChanPalette(amount); break;
-      case 'renew': this.newChans(); break;
+      case 'renew': this.renewChansInUse(); break;
+      case 'renewWild': this.newChans(); break;
       case 'dropLast': this.dropChan(); break;
       case 'addFromPalette': this.recycleChan(); break;
       case 'addRandom': this.addChan(); break;

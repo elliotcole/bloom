@@ -323,6 +323,28 @@ describe('lists phasing against the notes stay as they are', () => {
   });
 });
 
+describe('list-mode values', () => {
+  it('channels: n draws on the channels in use, N on any', () => {
+    const b = bloom(Array.from({ length: 40 }, (_, i) => 40 + i), [80], [0.25]);
+    b.chans = [2, 5, 2, 5];
+    b.shapeList('chan', 'renew');
+    expect(b.chans.length).toBe(4);
+    expect(b.chans.every(c => c === 2 || c === 5)).toBe(true);
+    const seen = new Set<number>();
+    for (let k = 0; k < 30; k++) { b.chans = [2, 5, 2, 5]; b.shapeList('chan', 'renewWild'); b.chans.forEach(c => seen.add(c)); }
+    expect([...seen].some(c => c !== 2 && c !== 5)).toBe(true);
+  });
+  it('1 2 fine-tune time (5%) and velocity (3), rests kept', () => {
+    const b = bloom([60, 62], [80, 0], [1, 0.5]);
+    b.shapeList('time', 'nudgeUp');
+    expect(b.timeIntervals).toEqual([1.05, 0.525]);
+    b.shapeList('vel', 'nudgeDown');
+    expect(b.velocities).toEqual([77, 0]);
+    b.shapeList('vel', 'nudgeUp'); b.shapeList('vel', 'nudgeUp');
+    expect(b.velocities).toEqual([83, 0]);
+  });
+});
+
 describe('mergeList merges a few pairs', () => {
   it('about a fifth of the list, never overlapping, the total time kept', () => {
     const b = bloom(Array.from({ length: 10 }, (_, i) => 60 + i), [80], Array(10).fill(0.25));

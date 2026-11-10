@@ -21,6 +21,7 @@ import type { HomeCtx } from './homeKeys';
 import { autosaveGarden } from '../io/garden-io';
 import { onScreenSlot } from './onScreen';
 import type { OnScreen } from './onScreen';
+import type { Shift } from '../audio/playhead';
 import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
@@ -71,8 +72,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale', fig: 'add one (a figure in use)' } },
   A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)', fig: 'add one (a new figure)' } },
   // values
-  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'faster', vel: 'softer', chan: 'shift −1', iv: 'all one lower', fig: 'every step a scale step lower' } },
-  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'slower', vel: 'louder', chan: 'shift +1', iv: 'all one higher', fig: 'every step a scale step higher' } },
+  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'a little faster', vel: 'a little softer', chan: 'shift −1', iv: 'all one lower', fig: 'every step a scale step lower' } },
+  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'a little slower', vel: 'a little louder', chan: 'shift +1', iv: 'all one higher', fig: 'every step a scale step higher' } },
   '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer', iv: 'an octave lower' } },
   '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder', iv: 'an octave higher' } },
   '3': { verb: 'stepDown', label: 'palette step down', labels: { pitch: 'scale step down' } },
@@ -91,8 +92,8 @@ const LIST_KEYS: Record<string, ListAction> = {
   M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)', fig: 'mutate (a few new figures)' } },
   h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer', fig: 'one kind of figure fewer' } },
   H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more', fig: 'one kind of figure more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', iv: 'new chords, same places', fig: 'new figures, same places' } },
-  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', iv: 'new chords and places', fig: 'new figures and places' } },
+  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', chan: 'new channels (the ones in use)', iv: 'new chords, same places', fig: 'new figures, same places' } },
+  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', chan: 'new channels (any)', iv: 'new chords and places', fig: 'new figures and places' } },
 };
 
 // l tilts down and L up, in every list
@@ -222,6 +223,8 @@ export interface KeyHandlerState {
   typeList?: (label: string, text: string, commit: (text: string, complete: boolean, values: string[]) => string | null, fields?: TyperField[]) => void;
   /** d: the pattern palette over a list of `n`; `bake` writes it out and returns what's wrong, or null */
   pickPattern?: (title: string, n: number, last: string | null, bake: (spec: string) => string | null) => void;
+  /** l in tuning mode: the tuning menu (ui/tuningPicker.ts) */
+  pickTuning?: () => void;
   /** Two voices: the view of the other voice, drawn dimmed over the main one */
   ghost?: BloomVisualization | null;
   tuningView?: {
@@ -300,8 +303,9 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   // ─── Patterns (d) ───────────────────────────────────────────────────────────
-  // d opens the palette over what the key reaches (the notes, the pitches alone,
-  // or a list mode's list) and bakes the one chosen; D bakes the last again.
+  // d opens the palette over what the key reaches (whole notes at home, a list
+  // mode's list, so the pitches alone in pitch mode) and bakes the one chosen;
+  // D bakes the last again.
   let _lastPattern: string | null = null;
 
   /** d / D on `k` ('events': whole notes). `title` names what's read, `tag` starts what's said */
@@ -347,8 +351,6 @@ export function createKeyHandler(state: KeyHandlerState) {
     const now = snap(state.bloom);
     if (sameSnap(now, _prevSnap)) { _prevBloom = snapshotOf(state.bloom); return ''; }   // only a setting changed (a name, say): the record keeps it
     const what = describeChange(_prevSnap, now);
-    // a name names one bloom: a change makes a new one, unnamed (its colour stays, and dims with each save)
-    if (state.bloom.name && state.bloom.name === _prevBloom.name) state.bloom.name = '';
     _undo.push({ bloom: _prevBloom, pins: _prevPins });
     if (_undo.length > HISTORY_MAX) _undo.shift();
     _redo.length = 0;
@@ -575,9 +577,12 @@ export function createKeyHandler(state: KeyHandlerState) {
   function stepTuningBy(dir: 1 | -1) {
     const lib = tuningLibrary();
     if (lib.length < 2) { status('no tunings loaded — load .scl (here, or bloom ▾ → tuning)'); return; }
-    // a new base under the same alterations
-    const cur = soundingTuning(state.bloom);
-    const next = rebase(cur, stepTuning(cur, dir));
+    setBaseTuning(stepTuning(soundingTuning(state.bloom), dir));
+  }
+
+  /** A new base under the same alterations (null: 12-TET): the held tuning's while held, else the bloom's */
+  function setBaseTuning(base: Tuning | null) {
+    const next = rebase(soundingTuning(state.bloom), base);
     if (isHeld()) setHeldTuning(next);
     else state.bloom.tuning = next;
     state.bloom.followTuningRoot();
@@ -704,6 +709,23 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** The garden slot the bloom on screen came from (marked in the garden) */
   let _onScreen: OnScreen = { slot: null, same: false };
+  // remembered across a reload, so a restored session still marks where its bloom came from
+  const ON_SCREEN_KEY = 'bloom.onScreen';
+  let _onScreenRestored = false;
+
+  /** Mark in the garden the slot the bloom on screen came from */
+  function markOnScreen() {
+    if (!state.gardenViz) return;
+    let was = _onScreen.slot;
+    if (!_onScreenRestored) {
+      _onScreenRestored = true;
+      try { const i = Number(localStorage.getItem(ON_SCREEN_KEY) ?? -1); if (i >= 0) was = state.garden.slots[i] ?? null; } catch { /* private window */ }
+    }
+    _onScreen = onScreenSlot(state.bloom, state.garden.slots, was, state.garden.cursor);
+    try { localStorage.setItem(ON_SCREEN_KEY, String(_onScreen.slot ? state.garden.slots.indexOf(_onScreen.slot) : -1)); } catch { /* private window */ }
+    state.gardenViz.update(state.garden);
+    state.gardenViz.setOnScreen(_onScreen);
+  }
 
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
@@ -721,11 +743,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
-    if (state.gardenViz) {
-      _onScreen = onScreenSlot(state.bloom, state.garden.slots, _onScreen.slot, state.garden.cursor);
-      state.gardenViz.update(state.garden);
-      state.gardenViz.setOnScreen(_onScreen);
-    }
+    markOnScreen();
     if (state.display) state.display.update(state.bloom, state.garden, msg);
     updateLooper(state.bloom);
     updatePulsar(state.bloom);
@@ -1103,13 +1121,19 @@ export function createKeyHandler(state: KeyHandlerState) {
       return true;
     }
     if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
+    if (ch === 'l') {   // the menu: a tuning chosen on purpose, nothing on the way sounding
+      e.preventDefault();   // the l mustn't land in the menu's filter
+      if (tuningLibrary().length < 2) status('no tunings loaded — load .scl (here, or bloom ▾ → tuning)');
+      else state.pickTuning?.();
+      return true;
+    }
     if ('129034#$'.includes(ch) && alterKey(ch)) return true;
     // the list mode keys switch straight across, as they do between list modes
     if (own(MODE_KEYS, ch)) { state.tuningView?.close(); return false; }
     // playback, garden, display and help pass through, as in the list modes
     if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ base · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-k 1/1 here · opt-t holds · T or esc leaves');
+    status('tuning mode: ] [ base · l menu · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-k 1/1 here · opt-t holds · T or esc leaves');
     return true;
   }
 
@@ -1195,7 +1219,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** What a home key's action can reach (homeKeys.ts HomeCtx) */
   function homeCtx(e: KeyboardEvent, ch: string): HomeCtx {
     return {
-      e, ch, shift: e.shiftKey, alt: e.altKey, b: state.bloom, g: state.garden, state,
+      e, ch, shift: e.shiftKey, alt: e.altKey, b: state.bloom, g: state.garden, state, onScreen: () => _onScreen,
       status, refresh, play,
       verb: (label, fn, said = label) => { status(label); fn(); refresh(said); },
       withSlot: (label, fn, said = label) => {
@@ -1215,7 +1239,7 @@ export function createKeyHandler(state: KeyHandlerState) {
         }, beatsToMs(src.dur()) + 200);
       },
       askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
-      pattern: (k, again) => patternKey(e, k, again, k === 'notes' ? 'the pitches alone' : 'the notes'),
+      pattern: again => patternKey(e, 'events', again, 'the notes'),
       memo: _memo,
       onLoopCycle: loopCycle,
       voices: { on: () => !!_voices, toggle: toggleVoices, flip: flipVoice, duplicate: duplicateVoice, stopOther: stopOtherVoice },
@@ -1267,7 +1291,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   let _voicesAside: { other: Voice; focus: 0 | 1 } | null = null;
   const focusName = () => (_voices ? VOICE_NAMES[_voices.focus] : '');
   const otherName = () => (_voices ? VOICE_NAMES[1 - _voices.focus] : '');
-  const ghostLight = (i: number, t: number) => state.ghost?.activateNote(i, t);
+  const ghostLight = (i: number, t: number, sh?: Shift) => state.ghost?.activateNote(i, t, sh);
   const copyOf = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
   /** The focused voice as it stands, taken out of the handler (its history moves with it) */
@@ -1386,7 +1410,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     parkLooper(from, leaving.bloom, ghostLight);
     state.ghost?.deactivateAll();
     giveFocused(coming);
-    unparkLooper(to, state.bloom, (i, t) => state.viz?.activateNote(i, t), loopCycle);
+    unparkLooper(to, state.bloom, (i, t, sh) => state.viz?.activateNote(i, t, sh), loopCycle);
     _voices = { other: leaving, focus: (1 - _voices.focus) as 0 | 1 };
     state.viz?.deactivateAll();
     voicesShown();
@@ -1437,5 +1461,6 @@ export function createKeyHandler(state: KeyHandlerState) {
     };
   }
 
-  return { voicesShown, otherVoice: () => _voices?.other.bloom ?? null, cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
+  markOnScreen();   // a restored session marks where its bloom came from
+  return { voicesShown, otherVoice: () => _voices?.other.bloom ?? null, cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setBaseTuning, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
 }

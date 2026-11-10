@@ -184,7 +184,7 @@ export class TuningEditor {
         <div class="te-row"><button data-act="hold" title="opt-t">release</button>
           <button data-act="keep" title="this bloom keeps the held tuning as its own">keep in this bloom</button></div>`
         : `<div class="te-row"><button data-act="hold" title="opt-t">hold over every bloom</button></div>`}
-        <div class="te-dim">[ ] step through the loaded tunings · opt-t holds · T or esc leaves</div>
+        <div class="te-dim">[ ] step through the loaded tunings · l picks one · opt-t holds · T or esc leaves</div>
       </div>`;
     this._wire();
   }

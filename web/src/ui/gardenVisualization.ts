@@ -1,6 +1,7 @@
 // Garden carousel — miniature bloom visualizations for each garden slot
 
 import type { OnScreen } from './onScreen';
+import { isLooping, isPulsing } from '../audio/scheduler';
 import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import {
@@ -179,7 +180,7 @@ export class GardenVisualization {
       const r = isCurrent ? base * 0.44 : base * 0.38;
       const bloom = (i >= 0 && i < garden.slots.length) ? garden.slots[i] : null;
       this._drawSlot(ctx, cx, cy, r, bloom, isCurrent, slotWidth, H, hues);
-      if (bloom && bloom === this._onScreen.slot) this._drawOnScreen(ctx, cx - slotWidth / 2 + 8, H - 9);
+      if (bloom && bloom === this._onScreen.slot) this._drawOnScreen(ctx, cx - slotWidth / 2 + 8, H - 11);
     }
     // the slot on screen scrolled out of view: a chevron at that edge points to it
     const at = this._onScreen.slot ? garden.slots.indexOf(this._onScreen.slot) : -1;
@@ -351,19 +352,23 @@ export class GardenVisualization {
 
   /**
    * The slot on screen, in its bottom-left corner: a filled dot and "on screen"
-   * while the bloom is still the slot, a hollow one and "from here" once changed
+   * while the bloom is still the slot, a hollow one and "from here" once
+   * changed; while it loops (or pulses), "looping", the dot breathing
    */
   private _drawOnScreen(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    const playing = isLooping() || isPulsing();
+    const same = this._onScreen.same;
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x + 3, y, 3, 0, Math.PI * 2);
+    const r = playing ? 3.5 + 1.2 * Math.sin(performance.now() / 260) : 3.5;
+    ctx.arc(x + 4, y, Math.max(2, r), 0, Math.PI * 2);
     ctx.strokeStyle = ctx.fillStyle = this._theme.accent;
-    ctx.lineWidth = 1.2;
-    if (this._onScreen.same) ctx.fill(); else ctx.stroke();
-    ctx.font = '9px monospace';
+    ctx.lineWidth = 1.4;
+    if (same) ctx.fill(); else ctx.stroke();
+    ctx.font = '11px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this._onScreen.same ? 'on screen' : 'from here', x + 10, y);
+    ctx.fillText(playing ? (same ? 'looping' : 'looping, changed') : (same ? 'on screen' : 'from here'), x + 12, y);
     ctx.restore();
   }
 

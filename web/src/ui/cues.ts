@@ -29,12 +29,12 @@ const MODE_CUES: Record<CueMode, string> = {
   pitch: '9 0 rotate · q snap to the scale · ( ) pivot · { merge · esc home',
   time: '9 0 rotate · q quantize · { } merge / divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · { merge · esc home',
-  chan: '9 0 rotate · y unify · q fewer channels · l L tilt · { merge · esc home',
+  chan: '9 0 rotate · y unify · q fewer channels · n N new (in use / any) · l L tilt · { merge · esc home',
   fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear',
   iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
 };
 
-const TUNING_CUE = '3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
+const TUNING_CUE = 'l pick a tuning · 3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
 const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F closes';
 const IDLE_CUE = 'space play · n new · ? all keys';
 
@@ -55,7 +55,7 @@ const TIPS = [
   'e E shear some an octave outward / gather some inward',
   'w draw curves · W remove doubles',
   '; : clump / flatten chords',
-  'opt-s u: move only the pitches',
+  'p, then s u d: move only the pitches',
   'd patterns: braid, pyramid, or type your own (123 +1) · D the last again',
   'opt-p push a save point · opt-shift-p pop back',
   'opt-w wheels within wheels',

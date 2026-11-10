@@ -15,6 +15,8 @@ import { drawRoadAt, roadAhead, stepTiles } from './road';
 import type { Tile } from './road';
 import { drawWeaveAt, weaveRow, weaveRows, weavePeriod, fitWeave, weaveImage } from './weave';
 import type { Row } from './weave';
+import { playedView, NO_SHIFT } from '../audio/playhead';
+import type { Shift } from '../audio/playhead';
 
 /**
  * The bloom with its times as the flow plays them: an inserted figure takes
@@ -2074,6 +2076,8 @@ export class BloomVisualization {
   private _lanesBloom: Bloom | null = null;
   /** Running count of notes played, so each lane's cursor cycles at its own length */
   private _tick = -1;
+  /** Where each list is from the tick, for a loop that kept its place through edits (audio/playhead.ts) */
+  private _shift: Shift = NO_SHIFT;
   /** The road: what has sounded, each step's tiles with its onset, newest last */
   private _roadPast: { atMs: number; tiles: Tile[] }[] = [];
   /** The weave: every note the session has played, a row each, oldest first (kept whatever the view, so the cloth is whole) */
@@ -2279,9 +2283,10 @@ export class BloomVisualization {
   getMode(): VizMode { return this._mode; }
   getTheme(): ThemeId { return this._theme.id; }
 
-  activateNote(index: number, tick = index): void {
+  activateNote(index: number, tick = index, shift: Shift = NO_SHIFT): void {
     if (!this.bloom || index < 0 || index >= this.bloom.notes.length) return;
     this._tick = tick;
+    this._shift = shift;
     if (this.petalFlash.length !== this.bloom.notes.length)
       this.petalFlash = new Array(this.bloom.notes.length).fill(0);
     this.petalFlash[index] = 1.0;
@@ -2289,10 +2294,10 @@ export class BloomVisualization {
     this._beadActivatedAt = performance.now();
     this._lastNoteAt = this._beadActivatedAt;
     if (this._mode === 'road') {
-      this._roadPast.push({ atMs: this._beadActivatedAt, tiles: stepTiles(this._lanesBloom ?? this.bloom, index, tick) });
+      this._roadPast.push({ atMs: this._beadActivatedAt, tiles: stepTiles(playedView(this._lanesBloom ?? this.bloom, shift), index, tick) });
       if (this._roadPast.length > 64) this._roadPast.shift();
     }
-    this._weave.push(weaveRow(this._lanesBloom ?? this.bloom, index, tick));
+    this._weave.push(weaveRow(this._lanesBloom ?? this.bloom, index, tick, shift));
     if (this._weave.length > 20000) this._weave.shift();
 
     // orbit: flash driven by petalFlash; rotation is autonomous (no playhead jump)
@@ -2600,16 +2605,16 @@ export class BloomVisualization {
         const playing = this.playheadIndex >= 0 && this._tick >= 0;
         let progress = 0;
         if (playing && this._beadActivatedAt > 0 && raw.timeIntervals.length) {
-          const stepMs = beatsToMs(Math.max(0.02, raw.stepAt(this.playheadIndex, this._tick)));
+          const stepMs = beatsToMs(Math.max(0.02, playedView(raw, this._shift).stepAt(this.playheadIndex, this._tick)));
           progress = Math.min(1, (performance.now() - this._beadActivatedAt) / stepMs);
         }
-        drawOrreryAt(ctx, cx, cy, minDim * 0.45, raw, this.petalFlash, theme, playing ? this._tick : -1, progress, this._showNoteLabels, hit);
+        drawOrreryAt(ctx, cx, cy, minDim * 0.45, raw, this.petalFlash, theme, playing ? this._tick : -1, progress, this._showNoteLabels, hit, this._shift);
         break;
       }
 
       case 'road': {
         // what sounded, at its distance behind; what the loop will play, ahead of the note that sounds
-        const raw = this._lanesBloom ?? this.bloom!;
+        const raw = playedView(this._lanesBloom ?? this.bloom!, this._shift);
         const playing = this.playheadIndex >= 0 && this._tick >= 0 && this._beadActivatedAt > 0;
         let tiles: Tile[];
         if (playing) {
@@ -2690,7 +2695,7 @@ export class BloomVisualization {
       progress = Math.min(1, (performance.now() - this._beadActivatedAt) / intervalMs);
     }
     this._lanes.draw(ctx, 0, y, W, this._lanesBloom ?? bloom, theme, this._listMode,
-      this.playheadIndex >= 0 ? this._tick : -1, progress, voice);
+      this.playheadIndex >= 0 ? this._tick : -1, progress, voice, this._shift);
   }
 
   /** A soft disc behind every node of a selected event, and the box being dragged */

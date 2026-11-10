@@ -22,6 +22,7 @@ import {
 import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
 import { ScalePicker } from './ui/scalePicker';
+import { TuningPicker } from './ui/tuningPicker';
 import { PatternPicker } from './ui/patternPicker';
 import { ListTyper } from './ui/listTyper';
 import { spell } from './lib/numbers';
@@ -304,7 +305,7 @@ async function main() {
     },
   };
 
-  const { voicesShown, otherVoice, cueContext, onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
+  const { voicesShown, otherVoice, cueContext, onKey, togglePin, clearPins, select, clearSelection, refresh: keysRefresh, mergeGarden, curdle, setBaseTuning, setClean, syncTuning, toggleHold, leaveListMode } = createKeyHandler(keyState);
 
   // ─── Cue line: the keys that belong to where you are ───────────────────────
   const cueEl = document.getElementById('cue-line') as HTMLElement;
@@ -343,12 +344,12 @@ async function main() {
   {
     const setBloom = viz.setBloom.bind(viz), light = viz.activateNote.bind(viz), dark = viz.deactivateAll.bind(viz);
     viz.setBloom = (b, trace = true) => { _shownNow = { bloom: b, trace }; takeShown(b, trace, b === bloom); setBloom(b, trace); };
-    viz.activateNote = (i, tick = i) => { takeLit(i, tick); light(i, tick); };
+    viz.activateNote = (i, tick = i, shift) => { takeLit(i, tick); light(i, tick, shift); };
     viz.deactivateAll = () => { takeDark(); dark(); };
     const gShow = ghost.setBloom.bind(ghost), gClear = ghost.clear.bind(ghost), gLight = ghost.activateNote.bind(ghost), gDark = ghost.deactivateAll.bind(ghost);
     ghost.setBloom = (b, trace = true) => { takeOtherShown(b); gShow(b, trace); };
     ghost.clear = () => { takeOtherShown(null); gClear(); };
-    ghost.activateNote = (i, tick = i) => { takeOtherLit(i, tick); gLight(i, tick); };
+    ghost.activateNote = (i, tick = i, shift) => { takeOtherLit(i, tick); gLight(i, tick, shift); };
     ghost.deactivateAll = () => { takeOtherDark(); gDark(); };
     const update = gardenViz.update.bind(gardenViz), slide = gardenViz.animateSlide.bind(gardenViz);
     const save = gardenViz.animateSave.bind(gardenViz), restore = gardenViz.animateRestore.bind(gardenViz);
@@ -524,6 +525,13 @@ async function main() {
   document.getElementById('scale-badge')?.addEventListener('click', () => scalePicker.open());
 
   // ─── Tuning: a library of .scl files; each bloom picks one ──────────────────
+  // the menu (l in tuning mode): one chosen on purpose, rather than stepping through the rest
+  const tuningPicker = new TuningPicker({
+    library: tuningLibrary,
+    current: () => soundingTuning(bloom)?.name ?? '12-TET',
+    apply: t => setBaseTuning(t.name === '12-TET' ? null : { ...t, cents: [...t.cents] }),
+  });
+  keyState.pickTuning = () => tuningPicker.open();
   const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;
   const tuningStatus = document.getElementById('tuning-status');
   const fillTuningSelect = () => {

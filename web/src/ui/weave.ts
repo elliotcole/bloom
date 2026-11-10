@@ -13,6 +13,8 @@
 
 import { Bloom } from '../core/Bloom';
 import { rings, lcm } from './orrery';
+import { playedView } from '../audio/playhead';
+import type { Shift } from '../audio/playhead';
 import type { RingKey } from './orrery';
 import type { Theme } from './theme';
 
@@ -47,8 +49,12 @@ export function weavePeriod(b: Bloom): number {
 }
 
 /** The row woven when event `index` sounds at `tick`: what sounded, and where every list was */
-export function weaveRow(b: Bloom, index: number, tick: number): Row {
-  const threads = rings(b).map(r => ({ key: r.key, idx: ((tick % r.len) + r.len) % r.len, len: r.len }));
+export function weaveRow(b: Bloom, index: number, tick: number, shift?: Shift): Row {
+  const threads = rings(b).map(r => {
+    const t = tick + (r.key === 'notes' ? 0 : shift?.[r.key] ?? 0);
+    return { key: r.key, idx: ((t % r.len) + r.len) % r.len, len: r.len };
+  });
+  if (shift) b = playedView(b, shift);   // what sounded: each list read at its place
   const row: Row = {
     i: index, tick, dur: 1, notes: [], extra: [], vel: 0, chan: 1, threads,
     conj: threads.length > 0 && threads.every(t => t.idx === 0),

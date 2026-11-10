@@ -6,6 +6,7 @@ import { formatFigure, isFigure } from '../lib/figures';
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
+import type { Shift } from '../audio/playhead';
 
 type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig' | null;
@@ -34,6 +35,37 @@ const FRACS: Record<string, string> = {
 };
 const fmtT = (t: number) => FRACS[String(Math.round(t * 1e4) / 1e4)] ?? t.toFixed(2);
 const chanHue = (c: number) => (c * 360) / 16;
+
+/**
+ * A chit's hue for every cell of every lane, so equal values wear one colour
+ * and a list's pattern shows at a glance (-1: none, as a rest or an empty
+ * step). Pitch by pitch class round the wheel; time and velocity from cool
+ * (short, soft) to warm (long, loud) through the values in use; channels by
+ * channel; intervals and figures a colour each, spread apart.
+ */
+export function chitHues(b: Bloom): Record<LaneKey, number[]> {
+  const ramp = (xs: number[], skip = (_: number) => false) => {
+    const vals = [...new Set(xs.filter(x => !skip(x)))].sort((p, q) => p - q);
+    return xs.map(x => skip(x) ? -1 : vals.length < 2 ? 210 : 210 - (200 * vals.indexOf(x)) / (vals.length - 1));
+  };
+  const each = (xs: unknown[], none: (x: unknown) => boolean) => {
+    const keys: string[] = [];
+    return xs.map(x => {
+      if (none(x)) return -1;
+      const k = JSON.stringify(x);
+      if (!keys.includes(k)) keys.push(k);
+      return (keys.indexOf(k) * 137.5 + 20) % 360;   // the golden angle: neighbours far apart
+    });
+  };
+  return {
+    notes: b.notes.map(nt => (((Math.round((flatNotes([nt]) as number[])[0]) % 12) + 12) % 12) * 30),
+    time: ramp(b.timeIntervals.map(t => Math.round(t * 1e4) / 1e4)),
+    vel: ramp(b.velocities, v => v <= 0),
+    chan: b.chans.map(chanHue),
+    iv: each(b.intervals, x => (Array.isArray(x) ? x : [x]).every(v => v === 0)),
+    fig: each(b.figures, x => !isFigure(x as never)),
+  };
+}
 const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
 const amber = (a: number) => `rgba(232,163,58,${Math.max(0, Math.min(1, a))})`;
 
@@ -81,11 +113,12 @@ export class Lanes {
    * Each lane is its own list at its own length. The time lane is drawn to
    * scale; the others in equal cells. `tick` is the running count of notes
    * played (-1 when stopped): each lane's cursor sits at tick mod its length,
-   * so lists of different lengths visibly cycle against each other.
+   * so lists of different lengths visibly cycle against each other. `shift`
+   * puts a list's cursor where a loop that kept its place through edits has it.
    */
   draw(
     ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number,
-    b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number, voice?: string,
+    b: Bloom, theme: Theme, mode: LaneMode, tick: number, progress: number, voice?: string, shift?: Shift,
   ): void {
     const n = b.notes.length;
     if (!n || !b.timeIntervals.length || !b.velocities.length || !b.chans.length || !b.intervals.length || !b.figures.length) return;
@@ -110,6 +143,8 @@ export class Lanes {
         const h = Math.max(...ph.slice(k, k + c), 0); k += c; return h;
       });
     }
+
+    const hues = chitHues(b);
 
     // cell edges per lane, as fractions of the lane's width
     const times = b.timeIntervals.map(t => Math.max(0.0001, t));
@@ -156,7 +191,7 @@ export class Lanes {
       ctx.textAlign = 'left';
 
       const E = edges(L.key);
-      const cur = tick >= 0 ? tick % len[L.key] : -1;
+      const cur = tick >= 0 ? (tick + (L.key === 'notes' ? 0 : shift?.[L.key] ?? 0)) % len[L.key] : -1;
       for (let li = 0; li < len[L.key]; li++) {
         const cx0 = X(E[li]) + 1, cx1 = X(E[li + 1]) - 1, cw = cx1 - cx0;
         if (cw <= 0) continue;
@@ -181,31 +216,39 @@ export class Lanes {
         ctx.save();
         ctx.beginPath(); ctx.rect(cx0, top, cw, LANE_H); ctx.clip();
         const a = li === cur ? 1 : 0.8;
-        ctx.fillStyle = ink(a);
-        if (L.key === 'notes') {
-          const ps = flatNotes([b.notes[li]]) as number[];
-          ctx.fillText(ps.length > 1 ? nameOf(ps[0]) + '+' : nameOf(ps[0]), cx0 + 4, mid);
-        } else if (L.key === 'time') {
-          ctx.fillText(fmtT(b.timeIntervals[li]), cx0 + 4, mid);
-        } else if (L.key === 'vel') {
+        // the chit: equal values, one colour
+        let tx = cx0 + 4;
+        if (L.key === 'vel') {
           const v = b.velocities[li];
           const bh = (LANE_H - 9) * v / 127;
           ctx.fillStyle = ink(0.25); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
-          ctx.fillStyle = ink(a); ctx.fillText(String(v), cx0 + 8, mid);
+          tx = cx0 + 8;
+        }
+        const hue = hues[L.key][li];
+        if (hue >= 0 && cw >= 22) {
+          ctx.fillStyle = `hsla(${hue},70%,55%,0.9)`;
+          ctx.beginPath(); ctx.arc(tx + 4, mid, 4, 0, Math.PI * 2); ctx.fill();
+          tx += 12;
+        }
+        ctx.fillStyle = ink(a);
+        if (L.key === 'notes') {
+          const ps = flatNotes([b.notes[li]]) as number[];
+          ctx.fillText(ps.length > 1 ? nameOf(ps[0]) + '+' : nameOf(ps[0]), tx, mid);
+        } else if (L.key === 'time') {
+          ctx.fillText(fmtT(b.timeIntervals[li]), tx, mid);
+        } else if (L.key === 'vel') {
+          ctx.fillText(String(b.velocities[li]), tx, mid);
         } else if (L.key === 'iv') {
           const step = b.intervals[li];
           const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
           ctx.fillStyle = ink(ivs.length ? a : 0.3);
-          ctx.fillText(stepName(step), cx0 + 4, mid);
+          ctx.fillText(stepName(step), tx, mid);
         } else if (L.key === 'fig') {
           const f = b.figures[li];
           ctx.fillStyle = ink(isFigure(f) ? a : 0.3);
-          ctx.fillText(isFigure(f) ? formatFigure(f) : '.', cx0 + 4, mid);
+          ctx.fillText(isFigure(f) ? formatFigure(f) : '.', tx, mid);
         } else {
-          const c = b.chans[li];
-          ctx.fillStyle = `hsla(${chanHue(c)},70%,55%,0.9)`;
-          ctx.beginPath(); ctx.arc(cx0 + 8, mid, 4, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = ink(a); ctx.fillText(String(c), cx0 + 16, mid);
+          ctx.fillText(String(b.chans[li]), tx, mid);
         }
         ctx.restore();
       }
