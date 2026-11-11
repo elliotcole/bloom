@@ -460,6 +460,11 @@ export const HOME_KEYS: HomeKey[] = [
     },
   },
   {
+    // the notes alone, at once: a loop runs on, every other list where it had got to
+    code: 'ArrowUp', alt: true, shift: false, whole: true, label: 'lift only the notes from the slot (the other lists play on, in place)',
+    act: c => c.withSlot('lift notes', src => c.b.liftNotes(src), `lifted the notes of [${c.g.index}]`),
+  },
+  {
     code: 'ArrowLeft', whole: true, label: 'previous slot (shift: and play it)',
     act: c => {
       if (c.g.cursor > 0) c.state.gardenViz?.animateSlide('left');

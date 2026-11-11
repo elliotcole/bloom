@@ -75,6 +75,7 @@ const TIPS = [
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
   'shift-↑ while looping: a soft swap, the lists of the same length carry on',
+  'opt-↑: only the slot\'s notes come in; the other lists play on where they are',
   'opt-tab two voices: a second bloom looping beside the first, tab moves the focus',
 ];
 const TIP_EVERY_MS = 30_000;

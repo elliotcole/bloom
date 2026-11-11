@@ -1016,6 +1016,12 @@ export class Bloom {
     return this;
   }
 
+  /** opt-↑: the slot's notes alone, every other list left as it is (a loop keeps each one's place) */
+  liftNotes(bloom: Bloom): this {
+    this.notes = JSON.parse(JSON.stringify(bloom.notes));
+    return this;
+  }
+
   cast(bloom: Bloom): this {
     const pcs = this.notes.map(n => {
       const flat = Array.isArray(n) ? (n as number[])[0] : n as number;
