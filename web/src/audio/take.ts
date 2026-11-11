@@ -18,6 +18,7 @@ import { setMidiTap, onMidiMessage } from './midi';
 import type { MidiOutput } from './midi';
 import { setTuningTap, tuningNow, setReplaying, replayHelper, replayPiano } from './tuningOut';
 import { every } from './clock';
+import { takeFrom, dueAfter } from './takeFrom';
 
 const HOLD_MS = 10_000;        // what's sounding at the stop rings this long
 const DELAY_MS = 40;           // a replay sends each message this far ahead of its time
@@ -285,7 +286,6 @@ export function finish(f: TakeFile, end: number): TakeFile {
 let _play: { T0: number; stop: () => void; gen: number } | null = null;
 let _gen = 0;
 
-/** Play the last take from the start; false if there's none */
 /** Two voices: what the other voice's view shows, a note of it, its dark */
 export function takeOtherShown(b: Bloom | null): void {
   if (_phase === 'recording' && _rec) _rec.add([_rec.at(performance.now()), 'v', b ? _rec.bloom(b) : -1]);
@@ -297,15 +297,34 @@ export function takeOtherDark(): void {
   if (_phase === 'recording' && _rec) _rec.add([_rec.at(performance.now()), 'y']);
 }
 
-export function playTake(): boolean {
+/** Play the last take from `fromMs` (the start by default); false if there's none */
+export function playTake(fromMs = 0): boolean {
   const take = _take;
   if (!take || !_host || _phase !== 'idle') return false;
-  const host = _host;
-  host.silence();
+  _host.silence();
   _phase = 'playing';
   setReplaying(true);
+  run(take, _host, fromMs);
+  _host.changed();
+  return true;
+}
+
+/** Playing: go on from `ms` instead (what sounds is let go, what's in force then is sent) */
+export function seekTake(ms: number): void {
+  if (!_play || !_take || !_host) return;
+  _play.stop();
+  _gen++;
+  const out = _host.out(), now = performance.now();
+  // let go of what sounds, and of what was already handed over, a little ahead
+  if (out) for (const at of [now, now + DELAY_MS + AHEAD_MS]) for (let ch = 0; ch < 16; ch++) out.send([0xb0 | ch, 123, 0], at);
+  run(_take, _host, ms);
+  _host.changed();
+}
+
+function run(take: TakeFile, host: TakeHost, fromMs: number): void {
   const gen = ++_gen;
-  const T0 = performance.now();
+  const from = Math.max(0, Math.min(fromMs, take.length));
+  const T0 = performance.now() - from;
   const blooms = new Map<number, Bloom>();
   const bloomAt = (i: number) => {
     let b = blooms.get(i);
@@ -315,6 +334,22 @@ export function playTake(): boolean {
   const later = (atMs: number, fn: () => void) => setTimeout(() => { if (_gen === gen) fn(); }, Math.max(0, atMs - performance.now()));
   const ev = take.events;
   let i = 0;
+  if (from > 0) {
+    // what's in force at that moment, then on from there
+    const at = take.events.length ? takeFrom(take, from) : null;
+    if (at) {
+      const out = host.out(), start = T0 + DELAY_MS + from;
+      at.midi.forEach(m => out?.send(m, start - 1));
+      if (at.piano !== undefined) replayPiano(at.piano < 0 ? null : take.tables[at.piano]);
+      at.helper.forEach(m => replayHelper(m, start - 1));
+      host.dark();
+      if (at.garden !== null) { const g = take.gardens[at.garden]; host.garden(g.slots.map(s => (s < 0 ? null : bloomAt(s))), g.cursor); }
+      if (at.shown) host.show(bloomAt(at.shown[0]), at.shown[1] === 1, at.shown[2] === 1);
+      if (at.other !== null) host.other?.show(at.other < 0 ? null : bloomAt(at.other));
+      for (const k of dueAfter(take, at, from)) { const e = ev[k] as [number, 'm', number[], number]; out?.send(e[2], T0 + DELAY_MS + e[0] + e[3]); }
+      i = at.index;
+    }
+  }
   const tick = () => {
     const now = performance.now() - T0;
     const out = host.out();
@@ -340,8 +375,6 @@ export function playTake(): boolean {
   };
   _play = { T0, stop: every(5, tick), gen };
   tick();
-  host.changed();
-  return true;
 }
 
 export function stopPlaying(): void {
@@ -373,6 +406,14 @@ export function saveTakeFile(): boolean {
   return true;
 }
 
+/** Make a take read from a file the last take (one cut short is ended where it stops) */
+export function useTake(t: TakeFile): void {
+  if (_phase === 'playing') stopPlaying();
+  _take = { ...(t.ended ? t : finish(t, lastTime(t))), saved: true };
+  keep(_take);
+  _host?.changed();
+}
+
 export function loadTakeFile(done: (err?: string) => void): void {
   const input = document.createElement('input');
   input.type = 'file';
@@ -383,10 +424,7 @@ export function loadTakeFile(done: (err?: string) => void): void {
     file.text().then(text => {
       const t = JSON.parse(text) as TakeFile;
       if (t.kind !== 'bloom-take' || t.version !== 1 || !Array.isArray(t.events)) throw new Error('not a take');
-      if (_phase === 'playing') stopPlaying();
-      _take = { ...(t.ended ? t : finish(t, lastTime(t))), saved: true };
-      keep(_take);
-      _host?.changed();
+      useTake(t);
       done();
     }).catch(err => done(`load failed: ${(err as Error).message}`));
   };

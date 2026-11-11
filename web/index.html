@@ -74,7 +74,7 @@
       body[data-theme="phosphor"] #garden-area { background: #010a00; border-color: #1a3a0a; }
       body[data-theme="phosphor"] #canvas-area { background: #010a00; }
       body[data-theme="phosphor"] select,
-      body[data-theme="phosphor"] input[type="number"],
+      body[data-theme="phosphor"] input[type="number"], body[data-theme="phosphor"] #take-from,
       body[data-theme="phosphor"] button:not(#help-full *) { background: #010a00; border-color: #1a4a05; color: #39ff14; }
       body[data-theme="phosphor"] .midi-status.ok { color: #39ff14; }
       body[data-theme="phosphor"] .midi-status.error { color: #ff4400; }
@@ -96,7 +96,7 @@
       body[data-theme="uv"] #garden-area { background: #06000c; border-color: #2a0040; }
       body[data-theme="uv"] #canvas-area { background: #08000f; }
       body[data-theme="uv"] select,
-      body[data-theme="uv"] input[type="number"],
+      body[data-theme="uv"] input[type="number"], body[data-theme="uv"] #take-from,
       body[data-theme="uv"] button:not(#help-full *) { background: #0d0018; border-color: #3a0060; color: #cc88ff; }
       body[data-theme="uv"] .midi-status.ok { color: #aa44ff; }
 
@@ -137,7 +137,7 @@
       .s-section { display: flex; align-items: center; gap: 5px; }
       .s-section-label { color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 2px; }
       #settings-bar label { display: flex; align-items: center; gap: 4px; cursor: default; }
-      #settings-bar input[type="number"] {
+      #settings-bar input[type="number"], #take-from {
         width: 46px;
         background: #1a1a22;
         border: 1px solid #2a2a38;
@@ -247,7 +247,8 @@
       }
       #take-badge.active { display: inline-block; }
       #take-rec.active { color: #e88; border-color: #a44; }
-      #take-status { font-variant-numeric: tabular-nums; }
+      #take-status, #take-from { font-variant-numeric: tabular-nums; }
+      #take-from { width: 58px; }
       /* while a take plays, what would change the bloom is out of reach */
       body.take-playing .menu-btn[data-menu="bloom"], body.take-playing .menu-btn[data-menu="play"],
       body.take-playing .menu-btn[data-menu="garden"], body.take-playing #scale-badge, body.take-playing #tuning-badge {
@@ -953,7 +954,11 @@
 <span class="s-section">
           <span class="s-section-label">take</span>
           <button class="s-btn" id="take-rec" title="arm a take: it starts on the first note that sounds and keeps everything that sounds and shows until you stop it (asks twice); then what's sounding holds 10 s and is let go">arm take</button>
-          <button class="s-btn" id="take-play" title="play the last take from the start, exactly as it went: its notes, tunings, keyboard and picture. The view keys stay yours (opt-0 … 9, opt-o, opt-v, opt-c, \ | opt-\); . stops it. The session comes back after">play take</button>
+          <button class="s-btn" id="take-play" title="play the last take from the place set beside it, exactly as it went: its notes, tunings, keyboard and picture. The view keys stay yours (opt-0 … 9, opt-o, opt-v, opt-c, \ | opt-\); ← → skip 10 s (shift: a minute); . stops it. The session comes back after">play take</button>
+          <label title="where play take starts: h:mm:ss, m:ss or seconds (enter sets it; while playing it goes there). What's in force then (pedal, controllers, tuning, the picture) is sent first">from
+            <input type="text" id="take-from" value="0:00" size="7" spellcheck="false" autocomplete="off">
+          </label>
+          <input type="range" id="take-pos" min="0" max="1" step="1000" value="0" style="width:160px" title="the take, start to end: where play take starts; while playing, where it is (drag to go there)">
           <button class="s-btn" id="take-save" title="save the last take to a .bloomtake file">save…</button>
           <button class="s-btn" id="take-load" title="load a .bloomtake file as the last take">load…</button>
           <span id="take-status" class="s-note"></span>
@@ -1265,7 +1270,7 @@ playback &amp; garden keys unchanged</div>
 <b>opt-c</b>    clean view (esc leaves)
 <b>opt-1 … 9</b> the views   <b>opt-0</b> orrery   <b>opt-o</b> road   <b>opt-v</b> weave (shift saves it)   <b>?</b> this help
 <b>perform ▾</b> take: record a whole performance, play it again
-          (while it plays: the keys above, . stops)
+          from anywhere (while it plays: the keys above, ← → skip, . stops)
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
 <b>drag</b>     a box selects events: keys act on them

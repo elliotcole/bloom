@@ -877,11 +877,22 @@ tunings, play a keyboard along), and the take keeps it all.
   (the bloom, the garden, each note as it lit).
 - **stop take** (click twice). The take really stops: nothing more is played,
   what's sounding holds for 10 seconds and is let go, the pedal lifted.
-- **play take** plays it from the start, exactly as it went out. The bloom ▾
-  play ▾ and garden ▾ menus are dimmed, and only the view keys work: opt-`0`…`9`, opt-`o`, opt-`v`,
-  opt-`c` (clean view), `\` `|` opt-`\`, `?`, `esc`. `.` stops it early.
-  Afterwards your session comes back as it was. To print, record the
-  playback in your DAW or screen recorder.
+- **play take** plays it exactly as it went out, from the place set beside
+  it. The bloom ▾ play ▾ and garden ▾ menus are dimmed, and only the view
+  keys work: opt-`0`…`9`, opt-`o`, opt-`v`, opt-`c` (clean view), `\` `|`
+  opt-`\`, `?`, `esc`. `.` stops it early. Afterwards your session comes
+  back as it was. To print, record the playback in your DAW or screen
+  recorder.
+- **Playing from part way in: from, and the bar beside it.** Type a time
+  in *from* (`1:44:00`, `44:30` or seconds; enter sets it), or drag the bar,
+  which runs from the start of the take to its end, and play take starts
+  there; it's kept for next time, so a part can be heard again and again.
+  What's in force at that moment goes out first: each channel's pedal and
+  controllers, the tuning (helper and piano), and the bloom, garden and
+  other voice on screen. Notes already sounding then aren't struck; the
+  rest plays as it went. **While it plays** the bar shows where it is: drag
+  it, or type in *from*, to go there, and `←` `→` skip back and on 10
+  seconds (shift-`←` `→` a minute). What sounds is let go at each jump.
 - **save… / load…** write and read a `.bloomtake` file. The last take is
   also kept in the browser and survives a reload. While you record, the take
   is saved once a minute, so if the page closes mid-take, it comes back up

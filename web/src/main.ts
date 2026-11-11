@@ -12,9 +12,10 @@ import { setFigureSlots } from './lib/figures';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave, sessionNow, restoreSession, pauseAutosave } from './io/garden-io';
 import {
-  initTakes, armTake, stopTake, playTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, loadTakeFile, clock as hms,
+  initTakes, armTake, stopTake, playTake, seekTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, loadTakeFile, clock as hms,
   takeShown, takeGarden, takeLit, takeDark, takeAnimate, takeOtherShown, takeOtherLit, takeOtherDark,
 } from './audio/take';
+import { parseClock } from './audio/takeFrom';
 import { askRestore } from './ui/restorePrompt';
 import {
   tuningLibrary, loadScalaFiles, clearLibrary, connectHelper, onHelperStatus, helperStatus, saveToLibrary,
@@ -434,6 +435,26 @@ async function main() {
   const takeSaveBtn = document.getElementById('take-save') as HTMLButtonElement | null;
   const takeLoadBtn = document.getElementById('take-load') as HTMLButtonElement | null;
   const takeStatus = document.getElementById('take-status');
+  const takeFromField = document.getElementById('take-from') as HTMLInputElement | null;
+  const takePos = document.getElementById('take-pos') as HTMLInputElement | null;
+  // where play take starts, kept for the next time (an audition goes back to it)
+  let _from = 0;
+  try { _from = Math.max(0, Number(localStorage.getItem('bloom.take.from')) || 0); } catch { /* none kept */ }
+  let _dragging = false;
+  const setFrom = (ms: number) => {
+    const t = lastTake();
+    _from = Math.max(0, Math.min(Math.round(ms), t ? t.length : ms));
+    try { localStorage.setItem('bloom.take.from', String(_from)); } catch { /* best effort */ }
+    if (takeFromField && document.activeElement !== takeFromField) takeFromField.value = hms(_from);
+  };
+  /** Playing: go to `ms`, within the take */
+  const seek = (ms: number) => {
+    const t = lastTake();
+    if (!t || takePhase() !== 'playing') return;
+    const to = Math.max(0, Math.min(ms, t.length - 1000));
+    seekTake(to);
+    display.setStatus(`take: ${hms(to)}`);
+  };
   const takeBadge = document.getElementById('take-badge');
   // what can't be undone asks twice: a second click within a few seconds
   let _asking: { what: 'replace' | 'stop'; until: number } | null = null;
@@ -465,6 +486,15 @@ async function main() {
     }
     if (takeSaveBtn) takeSaveBtn.disabled = !t || ph === 'recording' || ph === 'ending';
     if (takeLoadBtn) takeLoadBtn.disabled = ph !== 'idle';
+    if (takePos) {
+      takePos.max = String(t ? t.length : 1);
+      takePos.disabled = !t || (ph !== 'idle' && ph !== 'playing');
+      if (!_dragging) takePos.value = String(ph === 'playing' ? takeElapsed() : _from);
+    }
+    if (takeFromField) {
+      takeFromField.disabled = !t || (ph !== 'idle' && ph !== 'playing');
+      if (document.activeElement !== takeFromField && takeFromField.value !== hms(_from)) takeFromField.value = hms(_from);
+    }
     const el = hms(takeElapsed());
     const text = ph === 'armed' ? 'armed: starts on the first note'
       : ph === 'recording' ? `● ${el}`
@@ -504,12 +534,33 @@ async function main() {
     if (takePhase() === 'playing') { stopPlaying(); return; }
     const session = sessionNow(bloom, garden);
     leaveListMode();
-    if (playTake()) {
+    if (playTake(_from)) {
       _session = session;
       pauseAutosave(true);
       openMenu(null);
-      display.setStatus('playing the take: the view keys are yours; . stops it');
+      display.setStatus(`playing the take${_from ? ` from ${hms(_from)}` : ''}: the view keys are yours; ← → skip; . stops it`);
     }
+  });
+  takeFromField?.addEventListener('keydown', e => { if (e.key === 'Enter') takeFromField.blur(); });
+  takeFromField?.addEventListener('change', () => {
+    const ms = parseClock(takeFromField.value);
+    if (ms === null) { display.setStatus(`not a time: ${takeFromField.value} (h:mm:ss, m:ss or seconds)`); takeFromField.value = hms(_from); return; }
+    setFrom(ms);
+    takeFromField.value = hms(_from);
+    if (takePhase() === 'playing') seek(_from); else display.setStatus(`play take starts at ${hms(_from)}`);
+    takeUi();
+  });
+  takePos?.addEventListener('input', () => {
+    _dragging = true;
+    if (takeStatus) takeStatus.textContent = `→ ${hms(Number(takePos.value))}`;
+  });
+  takePos?.addEventListener('change', () => {
+    _dragging = false;
+    takePos.blur();
+    const ms = Number(takePos.value);
+    if (takePhase() === 'playing') seek(ms);
+    else { setFrom(ms); display.setStatus(`play take starts at ${hms(_from)}`); }
+    takeUi();
   });
   takeSaveBtn?.addEventListener('click', () => { takeSaveBtn.blur(); if (saveTakeFile()) { display.setStatus('take saved'); takeUi(); } });
   takeLoadBtn?.addEventListener('click', () => {
@@ -702,8 +753,13 @@ async function main() {
     // a take playing back: the view keys are free, . stops it, the rest wait
     if (takePhase() === 'playing') {
       if (e.key === '.' && !e.altKey && !e.metaKey && !e.ctrlKey) { stopPlaying(); display.setStatus('take stopped'); return; }
+      if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && !e.altKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        seek(takeElapsed() + (e.code === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 60_000 : 10_000));
+        return;
+      }
       if (!viewKey(e)) {
-        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-o, opt-v, opt-c, \\ | opt-\\, ?, esc); . stops it');
+        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-o, opt-v, opt-c, \\ | opt-\\, ?, esc); ← → skip 10 s (shift: a minute); . stops it');
         return;
       }
     }

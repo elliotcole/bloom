@@ -97,7 +97,7 @@ function situations(c: CueContext): string[] {
 }
 
 /** While a take plays back (perform ▾ → take): only the view is yours */
-export const TAKE_CUE = 'playing the take · opt-0 … 9 opt-o opt-v view · opt-c clean · \\ console · | labels · opt-\\ lanes · . stops it';
+export const TAKE_CUE = 'playing the take · opt-0 … 9 opt-o opt-v view · opt-c clean · \\ console · | labels · opt-\\ lanes · ← → skip 10 s (shift: 1 min) · . stops it';
 
 /** What the line says now; `now` turns the tips */
 export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: boolean } {
