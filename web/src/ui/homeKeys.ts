@@ -439,11 +439,11 @@ export const HOME_KEYS: HomeKey[] = [
       // and every list as long as the one it replaces carries on from where that had got to
       const soft = c.shift && isLooping();
       const land = (tick: number, at?: (k: ShiftKey) => number) => {
-        const before = c.b.listLengths();
+        const before = c.b.listLengths(), wasTurned = c.b.turned;
         c.state.gardenViz?.animateRestore(lifted, document.getElementById('bloom-canvas') as HTMLCanvasElement);
         c.b.import(lifted);
         // a soft swap: each list carries on from its own place
-        const carried = soft ? c.b.carryLists(before, at ? k => at(k as ShiftKey) : tick) : [];
+        const carried = soft ? c.b.carryLists(before, at ? k => at(k as ShiftKey) : tick, wasTurned) : [];
         if (isLooping()) updateLooper(c.b);
         if (isPulsing()) updatePulsar(c.b);
         c.clearPins(false);   // the pins and selection belonged to the bloom that was replaced (undo brings them back)

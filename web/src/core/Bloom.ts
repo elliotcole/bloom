@@ -291,6 +291,12 @@ export class Bloom {
   /** null: 12-TET. Degree 0 of the tuning sits on tuningRoot, which follows the key */
   tuning: Tuning | null;
   tuningRoot: number;
+  /**
+   * How far a soft swap has turned each list from the slot it came in from:
+   * [steps, the list's length then]. Kept through saves, so the next soft swap
+   * carries on from where the pattern itself has got to, not from the loop's tick.
+   */
+  turned: Partial<Record<ListKey, [number, number]>> = {};
 
   stack: Bloom[];
   private saved: Bloom | null = null;
@@ -373,6 +379,7 @@ export class Bloom {
     b.colorLevel = this.colorLevel;
     b.tuning = this.tuning ? JSON.parse(JSON.stringify(this.tuning)) as Tuning : null;
     b.tuningRoot = this.tuningRoot;
+    b.turned = JSON.parse(JSON.stringify(this.turned));
     b.stack = this.stack.map(s => s.clone());
     b.saved = this.saved ? this.saved.clone() : null;
     b.nest = this.nest ? JSON.parse(JSON.stringify(this.nest)) : null;
@@ -407,6 +414,7 @@ export class Bloom {
     this.colorLevel = b.colorLevel;
     this.tuning = b.tuning;
     this.tuningRoot = b.tuningRoot;
+    this.turned = b.turned;
     // don't copy stack
     return this;
   }
@@ -2168,17 +2176,27 @@ export class Bloom {
    * shift-↑, a soft swap: each list (not the notes) as long as the one it
    * replaces carries on from where that one had got to at `tick`, rather
    * than from its top (turned so the loop, starting again at 0, reads on
-   * from there). A list of a new length starts afresh. Returns the lists carried.
+   * from there). The place is counted in the slots' own order: the running
+   * list may stand turned by the swap before (`wasTurned`, its `turned`), and
+   * the lifted one by a save of a turned bloom, so one list lifted again and
+   * again runs on unbroken however many times it has gone round. A list of a
+   * new length starts afresh. Returns the lists carried.
    */
-  carryLists(before: Record<ListKey, number>, tick: number | ((k: ListKey) => number)): ListKey[] {
+  carryLists(before: Record<ListKey, number>, tick: number | ((k: ListKey) => number),
+    wasTurned: Partial<Record<ListKey, [number, number]>> = {}): ListKey[] {
     const carried: ListKey[] = [];
+    const by = (t: Partial<Record<ListKey, [number, number]>>, k: ListKey, n: number) => (t[k]?.[1] === n ? t[k]![0] : 0);
+    const turned = { ...this.turned };
     for (const k of ['time', 'vel', 'chan', 'iv', 'fig'] as ListKey[]) {
       const arr = this.getList(k), n = arr.length;
       if (!n || n !== before[k]) continue;
       carried.push(k);
-      const r = (typeof tick === 'number' ? tick : tick(k)) % n;
+      const at = ((typeof tick === 'number' ? tick : tick(k)) + by(wasTurned, k, n)) % n;   // where the pattern has got to
+      const r = (((at - by(this.turned, k, n)) % n) + n) % n;
       if (r) this.setList(k, [...arr.slice(r), ...arr.slice(0, r)]);
+      turned[k] = [at, n];
     }
+    this.turned = turned;
     return carried;
   }
 

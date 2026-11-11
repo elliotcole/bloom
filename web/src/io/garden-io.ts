@@ -4,6 +4,7 @@ import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { Scale } from '../lib/scales';
 import type { Tuning } from '../lib/tuning';
+import type { ListKey } from '../core/Bloom';
 
 // ─── JSON types ───────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ export interface BloomJSON {
   colorLevel?: number;
   tuning?: Tuning | null;   // absent in files saved before tunings existed
   tuningRoot?: number;
+  turned?: Partial<Record<ListKey, [number, number]>>;   // how far soft swaps turned each list (absent: none)
 }
 
 interface GardenFile {
@@ -78,6 +80,7 @@ export function bloomToJSON(b: Bloom): BloomJSON {
     colorLevel: b.colorLevel,
     tuning: b.tuning ? JSON.parse(JSON.stringify(b.tuning)) as Tuning : null,
     tuningRoot: b.tuningRoot,
+    ...(Object.keys(b.turned).length ? { turned: JSON.parse(JSON.stringify(b.turned)) } : {}),
   };
 }
 
@@ -121,6 +124,7 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   b.colorLevel = isNum(json.colorLevel) ? Math.max(0, Math.min(1, json.colorLevel)) : 1;
   b.tuning = json.tuning ?? null;
   b.tuningRoot = json.tuningRoot ?? 0;
+  b.turned = json.turned && typeof json.turned === 'object' ? json.turned : {};
   return b;
 }
 

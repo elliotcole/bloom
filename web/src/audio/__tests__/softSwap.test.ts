@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Bloom } from '../../core/Bloom';
 import { atNextCycle, setBpm, startLooper, stopAll, updateLooper } from '../scheduler';
 import type { MidiOutput } from '../midi';
+import { bloomFromJSON, bloomToJSON } from '../../io/garden-io';
 
 function bloom(notes: number[], vels: number[]): Bloom {
   const b = new Bloom();
@@ -68,5 +69,70 @@ describe('carryLists', () => {
     expect(b.velocities).toEqual([5, 6, 1, 2, 3, 4]);   // tick 10 is the 5th of 6
     expect(b.chans).toEqual([1, 2, 3]);
     expect(b.notes).toEqual([60, 62, 64, 65, 67]);
+  });
+});
+
+// One list lifted again and again: the swap before turned the running list, so
+// counting by the loop's tick alone landed the next slot off by that turn (the
+// Flower Sermon take: the accents jumped by however far the loop had gone round)
+describe('soft swaps one after another', () => {
+  beforeEach(() => { vi.useFakeTimers(); setBpm(120); });
+  afterEach(() => { stopAll(); vi.useRealTimers(); });
+
+  function swaps(slots: Bloom[], gaps: number[]): { note: number; vel: number }[] {
+    const out = recorder();
+    const live = bloom([60, 62, 64, 65, 67], ACCENTS);
+    startLooper(live, out);
+    slots.forEach((slot, i) => {
+      vi.advanceTimersByTime(gaps[i]);
+      atNextCycle((tick, at) => {
+        const before = live.listLengths(), wasTurned = live.turned;
+        live.import(slot.clone());
+        live.carryLists(before, at ? k => at(k as never) : tick, wasTurned);
+        updateLooper(live);
+      });
+    });
+    vi.advanceTimersByTime(3000);
+    return out.ons;
+  }
+
+  it('identical slots carry on, however many passes went before each', () => {
+    const slot = () => bloom([60, 62, 63, 65, 67], ACCENTS);
+    const ons = swaps([slot(), slot(), slot()], [1100, 1300, 700]);   // 2, 2 and 1 passes: turns of 4, then 4 more, ...
+    expect(ons.filter(o => o.note === 63).length).toBeGreaterThan(3);
+    const vels = ons.map(o => o.vel);
+    expect(vels).toEqual(vels.map((_, i) => ACCENTS[i % 6]));
+  });
+
+  it('a turned bloom saved and lifted again carries on too', () => {
+    const out = recorder();
+    const live = bloom([60, 62, 64, 65, 67], ACCENTS);
+    startLooper(live, out);
+    const soft = (slot: Bloom) => atNextCycle((tick, at) => {
+      const before = live.listLengths(), wasTurned = live.turned;
+      live.import(slot.clone());
+      live.carryLists(before, at ? k => at(k as never) : tick, wasTurned);
+      updateLooper(live);
+    });
+    vi.advanceTimersByTime(1100);
+    soft(bloom([60, 62, 63, 65, 67], ACCENTS));
+    vi.advanceTimersByTime(600);
+    const saved = bloomFromJSON(bloomToJSON(live));   // saved into the garden turned, and read back
+    expect(saved.turned.vel).toEqual(live.turned.vel);
+    expect(saved.velocities).not.toEqual(ACCENTS);   // shown turned to where it is
+    vi.advanceTimersByTime(700);
+    soft(saved);
+    vi.advanceTimersByTime(1300);
+    soft(bloom([60, 62, 64, 65, 67], ACCENTS));      // and an unturned slot after it
+    vi.advanceTimersByTime(3000);
+    const vels = out.ons.map(o => o.vel);
+    expect(vels).toEqual(vels.map((_, i) => ACCENTS[i % 6]));
+  });
+
+  it('a list rotated by hand still jumps, on purpose', () => {
+    const turnedByHand = bloom([60, 62, 63, 65, 67], [...ACCENTS.slice(2), ...ACCENTS.slice(0, 2)]);
+    const ons = swaps([turnedByHand], [1100]);
+    const vels = ons.map(o => o.vel);
+    expect(vels).not.toEqual(vels.map((_, i) => ACCENTS[i % 6]));
   });
 });
