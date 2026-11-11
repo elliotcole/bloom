@@ -775,7 +775,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   function setListMode(m: ListMode | null) {
     _mode = m;
-    state.viz?.setChanStrip(m === 'chan');
+    state.viz?.setListStrip(m ? LIST_OF_MODE[m] : null);   // the list as chits along the bottom
     state.viz?.setListMode(m);
     document.body.classList.toggle('list-mode', m !== null);   // swaps the help overlay view
     if (m) document.body.dataset.listMode = m; else delete document.body.dataset.listMode;   // and its own lines

@@ -1,5 +1,7 @@
 // Web MIDI API wrapper
 
+import { EchoWatch, inputRole, setInputMuted } from './midiInputs';
+
 export interface MidiOutput {
   name: string;
   send(data: number[], timestampMs?: number): void;
@@ -76,6 +78,7 @@ export async function initMidi(): Promise<MidiState> {
       _refreshOutputs();
       _refreshInputs();
       onOutputsChange?.(state.outputs);
+      _onInputs?.();
     };
   } catch (err) {
     state.error = `MIDI access denied: ${err}`;
@@ -91,6 +94,7 @@ function _refreshOutputs(): void {
     state.outputs.push({
       name: output.name ?? 'Unknown',
       send(data: number[], timestampMs?: number) {
+        if ((data[0] & 0xf0) === 0x90 && data[2] > 0) _echoes.out(data[1], data[2], timestampMs ?? performance.now());
         try {
           output.send(data, timestampMs);
         } catch (_) {
@@ -120,10 +124,19 @@ function _refreshInputs(): void {
     state.inputs.push({ name, id: input.id });
     // Attach message handler (safe to re-attach — browser deduplicates)
     input.onmidimessage = (ev: MIDIMessageEvent) => {
-      // a bus Bloom sends on (an IAC driver) comes back as an input: that's our own playing, not a keyboard's
-      if (state.selectedOutput && name === state.selectedOutput.name) return;
+      if (!ev.data) return;
+      const data = ev.data as Uint8Array;
       // the event's own timestamp is when it arrived, before the page got round to it
-      if (ev.data) _dispatchMsg(ev.data as Uint8Array, ev.timeStamp || performance.now());
+      const at = ev.timeStamp || performance.now();
+      _onActivity?.(name);
+      // the bus Bloom sends on comes back as an input (our own playing), and a muted one isn't heard
+      if (inputRole(name, state.selectedOutput?.name ?? null) !== 'listening') return;
+      if ((data[0] & 0xf0) === 0x90 && data[2] > 0 && _echoes.heard(name, data[1], data[2], at)) {
+        setInputMuted(name, true);   // Bloom's own notes coming back: kept out of takes from here
+        _onEcho?.(name);
+        return;
+      }
+      _dispatchMsg(data, at);
     };
   });
 }
@@ -139,6 +152,23 @@ export function getState(): MidiState {
 }
 
 let onOutputsChange: ((outputs: MidiOutput[]) => void) | null = null;
+
+// ─── Inputs: ⚙ → midi lists them, lights one as it sends, and hears of an echo ──
+const _echoes = new EchoWatch();
+let _onInputs: (() => void) | null = null;
+let _onActivity: ((name: string) => void) | null = null;
+let _onEcho: ((name: string) => void) | null = null;
+
+export function onInputsChange(cb: () => void): void { _onInputs = cb; }
+export function onInputActivity(cb: (name: string) => void): void { _onActivity = cb; }
+/** An input found sending Bloom's own notes back, and muted for it */
+export function onInputEcho(cb: (name: string) => void): void { _onEcho = cb; }
+
+/** Mute or unmute an input (by hand: an echo is watched for afresh) */
+export function muteInput(name: string, muted: boolean): void {
+  setInputMuted(name, muted);
+  _echoes.forget(name);
+}
 
 export function onOutputChange(cb: (outputs: MidiOutput[]) => void): void {
   onOutputsChange = cb;

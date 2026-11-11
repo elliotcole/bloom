@@ -150,6 +150,10 @@
       #settings-bar input[type="number"]::-webkit-inner-spin-button,
       #settings-bar input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
       #settings-bar input[type="range"] { cursor: pointer; }
+      #midi-inputs { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+      #midi-inputs label.own { opacity: 0.45; }
+      #midi-inputs .in-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.15; transition: opacity 0.4s; }
+      #midi-inputs .in-dot.lit { opacity: 0.9; transition: none; }
       #settings-bar input[type="checkbox"] { accent-color: #48a; width: 12px; height: 12px; cursor: pointer; }
       #settings-bar select {
         background: #1a1a22;
@@ -1004,6 +1008,11 @@
         </span>
 <span class="s-section">
           <span class="s-section-label">midi</span>
+          <label title="where Bloom plays (the same as the menu in the header)">out
+            <select id="midi-out-setup"></select>
+          </label>
+          <span class="s-note" title="the inputs Bloom hears: a keyboard played along goes into a take. Untick one that isn't a keyboard (a bus carrying Bloom's own notes on to TouchDesigner, say); the dot lights as it sends. The bus Bloom plays on is never heard. An input found sending Bloom's own notes back is unticked by itself">in</span>
+          <span id="midi-inputs"></span>
           <label title="highest MIDI channel (0-based)">max ch
             <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
           </label>

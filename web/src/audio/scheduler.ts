@@ -113,11 +113,6 @@ function letGo(p: Pending): void {
   p.on.forEach(clearTimeout); p.on.clear();
   p.visual.forEach(clearTimeout); p.visual.clear();
 }
-/** Everything, releases too (after a silence, or when nothing was sent) */
-function cancelAll(p: Pending): void {
-  letGo(p);
-  p.off.forEach(clearTimeout); p.off.clear();
-}
 
 // ─── One-shot playback ────────────────────────────────────────────────────────
 
@@ -127,7 +122,12 @@ export interface ActiveNote {
   offMs: number;
 }
 
-/** Play a bloom once. Returns a cleanup function that cancels pending note-offs. */
+/**
+ * Play a bloom once. Returns a cleanup that stops it as a loop stops: nothing
+ * more starts, and what sounds is released on time. (Not a panic: a new play
+ * cancelling the last mustn't send all-notes-off, which some instruments
+ * honour under a held pedal, cutting off what rings.)
+ */
 export function playOnce(
   bloom: Bloom,
   out: MidiOutput,
@@ -151,10 +151,7 @@ export function playOnce(
     cursor += beatsToMs(view.stepAt(i, tick + i));   // an inserted figure takes its own length
   });
 
-  return () => {
-    cancelAll(pending);
-    silence(out);
-  };
+  return () => letGo(pending);
 }
 
 // ─── Looper ───────────────────────────────────────────────────────────────────

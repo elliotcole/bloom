@@ -4,7 +4,8 @@ import './style.css';
 import { Bloom, BloomDefaults } from './core/Bloom';
 import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
 import { Garden } from './garden';
-import { initMidi, getState as midiStateNow, onMidiMessage, onOutputChange, registerVirtualOutput } from './audio/midi';
+import { initMidi, getState as midiStateNow, onMidiMessage, onOutputChange, registerVirtualOutput, onInputsChange, onInputActivity, onInputEcho, muteInput } from './audio/midi';
+import { inputRole } from './audio/midiInputs';
 import { stopAll, setBpm, getBpm, silence } from './audio/scheduler';
 import { ClockFollower, setTimebase } from './audio/clockSync';
 import { setFigureSlots } from './lib/figures';
@@ -46,6 +47,8 @@ async function main() {
   const displayEl = document.getElementById('console-overlay') as HTMLElement;
   const midiStatusEl = document.getElementById('midi-status') as HTMLElement;
   const midiSelectEl = document.getElementById('midi-select') as HTMLSelectElement;
+  const midiOutSetupEl = document.getElementById('midi-out-setup') as HTMLSelectElement;
+  const midiInputsEl = document.getElementById('midi-inputs') as HTMLElement;
   const vizArea = document.getElementById('viz-area') as HTMLElement;
   const gardenArea = document.getElementById('garden-area') as HTMLElement;
   const consoleToggleBtn = document.getElementById('console-toggle') as HTMLButtonElement;
@@ -96,6 +99,26 @@ async function main() {
       if (midiState.selectedOutput?.name === out.name) opt.selected = true;
       midiSelectEl.appendChild(opt);
     });
+    // ⚙ → midi: the same choice of output, and the inputs, each heard or not
+    midiOutSetupEl.innerHTML = midiSelectEl.innerHTML;
+    midiOutSetupEl.value = midiSelectEl.value;
+    midiInputsEl.innerHTML = '';
+    for (const inp of midiState.inputs) {
+      const role = inputRole(inp.name, midiState.selectedOutput?.name ?? null);
+      const label = document.createElement('label');
+      label.className = role;
+      label.title = role === 'own' ? 'the bus Bloom plays on: its own notes coming back, never heard' : 'heard: a keyboard played along goes into a take';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = role === 'listening';
+      cb.disabled = role === 'own';
+      cb.addEventListener('change', () => { muteInput(inp.name, !cb.checked); cb.blur(); updateMidiUi(); });
+      const dot = document.createElement('span');
+      dot.className = 'in-dot';
+      dot.dataset.input = inp.name;
+      label.append(cb, inp.name, dot);
+      midiInputsEl.appendChild(label);
+    }
     midiStatusEl.textContent = midiState.selectedOutput
       ? midiState.selectedOutput.name
       : 'No outputs';
@@ -106,11 +129,27 @@ async function main() {
   // a port plugged in or pulled out: the list follows, and so does where the keys play
   onOutputChange(() => { updateMidiUi(); keyState.out = midiState.selectedOutput; });
 
-  midiSelectEl.addEventListener('change', () => {
-    const found = midiState.outputs.find(o => o.name === midiSelectEl.value);
-    if (found) midiState.selectedOutput = found;
-    midiSelectEl.blur();   // keystrokes go back to the bloom
+  for (const sel of [midiSelectEl, midiOutSetupEl]) {
+    sel.addEventListener('change', () => {
+      const found = midiState.outputs.find(o => o.name === sel.value);
+      if (found) { midiState.selectedOutput = found; keyState.out = found; }
+      sel.blur();   // keystrokes go back to the bloom
+      updateMidiUi();
+    });
+  }
+  onInputsChange(updateMidiUi);
+  // an input's dot lights as it sends, muted or not: what's arriving, and where
+  const dotTimers = new Map<string, number>();
+  onInputActivity(name => {
+    const dot = [...midiInputsEl.querySelectorAll<HTMLElement>('.in-dot')].find(d => d.dataset.input === name);
+    if (!dot) return;
+    dot.classList.add('lit');
+    clearTimeout(dotTimers.get(name));
+    dotTimers.set(name, window.setTimeout(() => dot.classList.remove('lit'), 80));
+  });
+  onInputEcho(name => {
     updateMidiUi();
+    display.setStatus(`${name} is sending Bloom's own notes back: no longer heard (⚙ → midi to hear it again)`);
   });
 
   // ─── Console toggle ───────────────────────────────────────────────────────────

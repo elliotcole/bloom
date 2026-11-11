@@ -8,7 +8,7 @@ import { flatNotes } from '../lib/arrays';
 import type { Theme } from './theme';
 import type { Shift } from '../audio/playhead';
 
-type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
+export type LaneKey = 'notes' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 export type LaneMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig' | null;
 
 const LANE_H = 24;
@@ -43,6 +43,18 @@ const chanHue = (c: number) => (c * 360) / 16;
  * (short, soft) to warm (long, loud) through the values in use; channels by
  * channel; intervals and figures a colour each, spread apart.
  */
+/** What each cell of each lane says, as the lanes write it */
+export function chitLabels(b: Bloom): Record<LaneKey, string[]> {
+  return {
+    notes: b.notes.map(nt => { const ps = flatNotes([nt]) as number[]; return nameOf(ps[0]) + (ps.length > 1 ? '+' : ''); }),
+    time: b.timeIntervals.map(fmtT),
+    vel: b.velocities.map(String),
+    chan: b.chans.map(String),
+    iv: b.intervals.map(s => stepName(s)),
+    fig: b.figures.map(f => (isFigure(f) ? formatFigure(f) : '.')),
+  };
+}
+
 export function chitHues(b: Bloom): Record<LaneKey, number[]> {
   const ramp = (xs: number[], skip = (_: number) => false) => {
     const vals = [...new Set(xs.filter(x => !skip(x)))].sort((p, q) => p - q);

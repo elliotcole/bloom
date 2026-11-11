@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Bloom } from '../../core/Bloom';
-import { chitHues } from '../lanes';
+import { chitHues, chitLabels } from '../lanes';
 
 describe('chit colours', () => {
   const b = new Bloom();
@@ -21,5 +21,12 @@ describe('chit colours', () => {
     expect(h.vel[1]).toBe(-1);
     expect(h.iv[0]).toBe(-1);
     expect(h.fig[0]).toBe(-1);
+  });
+  it('each chit says its value, as the lanes do', () => {
+    const l = chitLabels(b);
+    expect(l.notes).toEqual(['C4', 'C5', 'D4']);
+    expect(l.vel).toEqual(['80', '0', '40', '80']);
+    expect(l.chan).toEqual(['0', '3']);
+    expect(l.fig).toEqual(['.']);
   });
 });

@@ -441,6 +441,11 @@ as usual. Any
 key with no meaning in the mode does nothing and shows a hint, so home-mode
 habits can't change the pitches by accident.
 
+With the lanes off, a list mode shows its list as a strip of coloured chits
+along the bottom of the view, one per value, equal values one colour (the
+lanes' colours) and each with its value; a list of its own length says it's
+phasing against the notes.
+
 **One key means the same thing in all three modes.**
 
 ### Order and length
@@ -720,8 +725,17 @@ nodes sit on a soft disc and the header shows `▣ 4`.
   the tempo but not yet the beat.
   - **perform ▾** takes (a whole performance recorded and played again), and
     for video: clean view, frame, size, drift, demo keys.
-  - **⚙** set once: display (skin, axis, note labels, cues), MIDI channels,
-    and the tuning helper (the command, and whether it's connected).
+  - **⚙** set once: display (skin, axis, note labels, cues), MIDI (where
+    Bloom plays, which inputs it hears, the channels), and the tuning helper
+    (the command, and whether it's connected).
+  - **⚙ → midi → in** lists the MIDI inputs, each with a tick and a dot that
+    lights as it sends. A ticked input is heard as a keyboard played along:
+    its notes go into a take, and a replay plays them. Untick an input that
+    isn't one, such as an IAC bus a DAW uses to pass Bloom's notes on to
+    TouchDesigner; Bloom remembers the choice by name. The bus Bloom plays on
+    is never heard. An input caught sending Bloom's own notes back (most of
+    16 notes in a row at the pitch and velocity Bloom just sent) is unticked
+    by itself, and the status line says so.
 - **The cue line,** under the header, names the few keys that belong to where
   you are: a mode's own keys (tuning mode, the freeze menu, a list mode), or
   at home the situations that open keys up, two at most — a selection, pins, a

@@ -7,7 +7,8 @@ import { THEMES, getTheme } from './theme';
 import type { VizMode, ThemeId, Theme } from './theme';
 import { drawNotehead, drawSharp, drawFlat } from './glyphs';
 import { Lanes, LANES_HEIGHT } from './lanes';
-import type { LaneMode } from './lanes';
+import type { LaneMode, LaneKey } from './lanes';
+import { chitHues, chitLabels } from './lanes';
 import { drawTuningPie, degreeAt } from './tuningPie';
 import type { PieMarks } from './tuningPie';
 import { drawOrreryAt } from './orrery';
@@ -2065,7 +2066,8 @@ export class BloomVisualization {
   private _theme: Theme = THEMES.dark;
   private _showAxis = false;
   private _showNoteLabels = false;
-  private _showChanStrip = false;
+  /** The list shown as a strip of chits along the bottom (its list mode, the lanes off) */
+  private _strip: LaneKey | null = null;
   private _showLanes = false;
   private _clean = false;
   private _listMode: LaneMode = null;
@@ -2228,7 +2230,7 @@ export class BloomVisualization {
   setShowNoteLabels(show: boolean): void { this._showNoteLabels = show; }
   toggleNoteLabels(): boolean { this._showNoteLabels = !this._showNoteLabels; return this._showNoteLabels; }
   /** Show the channel strip (channel-edit mode) */
-  setChanStrip(show: boolean): void { this._showChanStrip = show; }
+  setListStrip(k: LaneKey | null): void { this._strip = k; }
   /** Which list mode is active, so its lane is lit */
   setListMode(m: LaneMode): void { this._listMode = m; }
   setVoiceLanes(tags: [string, string] | null): void { this._voiceTags = tags; }
@@ -2680,8 +2682,8 @@ export class BloomVisualization {
 
     if (lanesOn) {
       this._drawLanes(ctx, fullH - LANES_HEIGHT, W, bloom, theme, this._voiceTags?.[0]);
-    } else if (this._showChanStrip && !this._clean) {
-      this._drawChanStrip(ctx, W, H, bloom, theme);
+    } else if (this._strip && !this._clean) {
+      this._drawListStrip(ctx, W, H, bloom, theme, this._strip);
     }
 
     ctx.restore();
@@ -2764,40 +2766,51 @@ export class BloomVisualization {
     ctx.restore();
   }
 
-  /** Channel-edit mode: the chans array itself, as colored squares along the bottom */
-  private _drawChanStrip(ctx: CanvasRenderingContext2D, W: number, H: number, bloom: Bloom, theme: Theme): void {
-    const chans = bloom.chans;
-    if (chans.length === 0) return;
+  /**
+   * A list mode: the list itself as coloured chits along the bottom, equal
+   * values one colour (the lanes' colours, lanes.ts chitHues), each with its
+   * value when there's room; a rest or an empty step is an outline
+   */
+  private _drawListStrip(ctx: CanvasRenderingContext2D, W: number, H: number, bloom: Bloom, theme: Theme, k: LaneKey): void {
+    const hues = chitHues(bloom)[k], labels = chitLabels(bloom)[k];
+    const n = hues.length;
+    if (n === 0) return;
 
     const gap = 3;
-    const s = Math.min(22, Math.max(8, (W * 0.9) / chans.length - gap));
-    const totalW = chans.length * (s + gap) - gap;
-    const x0 = (W - totalW) / 2;
+    const s = Math.min(22, Math.max(8, (W * 0.9) / n - gap));
+    const font = `${Math.floor(Math.max(s, 12) * 0.55)}px ui-monospace, monospace`;
+    ctx.font = font;
+    // a chit is as wide as its value needs, when they all still fit; else plain squares
+    const wide = labels.map(l => Math.max(s, ctx.measureText(l).width + 8));
+    const fits = wide.reduce((a, w) => a + w + gap, -gap) <= W * 0.9;
+    const ws = fits ? wide : labels.map(() => s);
+    const totalW = ws.reduce((a, w) => a + w + gap, -gap);
     const y = H - s - 10;
 
-    chans.forEach((chan, i) => {
-      const x = x0 + i * (s + gap);
-      const hue = (chan * 360) / 16;
-      ctx.fillStyle = `hsla(${hue},70%,55%,0.9)`;
+    let x = (W - totalW) / 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    hues.forEach((hue, i) => {
+      const w = ws[i];
       ctx.beginPath();
-      ctx.roundRect(x, y, s, s, 3);
-      ctx.fill();
-      if (s >= 12) {
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        ctx.font = `${Math.floor(s * 0.55)}px ui-monospace, monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(chan), x + s / 2, y + s / 2 + 0.5);
+      ctx.roundRect(x, y, w, s, 3);
+      if (hue >= 0) { ctx.fillStyle = `hsla(${hue},70%,55%,0.9)`; ctx.fill(); }
+      else { ctx.strokeStyle = withAlpha(theme.text, 0.35); ctx.lineWidth = 1; ctx.stroke(); }
+      if (s >= 12 && (fits || ctx.measureText(labels[i]).width <= w - 2)) {
+        ctx.fillStyle = hue >= 0 ? 'rgba(0,0,0,0.75)' : withAlpha(theme.text, 0.5);
+        ctx.fillText(labels[i], x + w / 2, y + s / 2 + 0.5);
       }
+      x += w + gap;
     });
 
-    // Note count marker: where the chans cycle sits relative to the notes cycle
-    if (chans.length !== bloom.notes.length && bloom.notes.length > 0) {
+    // a list of its own length phases against the notes
+    const notes = bloom.notes.length;
+    if (k !== 'notes' && n !== notes && notes > 0) {
+      const NAME: Record<LaneKey, string> = { notes: 'notes', time: 'times', vel: 'velocities', chan: 'chans', iv: 'intervals', fig: 'figures' };
       ctx.fillStyle = theme.text;
       ctx.font = '10px ui-monospace, monospace';
-      ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(`${chans.length} chans / ${bloom.notes.length} notes — phasing`, W / 2, y - 4);
+      ctx.fillText(`${n} ${NAME[k]} / ${notes} notes — phasing`, W / 2, y - 4);
     }
   }
 
