@@ -653,3 +653,23 @@ describe('lists in step with the notes follow them when the notes grow or are cu
     expect(b.timeIntervals).toEqual([1, 1, 1, 3]);
   });
 });
+
+describe('the lengths list (articulation, an experiment)', () => {
+  it('[1] changes nothing; a list of its own length shortens and lengthens the notes in turn', () => {
+    const b = new Bloom([60, 62, 64, 65], [80, 80, 80, 80], [1, 1, 1, 1], [0]);
+    b.legato = 1;
+    b.sustain = null;   // each note as long as its time
+    const gates = (bl: Bloom) => [0, 1, 2, 3, 4, 5].map(t => bl.soundsAt(t % 4, t)[0].gate);
+    expect(gates(b)).toEqual([1, 1, 1, 1, 1, 1]);
+    b.gates = [0.25, 1, 2];
+    expect(gates(b)).toEqual([0.25, 1, 2, 0.25, 1, 2]);   // three lengths against four notes
+  });
+
+  it('travels with a clone and a save', async () => {
+    const { bloomToJSON, bloomFromJSON } = await import('../../io/garden-io');
+    const b = new Bloom([60], [80], [1], [0]);
+    b.gates = [0.3, 1];
+    expect(b.clone().gates).toEqual([0.3, 1]);
+    expect(bloomFromJSON(JSON.parse(JSON.stringify(bloomToJSON(b)))).gates).toEqual([0.3, 1]);
+  });
+});

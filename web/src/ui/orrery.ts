@@ -42,9 +42,10 @@ const TAG: Record<RingKey, string> = { notes: 'p', time: 't', vel: 'v', chan: 'c
  */
 export function lengthsText(b: Bloom): string {
   const n = b.notes.length;
-  const R = rings(b).filter(r => r.key === 'notes' || r.len > 1);
+  const R: { tag: string; len: number }[] = rings(b).filter(r => r.key === 'notes' || r.len > 1).map(r => ({ tag: TAG[r.key], len: r.len }));
+  if (b.gates.length > 1) R.push({ tag: 'len', len: b.gates.length });   // the lengths list (an experiment) phases too
   if (!n || R.every(r => r.len === n)) return '';
-  return `${R.map(r => `${TAG[r.key]}${r.len}`).join(' ')} ↻${lcm(R.map(r => r.len))}`;
+  return `${R.map(r => `${r.tag}${r.len}`).join(' ')} ↻${lcm(R.map(r => r.len))}`;
 }
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));

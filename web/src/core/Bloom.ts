@@ -282,6 +282,14 @@ export class Bloom {
   figureTime: FigureTime;
   /** Beats per step for insert and superimpose, read from each figure's start and cycling */
   figureDurs: number[];
+  /**
+   * An experiment (12 Nov 2026): articulation as a list. Each note's length
+   * against the usual (its time × legato, or the fixed sustain): 1 as it was,
+   * 0.3 short, 2 ringing on. It cycles at its own length like the other
+   * lists, so a pattern of short and long phases against the notes. [1]
+   * changes nothing. Typed in time mode (↵, then tab: lengths).
+   */
+  gates: number[];
   /** Percent of the note's velocity a figure plays at (a garden figure's loudest note) */
   figureVel: number;
   /** Percent of the note's velocity the notes the intervals add play at */
@@ -359,6 +367,7 @@ export class Bloom {
     this.figures = [0];
     this.figureTime = 'divide';
     this.figureDurs = [0.25];
+    this.gates = [1];
     this.figureVel = 100;
     this.intervalVel = Math.round(ADDED_NOTE_VELOCITY * 100);
   }
@@ -376,6 +385,7 @@ export class Bloom {
     b.figures = JSON.parse(JSON.stringify(this.figures));
     b.figureTime = this.figureTime;
     b.figureDurs = [...this.figureDurs];
+    b.gates = [...this.gates];
     b.figureVel = this.figureVel;
     b.intervalVel = this.intervalVel;
     b.lowestPossibleNote = this.lowestPossibleNote;
@@ -441,6 +451,7 @@ export class Bloom {
     this.figures = b.figures;
     this.figureTime = b.figureTime;
     this.figureDurs = b.figureDurs;
+    this.gates = b.gates?.length ? b.gates : [1];
     this.figureVel = b.figureVel;
     this.intervalVel = b.intervalVel;
     this.lowestPossibleNote = b.lowestPossibleNote;
@@ -2874,7 +2885,8 @@ export class Bloom {
     const vel = wrapAt(this.velocities, tick);
     const time = wrapAt(this.timeIntervals, tick);
     const chan = wrapAt(this.chans, tick);
-    const gateOf = (t: number, s = sustain, l = legato) => (s !== null ? s : t * l);
+    const art = this.gates.length ? wrapAt(this.gates, tick) : 1;   // the lengths list, at its own place
+    const gateOf = (t: number, s = sustain, l = legato) => (s !== null ? s : t * l) * art;
     if (vel <= 0) return rests ? [{ at: 0, notes, vel: 0, chan, gate: gateOf(time) }] : [];
     const added = this.addedNotesAt(index, tick);
     const out: Sound[] = [];

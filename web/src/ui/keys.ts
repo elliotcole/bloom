@@ -115,6 +115,16 @@ function listFields(b: Bloom, m: ListMode): { fields: TyperField[]; check: (valu
     check: v => (pct(v[0]) === null ? pctProblem : null),
     set: v => { b.intervalVel = pct(v[0])!; },
   };
+  // an experiment: articulation as a list, each note's length against the usual, cycling at its own length
+  if (m === 'time') return {
+    fields: [{ kind: 'text', label: 'lengths', value: b.gates.join(' '), size: 14 }],
+    check: v => {
+      const r = parseFloatList(v[0]);
+      if (r.error) return `lengths: ${r.error}`;
+      return !r.values.length || r.values.some(x => !(x > 0) || x > 16) ? 'lengths: each note\'s length against the usual, above 0 (1 as it is, 0.3 short, 2 ringing on); they cycle' : null;
+    },
+    set: v => { b.gates = parseFloatList(v[0]).values; },
+  };
   return null;
 }
 
@@ -947,7 +957,8 @@ export function createKeyHandler(state: KeyHandlerState) {
         if (list.length && want) b.setList(LIST_OF_MODE[m], Array.from({ length: want }, (_, i) => list[i % list.length]));
       }
       const how = m === 'fig' ? ` · ${b.figureTime}${b.figureTime !== 'divide' ? ` ${b.figureDurs.join(' ')}` : ''} · vel ${b.figureVel}%`
-        : m === 'iv' ? ` · vel ${b.intervalVel}%` : '';
+        : m === 'iv' ? ` · vel ${b.intervalVel}%`
+        : m === 'time' && b.gates.some(g => g !== 1) ? ` · lengths ${b.gates.join(' ')}` : '';
       const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}`;
       status(msg);
       refresh(msg, false);

@@ -72,6 +72,8 @@ These move each note together with its time, velocity, channel and interval.
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |
 | | | opt-`z` | fit to a length: asks how long, then the velocity, channel, interval and figure lists are cut or looped round to it, so they come round together against a long bloom (the notes and times keep their own lengths). A list written folded, `P5/6`, counts its steps one by one |
 
+**Lengths (an experiment, 12 Nov 2026).** In time mode `↵`, then `tab`: a list of note lengths against the usual (1 as it is, 0.3 short, 2 ringing on). It cycles at its own length like any other list, so `0.3 1 1` against five notes moves the staccato round. With a fixed sustain it scales that. `1` alone is the old behaviour. It's saved with the bloom; it isn't yet in the lanes, the views or undo.
+
 **Come round in N: opt-shift-`z`.** Asks N, then every list but the notes is cut or looped to the length nearest its own that divides N, so they are all back at their start on note N (the header's ↻ shows the notes it takes with the notes' own length counted in).
 
 If the lists are phasing, they go on phasing: a whole-note move carries along

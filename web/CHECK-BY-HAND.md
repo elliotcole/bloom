@@ -14,7 +14,7 @@ About 30 minutes. Parts 1 and 2 matter most.
 - [ ] **Clean view.** `opt-c`, then `d`: the palette shows. `esc`, then try `t`, `F`, `?` in clean view: nothing gets stuck.
 - [ ] **Typing line.** `b` `↵`, type some figures, press `tab` round all the fields and back: what you typed is still there.
 - [ ] **Command palette.** `cmd-k`, type a few letters, `↓` then `↵`: the highlighted suggestion runs. Then type `scramble.pivto`: it should say what's wrong and not half-run.
-- [ ] **List modes.** In each of `p t v c 5 b`, a few keys, and especially `q`, `;`, `{`, `Z`, `opt-z`, `↵`. `space` plays and the page doesn't scroll.
+- [ ] **List modes.** In each of `p t v c 5 b`, a few keys, and especially `q`, `;`, `{`, `Z`, `opt-z`, `↵`, `x`. `space` plays and the page doesn't scroll.
 - [ ] **Tuning mode.** `T` in, `esc` out; `T` in, `T` out. With slices selected, `esc` lets go of them first.
 - [ ] **Freeze menu.** `F`, then `p t v c d 5 g`, each toggles; `F` or `esc` closes. With caps lock on, the same.
 - [ ] **Tab from a mode.** With two voices (`opt-tab`), `tab` reaches the other voice from the freeze menu and from tuning mode, as it does from a list mode.
@@ -61,12 +61,6 @@ About 30 minutes. Parts 1 and 2 matter most.
 - [ ] **Help order.** `?`: Playback is now top left; check no column runs off the bottom.
 - [ ] **Sort and wheels.** `o` / `O` do nothing at home (still sort in a list mode). `cmd-k`, `wheels`: one accent, then quiet.
 
-## Decisions I need from you
+## Decisions
 
-1. **`.` after a take.** Panic now also cuts notes during the 10 s ring-out after a take ends, though the take file says they ring. Keep, or only on page unload?
-2. **`oneRandChan` and `cycleChans`.** You kept them, but no key or palette command reaches them. Want palette commands (say `onechan`, `cyclechans`), or keys?
-3. **Spray (`Y`).** It sputters notes, velocities and times each on its own dice, so the three end at different lengths and every note loses its own velocity and time; channels, intervals and figures aren't touched. That may be exactly what spray is for (instant phasing), or you may want it to leave lists in step. `U` sputter already repeats whole notes. Say which.
-4. **Curves (`w`).** It resamples notes, times and velocities to 10 and leaves intervals and figures at their old length, so they start phasing. Same question.
-5. **Skins.** Ember, arctic and solar recolour the canvas but not the page around it. Worth doing?
-6. **Docs reorganisation.** You said yes; I'd do it after the UX review, since that will move things.
-7. **Push.** Nothing is pushed.
+The open decisions are at the end of [CATCH-UP.md](CATCH-UP.md), with the tour of what's new. Do that one first.

@@ -18,6 +18,7 @@ export interface BloomJSON {
   figures?: unknown;            // Figure[] — absent in files saved before figures existed
   figureTime?: string;          // divide | insert | superimpose (absent: divide)
   figureDurs?: number[];
+  gates?: number[];
   figureVel?: number;
   intervalVel?: number;
   lowestPossibleNote: number;
@@ -62,6 +63,7 @@ export function bloomToJSON(b: Bloom): BloomJSON {
     figures: JSON.parse(JSON.stringify(b.figures)),
     figureTime: b.figureTime,
     figureDurs: [...b.figureDurs],
+    gates: [...b.gates],
     figureVel: b.figureVel,
     intervalVel: b.intervalVel,
     lowestPossibleNote: b.lowestPossibleNote,
@@ -107,6 +109,7 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   // saved before figures chose their time: garden figures were superimposed, runs divided
   else if (b.figures.some(f => typeof f === 'object' && f !== null && !Array.isArray(f)) && !b.figures.some(Array.isArray)) b.figureTime = 'superimpose';
   if (Array.isArray(json.figureDurs) && json.figureDurs.length && json.figureDurs.every(x => typeof x === 'number' && x > 0)) b.figureDurs = json.figureDurs;
+  if (Array.isArray(json.gates) && json.gates.length && json.gates.every(x => typeof x === 'number' && x > 0)) b.gates = json.gates;
   if (typeof json.figureVel === 'number') b.figureVel = json.figureVel;
   if (typeof json.intervalVel === 'number') b.intervalVel = json.intervalVel;
   const num = (x: unknown, d: number) => (isNum(x) ? x : d);
