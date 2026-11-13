@@ -22,6 +22,8 @@ import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bl
 import { playOnce, isLooping, updateLooper, isPulsing, updatePulsar, isGardenLooping, isGardenPulsing, beatsToMs, parkLooper, unparkLooper, setParkedBloom, isParkedLooping, stopParked, startParkedInStep, nextMeeting, } from '../audio/scheduler';
 import type { VizMode } from './theme';
 import { findHome, isModifierKey, keyChar } from './homeKeys';
+import { sameSlots, slotsOf, undoGardenStep } from './gardenHistory';
+import type { GardenStep } from './gardenHistory';
 import type { HomeCtx } from './homeKeys';
 import { autosaveGarden } from '../io/garden-io';
 import { onScreenSlot } from './onScreen';
@@ -38,9 +40,10 @@ import {
 } from '../audio/tuningOut';
 import { spell } from '../lib/numbers';
 import { worldColor, worldHues, worldOf } from './worlds';
+import { lengthsText } from './orrery';
 
-/** A step back in the undo history: the bloom, what was pinned, and the freezes in force */
-interface HistoryEntry { bloom: Bloom; pins: number[]; holds: Holds }
+/** A step back in the undo history: the bloom, what was pinned, the freezes in force, and the garden's slots when the step changed them */
+interface HistoryEntry { bloom: Bloom; pins: number[]; holds: Holds; garden?: GardenStep }
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -257,15 +260,31 @@ export function createKeyHandler(state: KeyHandlerState) {
   let _prevSnap = snap(state.bloom);
   let _prevPins: number[] = [];   // the pins that go with _prevBloom
   let _prevHolds = state.bloom.holds();   // and the freezes: undo puts back the palettes a verb moved (a tempo change, a transposition)
+  // the garden's slots as last recorded, and where its cursor was: a save, insert or delete is a step too (gardenHistory.ts)
+  let _prevGarden = slotsOf(state.garden);
+  let _prevCursor = state.garden.cursor;
   const vizArea = document.getElementById('viz-area');
   const _notice = vizArea ? new Notice(vizArea) : null;
 
   /** Record the current state; returns what changed since the last one ('' if nothing) */
   function record(): string {
     const now = snap(state.bloom);
-    if (sameSnap(now, _prevSnap)) { _prevBloom = snapshotOf(state.bloom); _prevHolds = state.bloom.holds(); return ''; }   // only a setting changed (a name, say): the record keeps it
+    const slots = slotsOf(state.garden);
+    const garden: GardenStep | undefined = sameSlots(slots, _prevGarden) ? undefined : { before: _prevGarden, after: slots, cursor: _prevCursor };
+    _prevGarden = slots;
+    _prevCursor = state.garden.cursor;
+    if (sameSnap(now, _prevSnap)) {
+      // the garden alone changed (a save, a delete): a step of its own, the bloom as it is
+      if (garden) {
+        _undo.push({ bloom: _prevBloom, pins: _prevPins, holds: _prevHolds, garden });
+        if (_undo.length > HISTORY_MAX) _undo.shift();
+        _redo.length = 0;
+      }
+      _prevBloom = snapshotOf(state.bloom); _prevHolds = state.bloom.holds();   // only a setting changed (a name, say): the record keeps it
+      return '';
+    }
     const what = describeChange(_prevSnap, now);
-    _undo.push({ bloom: _prevBloom, pins: _prevPins, holds: _prevHolds });
+    _undo.push({ bloom: _prevBloom, pins: _prevPins, holds: _prevHolds, garden });
     if (_undo.length > HISTORY_MAX) _undo.shift();
     _redo.length = 0;
     _prevBloom = snapshotOf(state.bloom);
@@ -279,7 +298,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     const from = redo ? _redo : _undo, to = redo ? _undo : _redo;
     const target = from.pop();
     if (!target) { status(redo ? 'nothing to redo' : 'nothing to undo'); return; }
-    to.push({ bloom: snapshotOf(state.bloom), pins: [..._pinned], holds: state.bloom.holds() });
+    // the garden goes back with the step that changed it (unless the other voice has changed it since)
+    const gardenBack = target.garden ? undoGardenStep(state.garden, target.garden) : null;
+    if (gardenBack) { _prevGarden = slotsOf(state.garden); _prevCursor = state.garden.cursor; }
+    to.push({ bloom: snapshotOf(state.bloom), pins: [..._pinned], holds: state.bloom.holds(), garden: gardenBack ?? undefined });
     const before = _prevSnap;
     const stack = state.bloom.stack;
     state.bloom.import(target.bloom);
@@ -293,7 +315,8 @@ export function createKeyHandler(state: KeyHandlerState) {
     _prevSnap = snap(state.bloom);
     const what = describeChange(before, _prevSnap);
     const left = redo ? _redo.length : _undo.length;
-    status(`${redo ? 'redo' : 'undo'} (${left} more)`);
+    const gardenSaid = !target.garden ? '' : gardenBack ? ' · the garden too' : ' · the garden has changed since, and stays';
+    status(`${redo ? 'redo' : 'undo'}${gardenSaid} (${left} more)`);
     refresh(redo ? 'redo' : 'undo');
     _notice?.setDetail('', what);
   }
@@ -661,12 +684,22 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
+    updateLengthsBadge();
     markOnScreen();
     if (state.display) state.display.update(state.bloom, state.garden, msg);
     updateLooper(state.bloom);
     updatePulsar(state.bloom);
     autosaveGarden(state.bloom, state.garden);
     state.afterRefreshFn?.();
+  }
+
+  /** The lists' lengths in the header, while they differ (orrery.ts lengthsText) */
+  function updateLengthsBadge() {
+    const badge = document.getElementById('lengths-badge');
+    if (!badge) return;
+    const text = lengthsText(state.bloom);
+    badge.textContent = text;
+    badge.classList.toggle('active', text !== '');
   }
 
   function play(bloom: Bloom, msg?: string) {
@@ -778,6 +811,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   const freezeCtx: FreezeCtx = {
     status: msg => status(msg),
     close: () => setFreezeMenu(false),
+    leaving: escLeavesMode,
     unpin: () => { const n = _pinned.size; if (n) clearPins(); return n; },
     toggle: f => {
       const box = freezeBox(f);
@@ -851,6 +885,16 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
+  /**
+   * esc undoes the outermost thing first, wherever you are: clean view, then
+   * the help, and only then the mode (after that the selection, then the pins:
+   * homeKeys). False while clean view or the help still has first call on it.
+   */
+  function escLeavesMode(): boolean {
+    return !helpOpen() && !document.body.classList.contains('clean');
+  }
+  const helpOpen = () => document.getElementById('help-full')?.style.display === 'block';
+
   /** What a list-mode key's action can reach (modeKeys.ts ListCtx) */
   function listCtx(e: KeyboardEvent, ch: string, m: ListMode): ListCtx {
     const b = state.bloom;
@@ -867,6 +911,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       type: () => typeTheList(m, tag),
       text: () => listAsText(state.bloom, m).text,
       leave: () => setListMode(null),
+      leaving: escLeavesMode,
     };
   }
 
@@ -914,7 +959,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const view = state.tuningView!;
     return {
       e, ch, status,
-      leaving: () => document.getElementById('help-full')?.style.display !== 'block' && !document.body.classList.contains('clean'),
+      leaving: escLeavesMode,
       picked: () => view.picked(),
       clearPick: () => view.clearPick(),
       close: () => view.close(),
@@ -1241,6 +1286,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const b = state.bloom;
     return {
       mode: _mode, tuning: !!state.tuningView?.isOpen(), freezeMenu: _freezeMenu,
+      help: helpOpen(), slices: state.tuningView?.isOpen() ? state.tuningView.picked().length : 0,
       selection: _selection.length, pins: _pinned.size,
       ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), figures: b.hasFigures(), held: isHeld(),
       pulsing: isPulsing() || isGardenPulsing(), looping: isLooping() || isGardenLooping(),

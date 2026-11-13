@@ -61,3 +61,22 @@ describe('orrery', () => {
     expect(lcm(rings(b).map(r => r.len))).toBe(7);
   });
 });
+
+describe('lengthsText (the header badge)', () => {
+  it('nothing while every list is in step with the notes', async () => {
+    const { lengthsText } = await import('../orrery');
+    const { Bloom } = await import('../../core/Bloom');
+    expect(lengthsText(new Bloom([60, 62, 64], [80, 70, 60], [1, 1, 1], [0, 0, 0]))).toBe('');
+    // a list of one value is the same every time round
+    expect(lengthsText(new Bloom([60, 62, 64], [80, 70, 60], [1, 1, 1], [0]))).toBe('');
+  });
+
+  it('the lengths and the notes until they come round together', async () => {
+    const { lengthsText } = await import('../orrery');
+    const { Bloom } = await import('../../core/Bloom');
+    const b = new Bloom([60, 62, 64, 65, 67], [100, 30, 30, 30], [1, 1, 1, 1, 1], [0]);
+    expect(lengthsText(b)).toBe('p5 t5 v4 ↻20');
+    b.intervals = [7, 0, 0];
+    expect(lengthsText(b)).toBe('p5 t5 v4 int3 ↻60');
+  });
+});

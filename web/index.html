@@ -257,7 +257,7 @@
       }
 
       /* Selected events (drag a box round nodes): keys change only these */
-      #selection-badge {
+      #selection-badge, #lengths-badge {
         display: none;
         font-size: 10px;
         letter-spacing: 0.06em;
@@ -267,7 +267,9 @@
         padding: 1px 5px;
         flex-shrink: 0;
       }
-      #selection-badge.active { display: inline-block; }
+      #selection-badge.active, #lengths-badge.active { display: inline-block; }
+      /* The lists' lengths, when they differ: each cycles at its own */
+      #lengths-badge { color: #cdf; border-color: #568; }
 
       /* The bloom's attached scale and the key it implies (the root a tuning sits on) */
       #scale-badge {
@@ -834,6 +836,7 @@
       <span id="record-dot" title="recording"></span>
       <span id="take-badge" title="a take (perform ▾): ◌ armed, ● recording, ▶ playing back"></span>
       <span id="freeze-badge" title="frozen lists — F then p t v c 5 d g toggles; e2 = two pinned events"></span>
+      <span id="lengths-badge" title="the lists' lengths, shown when they differ: each cycles at its own length in the loop and the pulsar, and ↻ is how many notes until they all come round together (Z fits them to the notes; opt-\ shows the lanes)"></span>
       <span id="voice-badge"></span>
       <span id="scale-badge"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
@@ -1051,6 +1054,18 @@
       <div id="help-full-grid">
         <div class="hf-col">
           <div class="hf-sec">
+            <div class="hf-h">Playback</div>
+            <div class="hf-body"><b>space</b>     play
+<b>shift-sp</b>  play garden slot
+<b>,</b>         loop    (<b>opt-,</b> the garden)
+<b>/</b>         pulsar  (<b>opt-/</b> the garden)
+<b>.</b>         stop all
+<b>opt-tab</b>   two voices · <b>tab</b> the focus · <b>opt-x</b> copy into the other
+<b>&lt; &gt;</b>       slower/faster pulse
+<b>`</b>         record / stop
+<b>~</b>         sustain pedal</div>
+          </div>
+          <div class="hf-sec">
             <div class="hf-h">Storage</div>
             <div class="hf-body"><b>n</b>      new bloom (same scale)
 <b>N</b>      new bloom (any of 12)
@@ -1064,6 +1079,9 @@
 <b>'</b>      vary
 <b>{ }</b>    merge / split (asks how many)</div>
           </div>
+        </div>
+
+        <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Whole notes</div>
             <div class="hf-body"><b>s</b>      scramble     <b>S</b>    in chunks (how many?)
@@ -1079,9 +1097,6 @@
 <b>a A</b>    add one (in scale / any)
 pitches alone: in pitch mode (p)</div>
           </div>
-        </div>
-
-        <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Pitch</div>
             <div class="hf-body"><b>m M</b>  mutate (diatonic / chromatic)
@@ -1091,13 +1106,15 @@ pitches alone: in pitch mode (p)</div>
 <b>l L</b>  tilt down / up
 <b>i I</b>  invert / invert mean
 <b>e E</b>  shear / gather (an octave out / in)
-<b>o O</b>  sort up / down
 <b>( )</b>  pivot (highest / loudest)
 <b>[ ]</b>  step flatward / sharpward
 <b>w W</b>  draw curves / remove doubles
 <b>; :</b>  clump / flatten chords
-<b>opt-w</b> wheels within wheels</div>
+sort: in a list mode (o O)</div>
           </div>
+        </div>
+
+        <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">Scale &amp; tuning</div>
             <div class="hf-body"><b>k K</b>  choose nearest / slant scale
@@ -1106,9 +1123,6 @@ pitches alone: in pitch mode (p)</div>
 <b>T</b>    tuning mode (the pie)
 <b>opt-t</b> hold the tuning over every bloom</div>
           </div>
-        </div>
-
-        <div class="hf-col">
           <div class="hf-sec">
             <div class="hf-h">One list at a time</div>
             <div class="hf-body"><b>p t v c 5 b</b>  pitch time velocity
@@ -1235,18 +1249,6 @@ every pitch key from home works here too:
 playback &amp; garden keys unchanged</div>
           </div>
           <div class="hf-sec">
-            <div class="hf-h">Playback</div>
-            <div class="hf-body"><b>space</b>     play
-<b>shift-sp</b>  play garden slot
-<b>,</b>         loop    (<b>opt-,</b> the garden)
-<b>/</b>         pulsar  (<b>opt-/</b> the garden)
-<b>.</b>         stop all
-<b>opt-tab</b>   two voices · <b>tab</b> the focus · <b>opt-x</b> copy into the other
-<b>&lt; &gt;</b>       slower/faster pulse
-<b>`</b>         record / stop
-<b>~</b>         sustain pedal</div>
-          </div>
-          <div class="hf-sec">
             <div class="hf-h">Garden</div>
             <div class="hf-body"><b>↓</b>         save here    <b>↑</b>    lift here
 <b>← →</b>       navigate     <b>↵</b>    new slot
@@ -1274,6 +1276,7 @@ playback &amp; garden keys unchanged</div>
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>
           </div>
         </div>
+
       </div>
     </div>
 

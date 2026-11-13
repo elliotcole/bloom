@@ -146,10 +146,6 @@ export const HOME_KEYS: HomeKey[] = [
       else c.verb(`push (${c.b.stack.length + 1} saved)`, () => c.b.push(), 'push');
     },
   },
-  {
-    code: 'KeyW', alt: true, shift: false, label: 'wheels within wheels',
-    act: c => c.verb('wheels within wheels', () => { c.b.velocities = [100, ...Array(c.b.notes.length).fill(30)]; }),   // N+1 vels for N notes → accent shifts each cycle
-  },
 
   // ─── Storage ───────────────────────────────────────────────────────────────
   {
@@ -275,8 +271,6 @@ export const HOME_KEYS: HomeKey[] = [
   v('R', 'mirror', b => b.mirror()),
   { key: 'd', label: 'patterns: the palette (braid, pyramid, … or type one)', act: c => c.pattern(false) },
   { key: 'D', label: 'the last pattern again', act: c => c.pattern(true) },
-  v('o', 'sort pitches up', b => b.sortNotes()),
-  v('O', 'sort pitches down', b => b.sortNotes(true)),
 
   // ─── Pitch ─────────────────────────────────────────────────────────────────
   v('e', 'shear: some an octave outward', b => b.shear(), 'shear'),

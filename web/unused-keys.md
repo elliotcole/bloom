@@ -11,18 +11,18 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
-- `r`  `q`  `y`  *(`q` `y` quantize and unify in the list modes; `b` `B` are figures)*
+- `r`  `q`  `y`  `o`  *(`q` `y` `o` quantize, unify and sort in the list modes; `b` `B` are figures)*
 
 ## Shift keys
 
-- `P`  `Q`  `V`  *(`T` is tuning mode; `L` is tilt up; `Z` trims, `"` repeats)*
+- `P`  `Q`  `V`  `O`  *(`T` is tuning mode; `L` is tilt up; `Z` trims, `"` repeats)*
 - `_`  `%`  *(`#` `$` are breeze; `%` was semitones ↔ scale steps, now each interval names its own kind)*
 
 ## Option (alt) keys
 
 **Letters**
 - `opt-a`  `opt-b`  `opt-d`  `opt-g`  `opt-h`  `opt-i`  `opt-j`
-- `opt-l`  `opt-m`  `opt-q`  `opt-r`  `opt-s`  `opt-u`  `opt-y`
+- `opt-l`  `opt-m`  `opt-q`  `opt-r`  `opt-s`  `opt-u`  `opt-w`  `opt-y`
 - `opt-f` at home *(in a list mode, with two voices, opt-f / opt-x take the list from the other voice)*
 
 **Numbers**
@@ -37,7 +37,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Taken option keys
 
-- `opt-e` editor · `opt-w` wheels within wheels · `opt-c` clean view · `opt-t` tuning hold · `opt-p` / `opt-P` push / pop
+- `opt-e` editor · `opt-c` clean view · `opt-t` tuning hold · `opt-p` / `opt-P` push / pop
 - `opt-n` name and colour · `opt-k` key centre · `opt-z` fit the lists to a length · `opt-x` copy into the other voice · `opt-tab` two voices
 - `opt-0` orrery · `opt-o` road · `opt-v` weave (with opt-1 … opt-9, the views)
 - `opt-↑` `opt-↓` `opt-del` garden slots

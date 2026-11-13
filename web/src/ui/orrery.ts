@@ -32,6 +32,21 @@ export function rings(b: Bloom): Ring[] {
   return out.filter(r => r.len > 0);
 }
 
+const TAG: Record<RingKey, string> = { notes: 'p', time: 't', vel: 'v', chan: 'c', iv: 'int', fig: 'fig' };
+
+/**
+ * The lists' lengths, when they differ: "p5 t4 v6 ↻60", each list cycling at
+ * its own length and ↻ the notes it takes for them all to come round together.
+ * '' when every list is in step with the notes. A list of one value is the
+ * same every time round, so it isn't named.
+ */
+export function lengthsText(b: Bloom): string {
+  const n = b.notes.length;
+  const R = rings(b).filter(r => r.key === 'notes' || r.len > 1);
+  if (!n || R.every(r => r.len === n)) return '';
+  return `${R.map(r => `${TAG[r.key]}${r.len}`).join(' ')} ↻${lcm(R.map(r => r.len))}`;
+}
+
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
 /** The least common multiple: the notes it takes for every list to come round together */

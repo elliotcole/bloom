@@ -53,6 +53,14 @@ About 30 minutes. Parts 1 and 2 matter most.
 - [ ] **Second voice.** Its view honours the axis setting and doesn't drift in orbit.
 - [ ] **Cheat sheet.** Glance at `public/cheatsheet.pdf`: Garden and View sections on page 1, the `x / f` row on page 2 were reworded to fit six missing keys.
 
+## 5. Added later on 12 Nov
+
+- [ ] **Garden undo.** `↓` over a slot you care about, then `cmd-z`: the slot is back (the status says "the garden too"). `opt-del`, `cmd-z`: the slot returns where it was. `cmd-shift-z` redoes it. Moving `←` `→` is not an undo step.
+- [ ] **Lengths badge.** `v`, then `z` to drop a velocity: the header shows something like `p5 t5 v4 ↻20`. `Z` at home fits the lists and the badge goes.
+- [ ] **esc, one rule.** With the help open in a list mode, tuning mode or the freeze menu, `esc` closes the help first and a second `esc` leaves the mode. The cue line says what `esc` will do.
+- [ ] **Help order.** `?`: Playback is now top left; check no column runs off the bottom.
+- [ ] **Sort and wheels.** `o` / `O` do nothing at home (still sort in a list mode). `cmd-k`, `wheels`: one accent, then quiet.
+
 ## Decisions I need from you
 
 1. **`.` after a take.** Panic now also cuts notes during the 10 s ring-out after a take ends, though the take file says they ring. Keep, or only on page unload?

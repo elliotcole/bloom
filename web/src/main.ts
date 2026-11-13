@@ -284,6 +284,8 @@ async function main() {
     reg('breezeup12', 'some notes up an octave',         b => b.breeze(1, 'octave'));
     reg('breezedown12', 'some notes down an octave',     b => b.breeze(-1, 'octave'));
     reg(['sortpitch', 'sortp'], 'sort pitches up',       b => b.sortNotes());
+    // N+1 velocities for N notes: one accent, then quiet, so the accent moves round each cycle
+    reg(['wheels', 'wheelswithinwheels'], 'wheels within wheels: one accent drifting round each cycle', b => { b.velocities = [100, ...Array(b.notes.length).fill(30)]; });
 
     // One list at a time: <verb><list>, e.g. scrambleP (pitches), invertT, curveV, unifyC
     const PATTERN_NAMES: PatternOp[] = ['scramble', 'shuffle', 'mirror', 'stutter', 'sputter', 'braid', 'pyramid'];

@@ -135,10 +135,11 @@ PATTERNS-GUIDE.md teaches it step by step, with exercises.
 | `3` `4` | ∓ scale step | `#` `$` | **breeze**: some notes ∓ a scale step |
 | `e` / `E` | shear (a third of the notes an octave outward, same pitch class) / gather (the opposite: some of the outer notes an octave inward, so the range narrows) |
 | `l` / `L` | tilt down / up (each press a scale step steeper) | | | `[` / `]` | step flatward / sharpward |
-| `i` / `I` | invert / around the mean | `o` / `O` | sort up / down |
+| `i` / `I` | invert / around the mean | | |
 | `(` / `)` | pivot (highest / loudest) | `w` / `W` | draw curves / remove doubles |
 | `;` / `:` | clump / flatten chords | `k K j J` | scales: choose, slant, lift, reduce |
-| opt-`w` | wheels within wheels: one accent, then quiet, in a velocity list one longer than the notes, so the accent moves round each cycle | | |
+
+Sorting is a list-mode verb (`o` / `O` in `p`, `t`, `v`, `c`): at home the keys do nothing. **Wheels within wheels** is in the command palette (cmd-K, `wheels`): one accent, then quiet, in a velocity list one longer than the notes, so the accent moves round each cycle.
 
 ## Other home keys
 

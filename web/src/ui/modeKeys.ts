@@ -166,6 +166,8 @@ export interface ListCtx {
   /** the list as text */
   text(): string;
   leave(): void;
+  /** esc means leave: not while the help or clean view have first call on it */
+  leaving(): boolean;
 }
 
 /** opt-z: the longest a list can be cut or looped to */
@@ -225,7 +227,7 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
       }, FIT_MAX, 1);
     },
   },
-  { code: 'Escape', shift: false, name: 'esc', label: 'back home', act: c => { c.leave(); c.status(`${c.name} mode off`); } },
+  { code: 'Escape', shift: false, name: 'esc', label: 'back home', act: c => { if (!c.leaving()) return false; c.leave(); c.status(`${c.name} mode off`); } },
   { code: 'Enter', name: '↵', label: 'type the list (shift: looped round to the notes)', act: c => c.type() },
   { key: 'T', label: 'tuning mode', home: true },
 
@@ -408,6 +410,8 @@ export const FREEZE_ITEMS: FreezeItem[] = [
 export interface FreezeCtx {
   status(msg: string): void;
   close(): void;
+  /** esc means close: not while the help or clean view have first call on it */
+  leaving(): boolean;
   /** unpin every event; how many there were */
   unpin(): number;
   /** switch the item's freeze (d cycles off → trim → stretch) */
@@ -415,7 +419,7 @@ export interface FreezeCtx {
 }
 
 export const FREEZE_KEYS: ModeKey<FreezeCtx>[] = [
-  { code: 'Escape', name: 'esc', label: 'close the menu', act: c => c.close() },
+  { code: 'Escape', name: 'esc', label: 'close the menu', act: c => { if (!c.leaving()) return false; c.close(); } },
   { key: 'F', label: 'close the menu', act: c => c.close() },
   {
     key: 'e', label: 'unpin the pinned events',

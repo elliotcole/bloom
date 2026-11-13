@@ -12,6 +12,8 @@ export type CueMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
 export interface CueContext {
   mode: CueMode | null;
   tuning: boolean;          // tuning mode (the pie)
+  slices?: number;          // tuning mode: slices selected
+  help?: boolean;           // the ? overlay is open
   freezeMenu: boolean;
   selection: number;        // events selected
   pins: number;             // events pinned
@@ -30,12 +32,12 @@ const MODE_CUES: Record<CueMode, string> = {
   time: '9 0 rotate · q quantize · { } merge / divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · { merge · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · n N new (in use / any) · l L tilt · { merge · esc home',
-  fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear',
-  iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale',
+  fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear · esc home',
+  iv: '↵ type them: -P5/10 (tab: vel %) · 7 & sparser / denser · - = evener / uneven · ; : thicker / thinner · q into the scale · esc home',
 };
 
 const TUNING_CUE = 'l pick a tuning · 3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
-const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F closes';
+const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F or esc closes';
 const IDLE_CUE = 'space play · n new · ? all keys';
 
 /** Lesser-known home keys, one at a time while nothing else needs saying */
@@ -58,7 +60,7 @@ const TIPS = [
   'p, then s u d: move only the pitches',
   'd patterns: braid, pyramid, or type your own (123 +1) · D the last again',
   'opt-p push a save point · opt-shift-p pop back',
-  'opt-w wheels within wheels',
+  'cmd-k wheels: one accent in a velocity list one longer than the notes, drifting round each cycle',
   'opt-n name the bloom, give it a colour',
   'drag a box: del deletes, cmd-c cmd-v copy and paste the events',
   'opt-1 … 9 change the view',
@@ -84,7 +86,7 @@ const TIP_EVERY_MS = 30_000;
 function situations(c: CueContext): string[] {
   const out: string[] = [];
   if (c.selection) out.push('esc clears · shift-esc inverts · keys act on these only');
-  if (c.pins) out.push('esc unpins · click toggles a pin');
+  if (c.pins) out.push(c.selection ? 'esc again unpins · click toggles a pin' : 'esc unpins · click toggles a pin');
   if (c.ragaMoves) out.push('* bake what you hear');
   if (c.figures) out.push('b figures mode · * bake · B clear');
   if (c.intervals) out.push(c.ragaMoves ? '8 reset intervals' : '7 & sparser / denser · * bake · 8 reset');
@@ -101,7 +103,9 @@ export const TAKE_CUE = 'playing the take · opt-0 … 9 opt-o opt-v view · opt
 
 /** What the line says now; `now` turns the tips */
 export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: boolean } {
-  if (c.tuning) return { text: TUNING_CUE, tip: false };
+  // esc undoes the outermost thing first: the help, then a mode's own hold, the mode, the selection, the pins
+  if (c.help) return { text: 'esc or ? closes the help', tip: false };
+  if (c.tuning) return { text: c.slices ? TUNING_CUE.replace('esc home', 'esc lets go of the slices (again: home)') : TUNING_CUE, tip: false };
   if (c.freezeMenu) return { text: FREEZE_CUE, tip: false };
   if (c.mode) return { text: MODE_CUES[c.mode], tip: false };
   const s = situations(c);

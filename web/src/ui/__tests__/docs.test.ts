@@ -25,8 +25,8 @@ const SHIFTED = new Set(HOME_KEYS.filter(k => k.code !== undefined && k.shift ==
   return letter ? [`opt-${letter[1].toUpperCase()}`, `opt-shift-${letter[1]}`] : [`shift-${n}`];
 }));
 const atHome = (n: string) => HOME_NAMES.has(n) || SHIFTED.has(n);
-/** Bound in keys.ts ahead of the tables */
-const CMD_KEYS = ['cmd-z', 'cmd-c', 'cmd-v'];
+/** Bound in keys.ts and main.ts ahead of the tables */
+const CMD_KEYS = ['cmd-z', 'cmd-c', 'cmd-v', 'cmd-k', 'cmd-s', 'cmd-o'];
 /** The keys that pass home from every mode, by name */
 const PASS_NAMES = [...PASS_KEYS.map(k => (k === ' ' ? 'space' : k)), '↑', '↓', '←', '→', '↵', 'del', 'tab', 'shift-space', 'shift-↑', 'shift-↓'];
 
@@ -193,5 +193,26 @@ describe('unused-keys.md', () => {
     const names = ticked(taken).filter(k => k.startsWith('opt-'));
     expect(names.length).toBeGreaterThan(10);
     expect(names.filter(n => !atHome(n))).toEqual([]);
+  });
+});
+
+describe('esc on the cue line', () => {
+  it.each(LIST_MODES)('%s mode says esc goes home', (m: ListMode) => {
+    expect(cueFor(ctx({ mode: m })).text).toContain('esc home');
+  });
+  it('the help first, wherever you are', () => {
+    expect(cueFor(ctx({ help: true, mode: 'time', selection: 3 })).text).toBe('esc or ? closes the help');
+  });
+  it('tuning mode: the slices first, then home', () => {
+    expect(cueFor(ctx({ tuning: true })).text).toContain('esc home');
+    expect(cueFor(ctx({ tuning: true, slices: 2 })).text).toContain('esc lets go of the slices (again: home)');
+  });
+  it('the selection first, then the pins', () => {
+    const text = cueFor(ctx({ selection: 2, pins: 1 })).text;
+    expect(text).toContain('esc clears');
+    expect(text).toContain('esc again unpins');
+  });
+  it('the freeze menu', () => {
+    expect(cueFor(ctx({ freezeMenu: true })).text).toContain('F or esc closes');
   });
 });
