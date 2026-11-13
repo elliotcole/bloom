@@ -89,6 +89,8 @@ export interface HomeKey {
   shift?: boolean;
   /** sees the whole bloom even with a selection or pins: playing, viewing, the garden, modes */
   whole?: boolean;
+  /** changes only what's shown, so it stays free while a take plays back */
+  view?: true;
   /** what the docs call it, when the key and modifiers don't say it (see keyName) */
   name?: string;
   label: string;
@@ -112,20 +114,20 @@ const slot = (key: string, label: string, fn: (b: Bloom, src: Bloom) => void, sa
 export const HOME_KEYS: HomeKey[] = [
   // ─── View and modes (opt) ──────────────────────────────────────────────────
   {
-    code: Array.from({ length: 9 }, (_, i) => `Digit${i + 1}`), alt: true, shift: false, whole: true, name: 'opt-1 … 9',
+    code: Array.from({ length: 9 }, (_, i) => `Digit${i + 1}`), alt: true, shift: false, whole: true, view: true, name: 'opt-1 … 9',
     label: 'change the view',
     act: c => { const mode = VIZ_ORDER[parseInt(c.e.code.slice(5), 10) - 1]; c.state.setVizModeFn?.(mode); c.status(`view: ${mode}`); },
   },
   {
-    code: 'Digit0', alt: true, shift: false, whole: true, name: 'opt-0', label: 'the orrery: each list a ring turning at its own length',
+    code: 'Digit0', alt: true, shift: false, whole: true, view: true, name: 'opt-0', label: 'the orrery: each list a ring turning at its own length',
     act: c => { c.state.setVizModeFn?.('orrery'); c.status('view: orrery'); },
   },
   {
-    code: 'KeyO', alt: true, shift: false, whole: true, name: 'opt-o', label: 'the road: the notes come at you as tiles, what plays next laid out ahead',
+    code: 'KeyO', alt: true, shift: false, whole: true, view: true, name: 'opt-o', label: 'the road: the notes come at you as tiles, what plays next laid out ahead',
     act: c => { c.state.setVizModeFn?.('road'); c.status('view: road'); },
   },
   {
-    code: 'KeyV', alt: true, whole: true, name: 'opt-v', label: 'the weave: the performance as cloth, a row per note, a thread per list (shift: save the cloth as an image)',
+    code: 'KeyV', alt: true, whole: true, view: true, name: 'opt-v', label: 'the weave: the performance as cloth, a row per note, a thread per list (shift: save the cloth as an image)',
     act: c => {
       if (c.shift) c.status(c.state.viz?.saveWeave() ? 'saved the weave' : 'nothing to weave');
       else { c.state.setVizModeFn?.('weave'); c.status('view: weave'); }
@@ -135,7 +137,7 @@ export const HOME_KEYS: HomeKey[] = [
   { code: 'Tab', alt: true, shift: false, whole: true, name: 'opt-tab', label: 'two voices: bring in a second bloom (a copy, to start) / back to one', act: c => c.voices.toggle() },
   { code: 'Tab', alt: false, shift: false, whole: true, name: 'tab', label: 'two voices: the focus to the other voice', act: c => c.voices.flip() },
   { code: 'KeyX', alt: true, shift: false, whole: true, name: 'opt-x', label: 'two voices: copy the focused voice into the other (in step, if both loop)', act: c => c.voices.duplicate() },
-  { code: 'KeyC', alt: true, shift: false, whole: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
+  { code: 'KeyC', alt: true, shift: false, whole: true, view: true, label: 'clean view', act: c => c.setClean(!document.body.classList.contains('clean')) },
   { code: 'KeyE', alt: true, whole: true, label: 'edit the bloom', act: c => c.state.editorOpenFn?.() },
   {
     code: 'KeyP', alt: true, whole: true, name: 'opt-p', label: 'push a save point (shift: pop)',
@@ -502,7 +504,7 @@ export const HOME_KEYS: HomeKey[] = [
 
   // ─── View ──────────────────────────────────────────────────────────────────
   {
-    code: 'Backslash', shift: true, whole: true, name: '|', label: 'note labels',
+    code: 'Backslash', shift: true, whole: true, view: true, name: '|', label: 'note labels',
     act: c => {
       const next = c.state.viz?.toggleNoteLabels() ?? false;
       const cb = document.getElementById('show-note-labels') as HTMLInputElement | null;
@@ -511,18 +513,18 @@ export const HOME_KEYS: HomeKey[] = [
     },
   },
   {
-    code: 'Backslash', alt: true, shift: false, whole: true, label: 'lanes',
+    code: 'Backslash', alt: true, shift: false, whole: true, view: true, label: 'lanes',
     act: c => {
       const on = c.state.viz?.toggleLanes() ?? false;
       try { localStorage.setItem('bloom.lanes', on ? '1' : '0'); } catch { /* private window */ }
       c.status(on ? 'lanes on' : 'lanes off');
     },
   },
-  { code: 'Backslash', shift: false, whole: true, label: 'console', act: c => c.state.consoleToggleFn?.() },
-  { key: '?', whole: true, label: 'all the keys', act: c => c.state.fullHelpToggleFn?.() },
+  { code: 'Backslash', shift: false, whole: true, view: true, label: 'console', act: c => c.state.consoleToggleFn?.() },
+  { key: '?', whole: true, view: true, label: 'all the keys', act: c => c.state.fullHelpToggleFn?.() },
   {
     // esc: clean view off; else clear what's marked (shift: invert it), the selection if there is one, otherwise the pins (the help, when open, closes first); else close the help, clear and show the console
-    code: 'Escape', whole: true, name: 'esc', label: 'leave: clean view, the selection or pins, the help',
+    code: 'Escape', whole: true, view: true, name: 'esc', label: 'leave: clean view, the selection or pins, the help',
     act: c => {
       if (document.body.classList.contains('clean')) { c.setClean(false); return; }
       const helpOpen = document.getElementById('help-full')?.style.display === 'block';
@@ -607,4 +609,43 @@ export function keyNames(k: HomeKey): string[] {
     : asList(k.key);
   const mod = `${k.alt ? 'opt-' : ''}${k.shift && k.code !== undefined ? 'shift-' : ''}`;
   return base.map(b => `${mod}${b}`);
+}
+
+/** A key that's free while a take plays back: it changes the view, not the music (esc leaves; shift-esc inverts the selection, so it waits) */
+export function isViewKey(e: KeyboardEvent): boolean {
+  return !!findHome(e)?.view && !(e.code === 'Escape' && e.shiftKey);
+}
+
+/** The view keys by name, for saying which they are */
+export function viewKeyNames(): string[] {
+  return HOME_KEYS.filter(k => k.view).flatMap(keyNames);
+}
+
+/** The punctuation keys of a US keyboard by place: what each types, plain and with shift */
+export const PUNCT: Record<string, [string, string]> = {
+  Backquote: ['`', '~'], Minus: ['-', '_'], Equal: ['=', '+'], BracketLeft: ['[', '{'], BracketRight: [']', '}'],
+  Backslash: ['\\', '|'], Semicolon: [';', ':'], Quote: ["'", '"'], Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'],
+};
+
+/** A modifier pressed on its own: only the start of a chord, never a key */
+export function isModifierKey(e: KeyboardEvent): boolean {
+  return ['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key);
+}
+
+/**
+ * What was pressed, as the docs would write it: 's', 'S', 'opt-↓',
+ * 'shift-space', 'opt-|'. With opt the name comes from the key's place
+ * (opt-t types † on a Mac), otherwise from the character.
+ */
+export function pressName(e: KeyboardEvent, ch = keyChar(e)): string {
+  const opt = e.altKey ? 'opt-' : '';
+  const punct = PUNCT[e.code];
+  if (punct) return e.altKey ? `opt-${punct[e.shiftKey ? 1 : 0]}` : ch;
+  // keys that type nothing: shift is said
+  const glyph = GLYPH[e.code] ?? (e.code === 'Tab' ? 'tab' : undefined);
+  if (glyph) return `${opt}${e.shiftKey ? 'shift-' : ''}${glyph}`;
+  if (!e.altKey) return ch;
+  if (e.code.startsWith('Key')) return `opt-${e.shiftKey ? e.code.slice(3) : e.code.slice(3).toLowerCase()}`;
+  if (e.code.startsWith('Digit')) return `opt-${e.shiftKey ? 'shift-' : ''}${e.code.slice(5)}`;
+  return `opt-${e.shiftKey ? 'shift-' : ''}${ch}`;
 }

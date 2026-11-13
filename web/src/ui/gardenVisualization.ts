@@ -15,6 +15,7 @@ import { drawRoadAt, roadAhead } from './road';
 import { drawWeaveAt, weaveRows, weavePeriod, fitWeave } from './weave';
 import type { VizMode, ThemeId, Theme } from './visualization';
 import { worldColor, worldHues, worldOf } from './worlds';
+import { needsFrame } from './redraw';
 
 const SLIDE_DURATION = 150; // ms
 const ANIM_DURATION = 180;  // ms — save/restore overlay
@@ -43,6 +44,10 @@ export class GardenVisualization {
   private slideAnimStart = 0;
 
   private animationId: number | null = null;
+  // Drawn only when needed (redraw.ts): something changed, the slots are sliding, the playing mark is pulsing, or it's been a while
+  private _dirty = true;
+  private _shown = false;
+  private _lastDrawAt = 0;
 
   constructor(gardenArea: HTMLElement, vizArea: HTMLElement) {
     this.gardenArea = gardenArea;
@@ -66,6 +71,7 @@ export class GardenVisualization {
     gardenArea.appendChild(this.slider);
     this.slider.addEventListener('input', () => {
       this.visibleCount = parseInt(this.slider.value, 10);
+      this._dirty = true;
     });
 
     // ── Anim canvas (overlay for save/restore) — child of #canvas-area ────
@@ -86,15 +92,17 @@ export class GardenVisualization {
     this.garden = garden;
     const hasContent = garden.slots.length > 1 || garden.slots[0] !== null;
     this.gardenArea.style.display = hasContent ? 'block' : 'none';
+    this._shown = hasContent;
+    this._dirty = true;
   }
 
-  setMode(mode: VizMode): void { this._mode = mode; }
+  setMode(mode: VizMode): void { this._mode = mode; this._dirty = true; }
 
   /** The slot the bloom on screen came from, and whether it's still that slot (see onScreen.ts) */
-  setOnScreen(o: OnScreen): void { this._onScreen = o; }
+  setOnScreen(o: OnScreen): void { this._onScreen = o; this._dirty = true; }
   private _onScreen: OnScreen = { slot: null, same: false };
 
-  setTheme(id: ThemeId): void { this._theme = THEMES[id] ?? THEMES.dark; }
+  setTheme(id: ThemeId): void { this._theme = THEMES[id] ?? THEMES.dark; this._dirty = true; }
 
   animateSlide(direction: 'left' | 'right'): void {
     const sw = this.canvas.clientWidth / this.visibleCount;
@@ -122,6 +130,7 @@ export class GardenVisualization {
     const rect = this.gardenArea.getBoundingClientRect();
     this.canvas.width = (rect.width || 1) * dpr;
     this.canvas.height = (rect.height || 1) * dpr;
+    this._dirty = true;   // sizing a canvas clears it
   }
 
   private _startLoop(): void {
@@ -140,7 +149,13 @@ export class GardenVisualization {
       const sign = this.slideOffset > 0 ? 1 : -1;
       this.slideOffset = sign * this.slideSlotWidth * (1 - eased);
       if (t >= 1) this.slideOffset = 0;
+      this._dirty = true;
     }
+    // the mark on the slot that's on screen pulses while it plays
+    const pulsing = this._onScreen.slot !== null && (isLooping() || isPulsing());
+    if (!needsFrame({ visible: this._shown, dirty: this._dirty, animating: pulsing, now, lastDrawAt: this._lastDrawAt })) return;
+    this._dirty = false;
+    this._lastDrawAt = now;
     this._draw();
   }
 

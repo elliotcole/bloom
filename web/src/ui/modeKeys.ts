@@ -73,6 +73,12 @@ export function findModeKey<C>(table: ModeKey<C>[], e: KeyboardEvent, ch = keyCh
   });
 }
 
+/** The names the docs give a mode key's variants (`name` wins when set) */
+export function modeKeyNames<C>(k: ModeKey<C>): string[] {
+  if (k.name) return [k.name];
+  return k.code !== undefined ? asList(k.code) : asList(k.key);
+}
+
 /** The keys that mean in every mode what they mean at home: playing, the garden, the display toggles, help, the other voice */
 export const PASS_KEYS = [' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'];
 export const PASS_CODES = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Tab'];

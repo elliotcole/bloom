@@ -21,7 +21,7 @@ import type { TyperField } from './listTyper';
 import { formatNoteVal, parseFloatList, parseIntList, parseNoteList } from './bloomEditor';
 import { playOnce, isLooping, updateLooper, isPulsing, updatePulsar, isGardenLooping, isGardenPulsing, beatsToMs, parkLooper, unparkLooper, setParkedBloom, isParkedLooping, stopParked, startParkedInStep, nextMeeting, } from '../audio/scheduler';
 import type { VizMode } from './theme';
-import { findHome, keyChar } from './homeKeys';
+import { findHome, isModifierKey, keyChar } from './homeKeys';
 import type { HomeCtx } from './homeKeys';
 import { autosaveGarden } from '../io/garden-io';
 import { onScreenSlot } from './onScreen';
@@ -927,7 +927,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   function onKey(e: KeyboardEvent): void {
     if ((!_selection.length && !_pinned.size) || !worksOnSelection(e) || _previewResetId !== null
-      || ['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) { handleKey(e); return; }
+      || isModifierKey(e)) { handleKey(e); return; }
     const n = state.bloom.notes.length;
     const scope = _selection.length ? _selection : Array.from({ length: n }, (_, i) => i);
     const work = scope.filter(i => !_pinned.has(i));
@@ -965,20 +965,21 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (e.ctrlKey || e.metaKey) return;
     _notice?.begin();
     // A modifier pressed on its own is only the start of a chord (shift for F)
-    if (['Shift', 'Alt', 'Meta', 'Control', 'CapsLock'].includes(e.key)) return;
+    if (isModifierKey(e)) return;
 
     const ch = keyChar(e);
     const alt = e.altKey;
 
     // ─── Freeze menu: F, then the key for what to freeze ──────────────────────
-    if (_freezeMenu && onFreezeKey(e)) return;
+    // a key a mode takes is the mode's alone: the page doesn't scroll or find on it
+    if (_freezeMenu && onFreezeKey(e)) { e.preventDefault(); return; }
     if (ch === 'F' && !alt && !_freezeMenu) {
       setFreezeMenu(true);
       return;
     }
 
     // ─── Tuning mode: the tuning view is open ──────────────────────────────────
-    if (state.tuningView?.isOpen() && onTuningKey(e)) return;
+    if (state.tuningView?.isOpen() && onTuningKey(e)) { e.preventDefault(); return; }
 
     // ─── List mode toggle + dispatch ──────────────────────────────────────────
     if (!alt && own(MODE_KEYS, ch)) {
@@ -991,7 +992,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       }
       return;
     }
-    if (_mode && onListKey(e, _mode)) return;
+    if (_mode && onListKey(e, _mode)) { e.preventDefault(); return; }
 
     // ─── Home: the table in homeKeys.ts ──────────────────────────────────────
     const home = findHome(e, ch);

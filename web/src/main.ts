@@ -37,6 +37,7 @@ import { Display } from './ui/display';
 import type { KeyHandlerState } from './ui/keys';
 import { createKeyHandler } from './ui/keys';
 import { cueFor, TAKE_CUE } from './ui/cues';
+import { isModifierKey, isViewKey, pressName, viewKeyNames } from './ui/homeKeys';
 import { setNoticeKey } from './ui/notice';
 import { BloomEditor } from './ui/bloomEditor';
 import { CommandPalette } from './ui/commandPalette';
@@ -735,11 +736,6 @@ async function main() {
   if (tuningLibrary().length > 1 || bloom.tuning) void connectHelper();
   syncTuning();   // a restored bloom's tuning
 
-  /** What a take playing back leaves free: the view, clean view, the display toggles, help, esc */
-  const viewKey = (e: KeyboardEvent) =>
-    (e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(e.code)) || (e.altKey && !e.shiftKey && (e.code === 'KeyC' || e.code === 'KeyO' || e.code === 'KeyV'))
-    || e.code === 'Backslash' || e.key === '?' || (e.code === 'Escape' && !e.shiftKey);
-
   window.addEventListener('keydown', (e) => {
     // an overlay has the keyboard (palette, editor, picker, the typing line)
     if (Overlay.anyOpen()) return;
@@ -758,14 +754,14 @@ async function main() {
         seek(takeElapsed() + (e.code === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 60_000 : 10_000));
         return;
       }
-      if (!viewKey(e)) {
-        if (!e.metaKey && !e.ctrlKey && !['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) display.setStatus('playing the take: view keys only (opt-0 … 9, opt-o, opt-v, opt-c, \\ | opt-\\, ?, esc); ← → skip 10 s (shift: a minute); . stops it');
+      if (!isViewKey(e)) {
+        if (!e.metaKey && !e.ctrlKey && !isModifierKey(e)) display.setStatus(`playing the take: view keys only (${viewKeyNames().join(', ')}); ← → skip 10 s (shift: a minute); . stops it`);
         return;
       }
     }
     keyState.out = midiState.selectedOutput;
     // demo mode: the notice also shows the key, large, for recordings
-    setNoticeKey(_demoMode ? formatDemoKey(e) : '');
+    setNoticeKey(_demoMode && !isModifierKey(e) ? pressName(e) : '');
     onKey(e);
   });
 
@@ -826,7 +822,7 @@ async function main() {
   document.addEventListener('keydown', e => {
     const t = e.target as HTMLElement | null;
     if (!openMenuName() || (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))) return;
-    if (e.metaKey || e.ctrlKey || ['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) return;
+    if (e.metaKey || e.ctrlKey || isModifierKey(e)) return;
     openMenu(null);
   }, true);
 
@@ -994,26 +990,6 @@ async function main() {
   // ─── Demo mode ────────────────────────────────────────────────────────────────
   // Shows each key, large, in the notice above what it did (see ui/notice.ts)
   let _demoMode = false;
-
-  function formatDemoKey(e: KeyboardEvent): string {
-    const alt = e.altKey;
-    const shift = e.shiftKey;
-    if (e.code === 'Space')    return shift ? 'shift-space' : 'space';
-    if (e.code === 'ArrowUp')  return '↑';
-    if (e.code === 'ArrowDown')  return shift ? 'shift-↓' : '↓';
-    if (e.code === 'ArrowLeft')  return shift ? 'shift-←' : '←';
-    if (e.code === 'ArrowRight') return shift ? 'shift-→' : '→';
-    if (e.code === 'Enter')    return '↵';
-    if (e.code === 'Backspace' || e.code === 'Delete') return 'del';
-    if (e.code === 'Escape')   return 'esc';
-    if (e.code === 'KeyT' && alt)       return 'opt-t';
-    if (e.code === 'KeyW' && alt)       return 'opt-w';
-    if (e.code === 'KeyE' && alt)       return 'opt-e';
-    if (e.code === 'Comma' && alt)      return 'opt-,';
-    if (e.code === 'Slash' && alt)      return 'opt-/';
-    if (e.code === 'Backslash' && alt && shift) return 'opt-|';
-    return e.key;
-  }
 
   const demoModeCb = document.getElementById('demo-mode') as HTMLInputElement;
   demoModeCb?.addEventListener('change', () => {

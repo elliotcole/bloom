@@ -595,3 +595,61 @@ describe('holds: the freezes and the fixed duration and grid', () => {
     expect(c.holds()).toEqual(new Bloom().holds());
   });
 });
+
+describe('lists in step with the notes follow them when the notes grow or are cut', () => {
+  const stepped = () => {
+    const b = new Bloom([60, 62, 64, 65], [100, 90, 80, 70], [1, 1, 1, 1], [0, 1, 2, 3]);
+    b.intervals = [7, 0, [3, 7], 0];
+    b.figures = [[0, 1, 2], 0, 0, [0, -1]];
+    return b;
+  };
+
+  it('addOne: intervals and figures get one of their own values', () => {
+    const b = stepped();
+    const ivs = b.intervals.map(x => JSON.stringify(x)), figs = b.figures.map(x => JSON.stringify(x));
+    b.addOne(67);
+    expect(b.notes.length).toBe(5);
+    expect(b.intervals.length).toBe(5);
+    expect(b.figures.length).toBe(5);
+    expect(ivs).toContain(JSON.stringify(b.intervals[4]));
+    expect(figs).toContain(JSON.stringify(b.figures[4]));
+  });
+
+  it('addOne: phasing intervals and figures, and an untouched [0], stay as they are', () => {
+    const b = stepped();
+    b.intervals = [7, 0, 0];
+    b.figures = [0];
+    b.addOne(67);
+    expect(b.intervals).toEqual([7, 0, 0]);
+    expect(b.figures).toEqual([0]);
+  });
+
+  it('trimToDur cuts them with the notes', () => {
+    const b = stepped();
+    b.trimToDur(2);
+    expect(b.notes).toEqual([60, 62]);
+    expect(b.velocities).toEqual([100, 90]);
+    expect(b.chans).toEqual([0, 1]);
+    expect(b.intervals).toEqual([7, 0]);
+    expect(b.figures).toEqual([[0, 1, 2], 0]);
+  });
+
+  it('trimToDur with one list phasing: the lists in step are still cut, the phasing one left', () => {
+    const b = stepped();
+    b.chans = [0, 1, 2];
+    b.trimToDur(2);
+    expect(b.notes).toEqual([60, 62]);
+    expect(b.velocities).toEqual([100, 90]);
+    expect(b.chans).toEqual([0, 1, 2]);
+    expect(b.intervals).toEqual([7, 0]);
+    expect(b.figures).toEqual([[0, 1, 2], 0]);
+  });
+
+  it('trimToDur padding a short pass cuts nothing', () => {
+    const b = stepped();
+    b.trimToDur(6);
+    expect(b.notes.length).toBe(4);
+    expect(b.intervals.length).toBe(4);
+    expect(b.timeIntervals).toEqual([1, 1, 1, 3]);
+  });
+});

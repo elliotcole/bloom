@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { HOME_KEYS, keyNames, matches } from '../homeKeys';
+import { HOME_KEYS, isModifierKey, isViewKey, keyNames, matches, pressName, viewKeyNames } from '../homeKeys';
 import type { HomeKey } from '../homeKeys';
 
 const here = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
@@ -58,5 +58,59 @@ describe('home keys', () => {
       return !bodies.some(b => b === n || b.split(/[\s/]+/).includes(bare) || b.includes(n.replace('-', ' ')));
     });
     expect(missing).toEqual([]);
+  });
+});
+
+const press = (code: string, key: string, mods: { alt?: boolean; shift?: boolean } = {}) =>
+  ({ code, key, altKey: !!mods.alt, shiftKey: !!mods.shift, getModifierState: () => false }) as unknown as KeyboardEvent;
+
+describe('view keys (free while a take plays back)', () => {
+  it('the views, clean view, the display toggles, help and esc', () => {
+    for (const e of [
+      press('Digit0', 'º', { alt: true }), press('Digit4', '¢', { alt: true }), press('KeyO', 'ø', { alt: true }),
+      press('KeyV', '√', { alt: true }), press('KeyC', 'ç', { alt: true }),
+      press('Backslash', '\\'), press('Backslash', '|', { shift: true }), press('Backslash', '«', { alt: true }),
+      press('Slash', '?', { shift: true }), press('Escape', 'Escape'),
+    ]) expect(isViewKey(e), pressName(e)).toBe(true);
+  });
+
+  it('nothing that changes the music or the selection', () => {
+    for (const e of [
+      press('KeyS', 's'), press('Space', ' '), press('ArrowUp', 'ArrowUp'), press('KeyE', '´', { alt: true }),
+      press('Escape', 'Escape', { shift: true }), press('KeyP', 'p'), press('KeyQ', 'œ', { alt: true }),
+    ]) expect(isViewKey(e), pressName(e)).toBe(false);
+  });
+
+  it('are named for the status line', () => {
+    expect(viewKeyNames()).toEqual(['opt-1 … 9', 'opt-0', 'opt-o', 'opt-v', 'opt-c', '|', 'opt-\\', '\\', '?', 'esc']);
+  });
+});
+
+describe('pressName (demo mode)', () => {
+  it.each([
+    [press('KeyS', 's'), 's'],
+    [press('KeyS', 'S', { shift: true }), 'S'],
+    [press('Space', ' '), 'space'],
+    [press('Space', ' ', { shift: true }), 'shift-space'],
+    [press('ArrowDown', 'ArrowDown', { alt: true }), 'opt-↓'],
+    [press('ArrowUp', 'ArrowUp', { shift: true }), 'shift-↑'],
+    [press('Enter', 'Enter'), '↵'],
+    [press('Backspace', 'Backspace'), 'del'],
+    [press('Escape', 'Escape'), 'esc'],
+    [press('Tab', 'Tab', { alt: true }), 'opt-tab'],
+    [press('KeyT', '†', { alt: true }), 'opt-t'],
+    [press('KeyV', '◊', { alt: true, shift: true }), 'opt-V'],
+    [press('Digit3', '£', { alt: true }), 'opt-3'],
+    [press('Comma', '≤', { alt: true }), 'opt-,'],
+    [press('Comma', '<', { shift: true }), '<'],
+    [press('Slash', '?', { shift: true }), '?'],
+    [press('Backslash', '»', { alt: true, shift: true }), 'opt-|'],
+    [press('Backslash', '«', { alt: true }), 'opt-\\'],
+  ])('%#', (e, name) => expect(pressName(e)).toBe(name));
+
+  it('a modifier alone is no key', () => {
+    expect(isModifierKey(press('ShiftLeft', 'Shift'))).toBe(true);
+    expect(isModifierKey(press('CapsLock', 'CapsLock'))).toBe(true);
+    expect(isModifierKey(press('KeyS', 's'))).toBe(false);
   });
 });

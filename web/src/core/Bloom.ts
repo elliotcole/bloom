@@ -653,6 +653,10 @@ export class Bloom {
     grow(this.velocities, v);
     grow(this.timeIntervals, t);
     grow(this.chans);
+    // intervals and figures in step with the notes follow them too, as in insertEvents
+    const growOwn = <T>(arr: T[]) => { if (arr.length === n && n > 0) arr.push(JSON.parse(JSON.stringify(arr[Math.floor(Math.random() * n)])) as T); };
+    if (this.hasIntervals()) growOwn(this.intervals);
+    if (this.hasFigures()) growOwn(this.figures);
     return this;
   }
 
@@ -677,10 +681,22 @@ export class Bloom {
     return this;
   }
 
+  /**
+   * Cut (or pad) one pass of the notes to `dur` beats. A list in step with the
+   * notes is cut with them (as removeAt does); a list of another length is
+   * phasing on purpose and carries on cycling as it was.
+   */
   trimToDur(dur = 4): this {
     if (!Number.isFinite(dur) || dur <= 0) return this;   // an emptied number field: nothing to fit to
-    // Lists of other lengths (phasing): trim the notes so one pass fits, and
-    // leave the velocities and channels cycling as they were.
+    const was = this.notes.length;
+    const cutWithNotes = (n: number) => {
+      const cut = <T>(arr: T[]): T[] => (arr.length === was && n < was ? arr.slice(0, n) : arr);
+      this.velocities = cut(this.velocities);
+      this.chans = cut(this.chans);
+      this.intervals = cut(this.intervals);
+      this.figures = cut(this.figures);
+    };
+    // Lists of other lengths (phasing): trim the notes so one pass fits
     if (this.timeIntervals.length !== this.notes.length
       || this.velocities.length !== this.notes.length || this.chans.length !== this.notes.length) {
       const n0 = this.notes.length;
@@ -698,6 +714,7 @@ export class Bloom {
       this.notes = this.notes.slice(0, n);
       // the time list now lines up with the notes, since its last value is this pass's own
       this.timeIntervals = times;
+      cutWithNotes(n);
       return this;
     }
     const total = this.timeIntervals.reduce((a, b) => a + b, 0);
@@ -712,8 +729,7 @@ export class Bloom {
       const excess = this.timeIntervals.reduce((a, b) => a + b, 0) - dur;
       this.timeIntervals[n - 1] -= excess;
       this.notes = this.notes.slice(0, n);
-      this.velocities = this.velocities.slice(0, n);
-      this.chans = this.chans.slice(0, n);
+      cutWithNotes(n);
     } else {
       this.timeIntervals[this.timeIntervals.length - 1] += dur - total;
     }
