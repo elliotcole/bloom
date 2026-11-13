@@ -1,5 +1,6 @@
 // Core Bloom class — ported from Bloom.sc
 
+import { cellTimes, pulseOf, snapToPalette } from '../lib/rhythms';
 import type { NoteVal, NoteArray } from '../lib/arrays';
 import { keyRootOf } from '../lib/tuning';
 import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
@@ -2052,6 +2053,39 @@ export class Bloom {
       this.setList(k, Array.from({ length: n }, (_, i) => JSON.parse(JSON.stringify(arr[i % arr.length]))));
     }
     return { cut, looped };
+  }
+
+  /**
+   * opt-shift-z, come round in `n`: every list but the notes (and not a list
+   * of one value) is cut or looped to the length nearest its own that divides
+   * `n`, so they are all back at their start on note `n`. Returns the notes it
+   * now takes for everything, the notes included, to come round together.
+   */
+  roundIn(n: number): number {
+    const divisors = Array.from({ length: n }, (_, i) => i + 1).filter(d => n % d === 0);
+    const keys: ListKey[] = ['time', 'vel', 'chan', 'iv', 'fig'];
+    for (const k of keys) {
+      const len = this.getList(k).length;
+      if (len <= 1 || (k === 'iv' && !this.hasIntervals()) || (k === 'fig' && !this.hasFigures())) continue;
+      const to = divisors.reduce((a, d) => (Math.abs(d - len) < Math.abs(a - len) ? d : a));   // a tie goes to the shorter
+      this.fitListsTo(to, [k]);
+    }
+    const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+    return keys.map(k => this.getList(k).length).filter(l => l > 1).reduce((acc, l) => (acc * l) / gcd(acc, l), Math.max(1, this.notes.length));
+  }
+
+  /** Time mode k: every time to the nearest duration of a palette (ratios of the pulse, the commonest duration). Returns the pulse */
+  snapTimes(ratios: number[]): number {
+    const pulse = pulseOf(this.timeIntervals);
+    this.timeIntervals = snapToPalette(this.timeIntervals, ratios, pulse).map(t => Math.max(MIN_TIME, t));
+    return pulse;
+  }
+
+  /** Time mode k: the time list becomes a rhythm cell on the pulse, at the cell's own length. Returns the pulse */
+  setRhythm(cell: number[]): number {
+    const pulse = pulseOf(this.timeIntervals);
+    if (cell.length) this.timeIntervals = cellTimes(cell, pulse).map(t => Math.max(MIN_TIME, t));
+    return pulse;
   }
 
   /** Each list's length, the notes included (what a soft swap compares) */

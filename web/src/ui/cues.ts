@@ -15,6 +15,7 @@ export interface CueContext {
   slices?: number;          // tuning mode: slices selected
   help?: boolean;           // the ? overlay is open
   freezeMenu: boolean;
+  select?: boolean;         // select mode (r)
   selection: number;        // events selected
   pins: number;             // events pinned
   ragaMoves: boolean;       // a raga sounds some notes other than written
@@ -29,7 +30,7 @@ export interface CueContext {
 
 const MODE_CUES: Record<CueMode, string> = {
   pitch: '9 0 rotate · q snap to the scale · ( ) pivot · { merge · esc home',
-  time: '9 0 rotate · q quantize · { } merge / divide · ! @ double / half time · esc home',
+  time: '9 0 rotate · k K a duration palette or a rhythm cell · q quantize · { } merge / divide · ! @ double / half time · esc home',
   vel: '9 0 rotate · y unify · q fewer levels · l L tilt · { merge · esc home',
   chan: '9 0 rotate · y unify · q fewer channels · n N new (in use / any) · l L tilt · { merge · esc home',
   fig: '↵ type them (tab: divide insert superimpose · vel %) · n N new · ; : longer / shorter · a z add / drop · B clear · esc home',
@@ -38,6 +39,7 @@ const MODE_CUES: Record<CueMode, string> = {
 
 const TUNING_CUE = 'l pick a tuning · 3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
 const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F or esc closes';
+const SELECT_CUE = '= - more / fewer · 9 0 rotate · l L loud / soft · h H high / low · d D long / short · e every Nth · i invert · x to pins · p t v c act on these · esc home';
 const IDLE_CUE = 'space play · n new · ? all keys';
 
 /** Lesser-known home keys, one at a time while nothing else needs saying */
@@ -68,6 +70,10 @@ const TIPS = [
   'opt-o the road: the notes come at you as tiles, what plays next laid out ahead',
   'opt-v the weave: the performance as cloth, a row per note, a thread per list (shift saves it as an image)',
   'F freeze lists while you keep playing',
+  't k: a duration palette (ternary, aksak, fibonacci) or a rhythm cell (type 5/8, or 3 3 2)',
+  'opt-Z: every list comes round on note N (asks which)',
+  'r select mode: = a few at random, then p and 3: only those move',
+  'r l: the loudest notes selected (again: the next loudest too) · x pins them',
   'T tuning mode · opt-t hold the tuning',
   '5 ↵ add a chord every few notes: -P5/10',
   'b ↵ figures: 0 (1 2 3) 0 — a note plays do re mi in its time',
@@ -77,7 +83,7 @@ const TIPS = [
   'p t v c list modes: one key, one verb in each',
   '↓ save into the garden · ↑ lift a slot back',
   'shift-↑ while looping: a soft swap, the lists of the same length carry on',
-  'opt-↑: only the slot\'s notes come in; the other lists play on where they are',
+  'opt-↑: only the slot\'s notes come in; the other lists play on where they are (in a list mode: that list alone)',
   'opt-tab two voices: a second bloom looping beside the first, tab moves the focus',
 ];
 const TIP_EVERY_MS = 30_000;
@@ -107,6 +113,7 @@ export function cueFor(c: CueContext, now = Date.now()): { text: string; tip: bo
   if (c.help) return { text: 'esc or ? closes the help', tip: false };
   if (c.tuning) return { text: c.slices ? TUNING_CUE.replace('esc home', 'esc lets go of the slices (again: home)') : TUNING_CUE, tip: false };
   if (c.freezeMenu) return { text: FREEZE_CUE, tip: false };
+  if (c.select) return { text: SELECT_CUE, tip: false };
   if (c.mode) return { text: MODE_CUES[c.mode], tip: false };
   const s = situations(c);
   if (s.length) return { text: s.slice(0, 2).join('   ·   '), tip: false };

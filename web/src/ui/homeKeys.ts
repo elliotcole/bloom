@@ -58,7 +58,7 @@ export interface HomeCtx {
   /** d: the pattern palette over whole notes; again: the last pattern, without it (the pitches alone: d in pitch mode) */
   pattern(again: boolean): void;
   /** what the asking keys offered last time */
-  memo: { splitSlices: number; repeatTimes: number; chunks: number; fitTo: number };
+  memo: { splitSlices: number; repeatTimes: number; chunks: number; fitTo: number; roundIn: number };
   /** the loop's display: each cycle's lists, as they phase */
   onLoopCycle(vel: number[], time: number[], chan: number[], iv: IntervalVal[], fig: Figure[]): void;
   leaveListMode(): void;
@@ -232,8 +232,16 @@ export const HOME_KEYS: HomeKey[] = [
   },
   {
     code: 'KeyZ', alt: true, whole: true, name: 'opt-z',
-    label: 'cut or loop the velocity, channel, interval and figure lists to a length (asks): they come round together against the notes',
-    act: c => c.askCount('velocities, channels, intervals, figures: how long:', c.memo.fitTo, n => {
+    label: 'cut or loop the velocity, channel, interval and figure lists to a length (asks): they come round together against the notes (shift: every list to a length that divides N, so all come round on note N)',
+    act: c => c.shift
+      // shift: come round in N. Every list but the notes to the nearest length that divides N
+      ? c.askCount('every list comes round on note:', c.memo.roundIn, n => {
+        c.memo.roundIn = n;
+        const period = c.b.roundIn(n);
+        return period === n ? `every list divides ${n}: they all come round on note ${n}`
+          : `the lists divide ${n}; with the ${c.b.notes.length} notes it all comes round every ${period}`;
+      }, 512, 2)
+      : c.askCount('velocities, channels, intervals, figures: how long:', c.memo.fitTo, n => {
       c.memo.fitTo = n;
       const { cut, looped } = c.b.fitListsTo(n, c.b.colourLists());
       const did = [cut && `${cut} cut`, looped && `${looped} looped`].filter(Boolean).join(', ');

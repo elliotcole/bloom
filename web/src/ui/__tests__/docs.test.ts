@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { HOME_KEYS, PUNCT, findHome, keyNames, pressName, viewKeyNames } from '../homeKeys';
 import {
-  FREEZE_KEYS, LIST_MODE_KEYS, LIST_MODES, LIST_VERBS, MODE_KEYS, PASS_KEYS, TUNING_KEYS, modeKeyNames,
+  FREEZE_KEYS, SELECT_KEYS, LIST_MODE_KEYS, LIST_MODES, LIST_VERBS, MODE_KEYS, PASS_KEYS, TUNING_KEYS, modeKeyNames,
 } from '../modeKeys';
 import type { ListMode } from '../modeKeys';
 import { TAKE_CUE, cueFor } from '../cues';
@@ -56,7 +56,7 @@ describe('the cheat sheet', () => {
   });
 
   it('names every list mode, and the keys of tuning mode and the freeze menu', () => {
-    const want = [...Object.keys(MODE_KEYS), ...TUNING_KEYS.flatMap(modeKeyNames), ...FREEZE_KEYS.flatMap(modeKeyNames)];
+    const want = ['r', ...Object.keys(MODE_KEYS), ...TUNING_KEYS.flatMap(modeKeyNames), ...FREEZE_KEYS.flatMap(modeKeyNames)];
     expect(want.filter(n => !presses.has(n))).toEqual([]);
   });
 });
@@ -107,6 +107,12 @@ describe('the cue line', () => {
     expect(cueKeys(cueFor(ctx({ tuning: true })).text).filter(k => !there.has(k))).toEqual([]);
   });
 
+  it('select mode', () => {
+    const there = new Set([...SELECT_KEYS.flatMap(modeKeyNames), ...PASS_NAMES]);
+    expect(cueKeys(cueFor(ctx({ select: true })).text).filter(k => !there.has(k))).toEqual([]);
+    expect(cueFor(ctx({ select: true })).text).toContain('esc home');
+  });
+
   it('the freeze menu', () => {
     const there = new Set([...FREEZE_KEYS.flatMap(modeKeyNames), ...PASS_NAMES]);
     expect(cueKeys(cueFor(ctx({ freezeMenu: true })).text).filter(k => !there.has(k))).toEqual([]);
@@ -114,7 +120,7 @@ describe('the cue line', () => {
 
   // at home a cue may lead into a mode ("b ↵ figures", "F l its length"), so a key of any table will do
   const anywhere = new Set([
-    ...HOME_NAMES, ...SHIFTED, ...CMD_KEYS, 'F', ...Object.keys(MODE_KEYS), ...Object.keys(LIST_VERBS),
+    ...HOME_NAMES, ...SHIFTED, ...CMD_KEYS, 'F', 'r', ...SELECT_KEYS.flatMap(modeKeyNames), ...Object.keys(MODE_KEYS), ...Object.keys(LIST_VERBS),
     ...LIST_MODE_KEYS.flatMap(modeKeyNames), ...TUNING_KEYS.flatMap(modeKeyNames), ...FREEZE_KEYS.flatMap(modeKeyNames),
   ]);
 
@@ -177,8 +183,8 @@ describe('unused-keys.md', () => {
     if (name === 'opt-|') return !findHome({ code: 'Backslash', key: '|', altKey: true, shiftKey: true, getModifierState: () => false } as unknown as KeyboardEvent);
     const p = presses.find(x => x.name === name);
     expect(p, `${name}: not a key this test knows`).toBeDefined();
-    // F opens the freeze menu and the list-mode keys their modes, ahead of the home table
-    return !findHome(p!.e) && name !== 'F' && !(name in MODE_KEYS);
+    // F opens the freeze menu, r select mode and the list-mode keys their modes, ahead of the home table
+    return !findHome(p!.e) && name !== 'F' && name !== 'r' && !(name in MODE_KEYS);
   };
 
   it('every key it calls free is free at home', () => {

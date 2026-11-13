@@ -405,11 +405,12 @@
       body.list-mode .hf-sec:not(#hf-list-sec) { display: none; }
       /* in tuning mode and the freeze menu, ? shows their own section */
       body.help-tuning .hf-sec:not(#hf-tuning-sec) { display: none; }
+      body.help-select .hf-sec:not(#hf-select-sec) { display: none; }
       body.help-freeze .hf-sec:not(#hf-freeze-sec) { display: none; }
       /* their sections show only there, not at home */
-      #hf-tuning-sec, #hf-freeze-sec { display: none; }
+      #hf-tuning-sec, #hf-freeze-sec, #hf-select-sec { display: none; }
       /* (.hf-sec repeated so these outweigh the list-mode rule above: the freeze menu can open inside a list mode) */
-      body.help-tuning #hf-tuning-sec.hf-sec, body.help-freeze #hf-freeze-sec.hf-sec { display: block; }
+      body.help-tuning #hf-tuning-sec.hf-sec, body.help-freeze #hf-freeze-sec.hf-sec, body.help-select #hf-select-sec.hf-sec { display: block; }
       /* in a list mode, the lines for that mode alone */
       .hf-only { display: none; }
       body[data-list-mode="pitch"] .hf-pitch, body[data-list-mode="time"] .hf-time,
@@ -549,7 +550,7 @@
       }
       .hf-body b { color: #9bc; font-weight: normal; }
       /* a mode or menu shows one section: it gets the whole width (a list mode's, in two columns) */
-      body.list-mode #help-full-grid, body.help-tuning #help-full-grid, body.help-freeze #help-full-grid { grid-template-columns: 1fr; }
+      body.list-mode #help-full-grid, body.help-tuning #help-full-grid, body.help-freeze #help-full-grid, body.help-select #help-full-grid { grid-template-columns: 1fr; }
       body.list-mode #hf-list-sec .hf-body { column-count: 2; column-gap: 4em; }
 
       /* ─── Bloom Editor ──────────────────────────────────────────────────────── */
@@ -1094,6 +1095,7 @@
 <b>z</b>      drop last
 <b>"</b>      repeat (how many times?)  <b>Z</b> fit to the notes
 <b>opt-z</b>  vel, chan, iv, fig lists to a length (how long?)
+<b>opt-Z</b>  every list comes round on note N (which?)
 <b>a A</b>    add one (in scale / any)
 pitches alone: in pitch mode (p)</div>
           </div>
@@ -1141,6 +1143,7 @@ same keys, same verbs
           <div class="hf-sec">
             <div class="hf-h">Freeze, pin, select</div>
             <div class="hf-body"><b>F</b>    freeze menu (? there for more)
+<b>r</b>    select mode (? there for more)
 click a node: pin · drag: select
 <b>esc</b>  clear  <b>shift-esc</b> invert</div>
           </div>
@@ -1168,6 +1171,25 @@ the palette above chooses the comma
 <b>opt-t</b> hold the tuning over every bloom
 (load .scl files in bloom ▾ or here;
  the tuning's root follows the key)</div>
+          </div>
+          <div class="hf-sec" id="hf-select-sec">
+            <div class="hf-h">Select mode (r or esc goes home, the selection kept)</div>
+            <div class="hf-body"><b>= -</b>    a few more / fewer, at random
+<b>9 0</b>    rotate the selection
+<b>s n</b>    as many, in new places
+<b>R</b>      mirror         <b>i</b>  invert: the others
+<b>a z</b>    all / none
+<b>e</b>      every Nth event (how many?): 9 0 then move it along
+<b>l L</b>    the loudest / softest; again: the next level too
+<b>h H</b>    the highest / lowest
+<b>d D</b>    the longest / shortest
+<b>x</b>      the selection becomes pins, ready for another
+<b>X</b>      the pins become the selection
+<b>p t v c 5 b</b>  straight across to a list mode:
+         its keys change only the selected events
+cmd-c cmd-v copy / paste them · del deletes them
+drag a box selects by hand, here or anywhere
+playback &amp; garden keys unchanged</div>
           </div>
           <div class="hf-sec" id="hf-freeze-sec">
             <div class="hf-h">Freeze (F, then…)</div>
@@ -1203,6 +1225,9 @@ drag a box: select events — keys
 <b>R</b>      mirror
 <b>{</b>      merge two neighbours
 <span class="hf-only hf-time"><b>}</b>      divide a few long ones (how many?)
+<b>k</b>      a duration palette (the times snap to it)
+         or a rhythm cell (5/8, 3 3 2: the list becomes it)
+<b>K</b>      the next duration palette
 </span><b>9 0</b>    rotate &lt;&lt; &gt;&gt;
 <b>u U</b>    stutter / sputter
 <b>d D</b>    patterns / the last again
@@ -1243,8 +1268,9 @@ every pitch key from home works here too:
 <b>i</b> up ↔ down  <b>1 2</b> every step a scale step
 <b>* B</b> bake / clear, as at home
 </span>
-<b>x f</b>    lace / copy from slot
-<b>opt-x opt-f</b> from the other voice
+<b>x</b>      lace with the slot's list
+<b>opt-↑</b>  lift this list alone from the slot
+<b>opt-x opt-f</b> lace / copy from the other voice
 <b>p t v c 5 b</b> switch list · <b>F</b> freeze menu
 playback &amp; garden keys unchanged</div>
           </div>

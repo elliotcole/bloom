@@ -13,6 +13,8 @@ import type { Garden } from '../garden';
 import { formatIntervals } from '../lib/intervals';
 import { formatFigures } from '../lib/figures';
 import { keyChar } from './homeKeys';
+import { DURATION_PALETTES, ratioText } from '../lib/rhythms';
+import { everyNth, fewer, invert, mirror, more, rotate, scramble, slice } from './selectVerbs';
 
 // ─── The list modes ──────────────────────────────────────────────────────────
 
@@ -168,7 +170,12 @@ export interface ListCtx {
   leave(): void;
   /** esc means leave: not while the help or clean view have first call on it */
   leaving(): boolean;
+  /** k in time mode: the rhythm picker; false when there's none to open */
+  pickRhythm(): boolean;
 }
+
+/** K in time mode: which palette it's on */
+let _palette = 0;
 
 /** opt-z: the longest a list can be cut or looped to */
 export const FIT_MAX = 512;
@@ -256,6 +263,25 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
       else c.status(`${c.tag} q snaps to the scale; k K j J choose it`);
     },
   },
+  {
+    // as k chooses the scale in pitch mode: the scale is pitch's palette
+    key: 'k', modes: ['time'], label: 'choose a duration palette or a rhythm cell',
+    act: c => {
+      if (c.b.frozen.time) { c.status(`${c.tag} the rhythm is frozen: F t lets it go`); return; }
+      c.e.preventDefault();   // the k mustn't land in the picker's filter
+      if (!c.pickRhythm()) c.status(`${c.tag} no picker here`);
+    },
+  },
+  {
+    // as K slants to a neighbouring scale
+    key: 'K', modes: ['time'], label: 'the next duration palette',
+    act: c => {
+      if (c.b.frozen.time) { c.status(`${c.tag} the rhythm is frozen: F t lets it go`); return; }
+      _palette = (_palette + 1) % DURATION_PALETTES.length;
+      const p = DURATION_PALETTES[_palette];
+      c.apply(`${p.name}: ${p.ratios.map(ratioText).join(' ')}`, () => c.b.snapTimes(p.ratios));
+    },
+  },
   snapToScale('iv', 'q snaps the intervals to the scale (m3 → 3rd)'),
   snapToScale('fig', "q snaps the figures' steps to the scale (+M2 → 2)"),
   {
@@ -319,12 +345,22 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
     },
   },
   {
-    key: ['f', 'x'], label: "copy / lace the garden slot's list",
+    key: 'x', label: "lace this list with the garden slot's",
     act: c => {
       const src = c.g.current;
       if (!src) { c.status('no bloom in slot'); return; }
-      if (c.ch === 'x') c.apply('lace with slot', () => c.b.laceList(c.k, src));
-      else c.apply('copy from slot', () => c.b.copyList(c.k, src));
+      c.apply('lace with slot', () => c.b.laceList(c.k, src));
+    },
+  },
+  {
+    // the lift, by mode: at home opt-↑ lifts the slot's notes alone; in a list mode, that mode's list alone
+    code: 'ArrowUp', alt: true, shift: false, name: 'opt-↑', label: "lift this list alone from the garden slot (the others play on, in place)",
+    act: c => {
+      const src = c.g.current;
+      if (!src) { c.status('no bloom in slot'); return; }
+      if (!src.getList(c.k).length) { c.status(`${c.tag} the slot has no ${c.name} list`); return; }
+      if (c.k === 'notes') c.apply(`lifted the notes of [${c.g.index}]`, () => c.b.liftNotes(src));
+      else c.apply(`lifted the ${c.name} list of [${c.g.index}]`, () => c.b.copyList(c.k, src));
     },
   },
   {
@@ -337,6 +373,75 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
   },
   { key: ['d', 'D'], label: 'patterns over this list / the last pattern again', act: c => c.pattern(c.ch === 'D') },
 ];
+
+// ─── Select mode ─────────────────────────────────────────────────────────────
+// r. The selection is a list of its own, one on/off per event, and the list
+// verbs mean on it what they mean everywhere (selectVerbs.ts). Nothing here
+// changes a note: a list-mode key (p t v c 5 b) goes straight across with the
+// selection kept, and the keys there act on it.
+
+/** What a select-mode key's action can reach */
+export interface SelectCtx {
+  e: KeyboardEvent;
+  ch: string;
+  /** how many events there are */
+  n: number;
+  sel(): number[];
+  /** the pinned events: nothing selects them */
+  fixed(): number[];
+  /** each event's loudness, its highest and lowest pitch, its duration */
+  values(of: 'vel' | 'high' | 'low' | 'time'): number[];
+  /** the new selection, and what to say */
+  set(sel: number[], msg: string): void;
+  /** the selection becomes pins (and empties) / the pins become the selection */
+  toPins(): void;
+  fromPins(): void;
+  askCount(label: string, last: number, act: (n: number) => string, max?: number, min?: number): boolean;
+  memo: { every: number };
+  status(msg: string): void;
+  leave(): void;
+  /** esc means leave: not while the help or clean view have first call on it */
+  leaving(): boolean;
+}
+
+const deepen = (key: [string, string], of: ['vel' | 'high' | 'low' | 'time', 'vel' | 'high' | 'low' | 'time'], names: [string, string]): ModeKey<SelectCtx> => ({
+  key, label: `the ${names[0]} / ${names[1]}, each press a level deeper`,
+  act: c => {
+    const most = c.ch === key[0];
+    const sel = slice(c.values(of[most ? 0 : 1]), c.sel(), most, c.fixed(), of[0] === 'vel' ? v => v <= 0 : undefined);   // a rest is not the softest note
+    c.set(sel, most ? names[0] : names[1]);
+  },
+});
+
+export const SELECT_KEYS: ModeKey<SelectCtx>[] = [
+  { code: 'Escape', shift: false, name: 'esc', label: 'back home, the selection kept', act: c => { if (!c.leaving()) return false; c.leave(); c.status('select mode off (the selection stays: esc again clears it)'); } },
+  { key: 'r', label: 'back home, the selection kept', act: c => { c.leave(); c.status('select mode off (the selection stays: esc clears it)'); } },
+  { key: ['=', '+'], label: 'a few more, at random', act: c => c.set(more(c.sel(), c.n, c.fixed()), 'more') },
+  { key: '-', label: 'a few fewer, at random', act: c => c.set(fewer(c.sel(), c.n), 'fewer') },
+  { key: ['9', '0'], label: 'rotate the selection', act: c => c.set(rotate(c.sel(), c.n, c.ch === '0' ? 1 : -1), c.ch === '0' ? 'rotate >>' : 'rotate <<') },
+  { key: ['s', 'n'], label: 'as many, in new places', act: c => c.set(scramble(c.sel(), c.n, c.fixed()), 'new places') },
+  { key: 'R', label: 'mirror', act: c => c.set(mirror(c.sel(), c.n), 'mirror') },
+  { key: 'i', label: 'invert: the others', act: c => c.set(invert(c.sel(), c.n, c.fixed()), 'invert') },
+  { key: 'a', label: 'all', act: c => c.set(invert([], c.n, c.fixed()), 'all') },
+  { key: 'z', label: 'none', act: c => c.set([], 'none') },
+  {
+    key: 'e', label: 'every Nth event (asks N; 9 0 then move it along)',
+    act: c => c.askCount('select every:', c.memo.every, n => {
+      c.memo.every = n;
+      c.set(everyNth(c.n, n, 0, c.fixed()), `every ${n}`);
+      return `[select] every ${n}: 9 0 move it along`;
+    }, Math.max(2, c.n), 2),
+  },
+  deepen(['l', 'L'], ['vel', 'vel'], ['loudest', 'softest']),
+  deepen(['h', 'H'], ['high', 'low'], ['highest', 'lowest']),
+  deepen(['d', 'D'], ['time', 'time'], ['longest', 'shortest']),
+  { key: 'x', label: 'the selection becomes pins, ready for another', act: c => c.toPins() },
+  { key: 'X', label: 'the pins become the selection', act: c => c.fromPins() },
+  // the list modes are where the selection gets changed: straight across, the selection kept
+  { key: Object.keys(MODE_KEYS), label: 'straight across to that list mode: its keys act on the selection', act: c => { c.leave(); return false; } },
+];
+
+export const SELECT_HINT = 'select mode: = - more / fewer · 9 0 rotate · s new places · i invert · a z all / none · e every Nth · l L loud / soft · h H high / low · d D long / short · x X to / from pins · p t v c 5 b act on these · r or esc home';
 
 // ─── Tuning mode ─────────────────────────────────────────────────────────────
 

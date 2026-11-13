@@ -25,6 +25,8 @@ import { TuningEditor } from './ui/tuningEditor';
 import { rebase } from './lib/tuning';
 import { ScalePicker } from './ui/scalePicker';
 import { TuningPicker } from './ui/tuningPicker';
+import { RhythmPicker } from './ui/rhythmPicker';
+import { ratioText } from './lib/rhythms';
 import { PatternPicker } from './ui/patternPicker';
 import { ListTyper } from './ui/listTyper';
 import { spell } from './lib/numbers';
@@ -363,6 +365,7 @@ async function main() {
     const ctx = cueContext();
     document.body.classList.toggle('help-tuning', ctx.tuning);   // ? shows the section for where you are
     document.body.classList.toggle('help-freeze', ctx.freezeMenu);
+    document.body.classList.toggle('help-select', !!ctx.select && !ctx.freezeMenu && !ctx.tuning);
     const off = !(cueToggle?.checked ?? true) || !!document.getElementById('console-overlay')?.classList.contains('visible');
     cueEl.classList.toggle('off', off);
     if (off) return;
@@ -625,6 +628,18 @@ async function main() {
     apply: t => setBaseTuning(t.name === '12-TET' ? null : { ...t, cents: [...t.cents] }),
   });
   keyState.pickTuning = () => tuningPicker.open();
+  // time mode k: duration palettes (the times snap to one) and rhythm cells (the time list becomes one)
+  const rhythmPicker = new RhythmPicker({
+    apply: r => {
+      const pulse = r.kind === 'palette' ? bloom.snapTimes(r.values) : bloom.setRhythm(r.values);
+      const msg = r.kind === 'palette'
+        ? `[t] ${r.name}: the times snapped to ${r.values.map(ratioText).join(' ')} of ${pulse}`
+        : `[t] ${r.name}: ${r.values.map(ratioText).join(' ')} on a pulse of ${pulse}, ${r.values.length} long`;
+      display.setStatus(msg);
+      keysRefresh(msg);
+    },
+  });
+  keyState.pickRhythm = () => rhythmPicker.open();
   const tuningSelect = document.getElementById('tuning-select') as HTMLSelectElement | null;
   const tuningStatus = document.getElementById('tuning-status');
   const fillTuningSelect = () => {

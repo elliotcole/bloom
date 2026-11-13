@@ -72,6 +72,8 @@ These move each note together with its time, velocity, channel and interval.
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |
 | | | opt-`z` | fit to a length: asks how long, then the velocity, channel, interval and figure lists are cut or looped round to it, so they come round together against a long bloom (the notes and times keep their own lengths). A list written folded, `P5/6`, counts its steps one by one |
 
+**Come round in N: opt-shift-`z`.** Asks N, then every list but the notes is cut or looped to the length nearest its own that divides N, so they are all back at their start on note N (the header's ↻ shows the notes it takes with the notes' own length counted in).
+
 If the lists are phasing, they go on phasing: a whole-note move carries along
 the lists that are in step with the notes (as long as they are) and leaves the
 others exactly as they were. Nothing lines the lists up but `Z`.
@@ -462,6 +464,7 @@ These only move values around, so they mean exactly the same in every list.
 | `o` / `O` | sort up / down (for velocity: crescendo / decrescendo) |
 | `z` / `a` / `A` | drop last / add one from the palette / add one at random |
 | `"` / `Z` | repeat this list (asks how many times) / fit it to the notes' length (cut or looped round) |
+| `k` / `K` (time mode) | **duration palettes and rhythm cells.** `k` opens a picker. A *palette* is to time what a scale is to pitch: a few durations as ratios of the pulse (your commonest duration), and the times snap to the nearest: binary, dotted, ternary, swing, aksak (1 and 1½), quintuple, fibonacci, primes, harmonic. A *cell* replaces the time list with a short pattern at its own length, which then phases against the notes: tresillo 3 3 2, cinquillo, the bells, bars of 5, 7 and 9; or type one, `5/8` (five spread over eight) or `3 3 2` (the gaps, in pulses). `K` steps to the next palette without the picker. A frozen rhythm (`F t`) is left alone |
 | opt-`z` | cut or loop this list to a length (asks how long, 1 or more): `P5/6` is six steps, so 4 gives `P5 . . .` |
 
 Changing one list's length makes it phase against the notes. That's often the
@@ -606,7 +609,8 @@ own rhythmic vocabulary, dynamic levels, instruments.
 | `q` / `Q` | quantize / choose the setting: the grid for time, the most levels for velocity and channels |
 | `n` | new random list (for time: drawn from the palette; for pitch: in the scale) |
 | `N` | pitch mode only: new pitches on any of the twelve (elsewhere the same as `n`) |
-| `x` / `f` | lace with / copy from the selected garden slot |
+| `x` | lace with the selected garden slot's list |
+| opt-`↑` | lift this list alone from the slot: the others play on, in place (at home, the notes alone) |
 | opt-`x` / opt-`f` | two voices: lace with / copy from the other voice's list |
 
 **Time verbs stay in your vocabulary wherever they can.** `3 4 - = y i e w`
@@ -615,6 +619,30 @@ double. A groove made of 1, ½ and ¼ stays made of halves and doubles. `1 2`
 (×1.2) and `I` are the continuous exceptions.
 
 ---
+
+## Select mode: `r`
+
+`r` enters select mode, from home or a list mode; `r` or `esc` leaves, and the
+selection stays (a second `esc` at home clears it). The selection is a list of
+its own, one on/off per event, and the keys are the list verbs:
+
+| key | |
+|---|---|
+| `=` `-` | a few more / fewer, at random (about an eighth of the events a press) |
+| `9` `0` | rotate the selection |
+| `s` `n` | as many, in new places |
+| `R` / `i` | mirror / invert (the others) |
+| `a` / `z` | all / none |
+| `e` | every Nth event (asks N); `9` `0` then move it along |
+| `l` / `L` | the loudest / softest: every event at that level; pressed again, the next level too |
+| `h` / `H` | the highest / lowest, the same way |
+| `d` / `D` | the longest / shortest |
+| `x` / `X` | the selection becomes pins, ready for another / the pins become the selection |
+| `p t v c 5 b` | straight across to that list mode, the selection kept: its keys change only the selected events |
+
+Nothing in select mode changes a note. Playing, the garden, `del`, cmd-c and
+cmd-v work as at home. Pinned events are never selected. A dragged box still
+selects by hand, anywhere.
 
 ## Freezing: `F`
 
@@ -838,7 +866,7 @@ when both are looping, the copy starts on the focused voice's next
 downbeat, so the two loop in unison and pull apart as you change one.
 
 A list can cross alone. In a list mode, opt-`f` copies the other voice's
-list into the voice with the focus and opt-`x` laces the two (as `f` and `x`
+list into the voice with the focus and opt-`x` laces the two (as `x` and opt-`↑`
 do with the garden slot): in time mode with B focused, opt-`f` gives B A's
 rhythm and B keeps its pitches. The lock, `F l` (or **play ▾** → freeze →
 voice), holds the voice with the focus to the other's length: before each

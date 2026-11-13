@@ -10,7 +10,9 @@ import {
   MODE_KEYS, KEY_OF_MODE, MODE_TAG, MODE_NAME, LIST_OF_MODE, LIST_VERBS, LIST_MODE_KEYS, TUNING_KEYS, TUNING_HINT,
   FREEZE_ITEMS, FREEZE_KEYS, findModeKey, passesHome, own,
 } from './modeKeys';
-import type { ListMode, ListCtx, TuningCtx, FreezeCtx, FreezeItem } from './modeKeys';
+import type { ListMode, ListCtx, TuningCtx, FreezeCtx, FreezeItem, SelectCtx } from './modeKeys';
+import { SELECT_KEYS, SELECT_HINT } from './modeKeys';
+import { flatNotes } from '../lib/arrays';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
@@ -144,6 +146,8 @@ export interface KeyHandlerState {
   pickPattern?: (title: string, n: number, last: string | null, bake: (spec: string) => string | null) => void;
   /** l in tuning mode: the tuning menu (ui/tuningPicker.ts) */
   pickTuning?: () => void;
+  /** k in time mode: duration palettes and rhythm cells (ui/rhythmPicker.ts) */
+  pickRhythm?: () => void;
   /** Two voices: the view of the other voice, drawn dimmed over the main one */
   ghost?: BloomVisualization | null;
   tuningView?: {
@@ -185,7 +189,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   // added before a pin), and undo must put them back on the same events
   const _undo: HistoryEntry[] = [];
   // what the asking keys offered last time: } (split at home, divide in time mode), " and S
-  const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3, fitTo: 8 };
+  const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3, fitTo: 8, every: 2, roundIn: 12 };
 
   /**
    * Ask how many (2 to `max`, offering the last answer), then do it; `act`
@@ -432,6 +436,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   /** Keys that play, view, move through the garden or switch modes see the whole bloom (homeKeys: `whole`) */
   function worksOnSelection(e: KeyboardEvent): boolean {
     if (e.metaKey || e.ctrlKey || _freezeMenu || keyChar(e) === 'F') return false;
+    if (_selectMode || (!e.altKey && keyChar(e) === 'r')) return false;   // select mode changes the selection, never the notes
     if (state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
     if (!e.altKey && own(MODE_KEYS, keyChar(e))) return false;
     // in a list mode other than pitch, a key that changes the list's length works on the whole list:
@@ -739,6 +744,72 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (name) name.textContent = m ? MODE_NAME[m] : '';
   }
 
+  // ─── Select mode ────────────────────────────────────────────────────────────
+  // r. Its keys change which events are selected (modeKeys.ts SELECT_KEYS);
+  // a list-mode key goes straight across, the selection kept, and acts on it.
+  let _selectMode = false;
+
+  function setSelectMode(on: boolean) {
+    if (on && _mode) setListMode(null);
+    _selectMode = on;
+    if (_mode) return;   // a list mode has the badge
+    const badge = document.getElementById('list-mode-badge');
+    if (badge) { badge.textContent = on ? 'SELECT' : ''; badge.classList.toggle('active', on); }
+  }
+
+  function selectCtx(e: KeyboardEvent, ch: string): SelectCtx {
+    const b = state.bloom;
+    const flat = (nt: unknown) => flatNotes([nt] as never) as number[];
+    return {
+      e, ch, n: b.notes.length, status, memo: _memo,
+      sel: () => [..._selection],
+      fixed: () => [..._pinned],
+      values: of => {
+        const evs = b.events();
+        switch (of) {
+          case 'vel': return evs.map(ev => ev.vel);
+          case 'time': return evs.map(ev => ev.time);
+          case 'high': return evs.map(ev => Math.max(...flat(ev.note)));
+          case 'low': return evs.map(ev => Math.min(...flat(ev.note)));
+        }
+      },
+      set: (sel, msg) => {
+        select(sel);
+        status(`[select] ${msg}: ${_selection.length} of ${b.notes.length}`);
+      },
+      toPins: () => {
+        if (!_selection.length) { status('[select] nothing selected to pin'); return; }
+        const n = _selection.length;
+        _selection.forEach(i => _pinned.add(i));
+        _prevPins = [..._pinned];
+        pinsChanged();
+        select([]);
+        status(`[select] ${n} pinned (${_pinned.size} in all): select again, or X brings the pins back as the selection`);
+      },
+      fromPins: () => {
+        if (!_pinned.size) { status('[select] no pins to select'); return; }
+        const idx = [..._pinned];
+        clearPins();
+        select(idx);
+        status(`[select] ${idx.length} unpinned and selected`);
+      },
+      askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
+      leave: () => setSelectMode(false),
+      leaving: escLeavesMode,
+    };
+  }
+
+  /** Handle a key in select mode. Returns true if the key was consumed. */
+  function onSelectKey(e: KeyboardEvent): boolean {
+    const ch = keyChar(e);
+    const key = findModeKey(SELECT_KEYS, e, ch);
+    if (key) return key.act!(selectCtx(e, ch)) !== false;
+    if (e.altKey) return false;
+    if (passesHome(e, ch) || e.code === 'Escape') return false;   // playing, the garden, del, help; shift-esc inverts
+    status(SELECT_HINT);
+    return true;
+  }
+
   // ─── Freeze menu ────────────────────────────────────────────────────────────
   // F opens it; the next key toggles one freeze and closes it. The settings bar
   // checkboxes are the source of truth, so mouse and keys stay in step.
@@ -912,6 +983,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       text: () => listAsText(state.bloom, m).text,
       leave: () => setListMode(null),
       leaving: escLeavesMode,
+      pickRhythm: () => { if (!state.pickRhythm) return false; state.pickRhythm(); return true; },
     };
   }
 
@@ -1025,6 +1097,14 @@ export function createKeyHandler(state: KeyHandlerState) {
 
     // ─── Tuning mode: the tuning view is open ──────────────────────────────────
     if (state.tuningView?.isOpen() && onTuningKey(e)) { e.preventDefault(); return; }
+
+    // ─── Select mode: r, from home or a list mode ──────────────────────────────
+    if (ch === 'r' && !alt && !_selectMode) {
+      setSelectMode(true);
+      status(`select mode${_selection.length ? `: ${_selection.length} selected` : ''}`);   // its keys are on the cue line
+      return;
+    }
+    if (_selectMode && onSelectKey(e)) { e.preventDefault(); return; }
 
     // ─── List mode toggle + dispatch ──────────────────────────────────────────
     if (!alt && own(MODE_KEYS, ch)) {
@@ -1285,7 +1365,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   function cueContext(): CueContext {
     const b = state.bloom;
     return {
-      mode: _mode, tuning: !!state.tuningView?.isOpen(), freezeMenu: _freezeMenu,
+      mode: _mode, tuning: !!state.tuningView?.isOpen(), freezeMenu: _freezeMenu, select: _selectMode,
       help: helpOpen(), slices: state.tuningView?.isOpen() ? state.tuningView.picked().length : 0,
       selection: _selection.length, pins: _pinned.size,
       ragaMoves: b.sounding() !== b, intervals: b.hasIntervals(), figures: b.hasFigures(), held: isHeld(),

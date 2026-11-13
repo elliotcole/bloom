@@ -11,7 +11,7 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Bare keys (no modifier)
 
-- `r`  `q`  `y`  `o`  *(`q` `y` `o` quantize, unify and sort in the list modes; `b` `B` are figures)*
+- `q`  `y`  `o`  *(`q` `y` `o` quantize, unify and sort in the list modes; `b` `B` are figures; `r` is select mode)*
 
 ## Shift keys
 
