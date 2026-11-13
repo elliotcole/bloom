@@ -29,6 +29,12 @@ export class ClockFollower {
   private phaseKnown = false;
   private playing = false;
   private fit: { a: number; m: number } | null = null;   // time = a + m · position
+  /**
+   * Which count of beats this is: it moves on whenever the beats are counted
+   * afresh (Start, Song Position, the clock back after a gap), so a loop locked
+   * to a beat number of the old count can tell that number means nothing now
+   */
+  epoch = 0;
 
   /** Feed every incoming MIDI message; returns true when it was a clock message */
   message(data: Uint8Array | number[], t: number): boolean {
@@ -48,7 +54,7 @@ export class ClockFollower {
     return false;
   }
 
-  private resetFit() { this.times = []; this.positions = []; this.fit = null; }
+  private resetFit() { this.times = []; this.positions = []; this.fit = null; this.epoch++; }
 
   private pulse(t: number) {
     const last = this.times[this.times.length - 1];
@@ -97,6 +103,8 @@ function lineFit(x: number[], y: number[]): { a: number; m: number } {
 export interface Timebase {
   timeAtBeat(beat: number): number | null;
   beatAt(t: number): number | null;
+  /** changes when the beats are counted afresh (a timebase that never is can leave it out) */
+  epoch?: number;
 }
 
 let _timebase: (() => Timebase | null) = () => null;

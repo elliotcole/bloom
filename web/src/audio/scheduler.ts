@@ -2,7 +2,7 @@
 
 import { Bloom } from '../core/Bloom';
 import { applyTuning } from './tuningOut';
-import { after, every } from './clock';
+import { after, every, HIDDEN_LOOKAHEAD_MS, pageHidden as hidden } from './clock';
 import type { IntervalVal, Sound } from '../core/Bloom';
 import type { Figure } from '../lib/figures';
 import type { MidiOutput } from './midi';
@@ -17,10 +17,12 @@ type Timer = ReturnType<typeof setTimeout>;
 // A page that's covered or in a background tab gets its timers once a second
 // at best, so everything is handed to the output further ahead, stamped with
 // its time (Web MIDI and the piano both honour a timestamp)
-const LOOKAHEAD_HIDDEN_MS = 1500;
-const hidden = (): boolean => typeof document !== 'undefined' && document.hidden;
+const LOOKAHEAD_HIDDEN_MS = HIDDEN_LOOKAHEAD_MS;
 
 // ─── BPM state ────────────────────────────────────────────────────────────────
+
+/** The step given to a bloom whose times are all 0, so a loop of it still moves on */
+const STILL_BEATS = 0.02;
 
 let _bpm = 60;
 
@@ -76,8 +78,9 @@ function clearVoices(out: MidiOutput): void { _voices.delete(out); }
 export function silence(out: MidiOutput | null): void {
   if (!out) return;
   const held = _voices.get(out);
-  held?.forEach((_, key) => noteOff(out, key >> 7, key & 127));
-  allNotesOff(out);
+  // urgent: through a take's tap even while it holds its last notes (the page may be closing)
+  held?.forEach((_, key) => noteOff(out, key >> 7, key & 127, undefined, true));
+  allNotesOff(out, true);
   clearVoices(out);
 }
 
@@ -88,20 +91,24 @@ export function silence(out: MidiOutput | null): void {
  * sounds. The note-off goes `offLead` ahead (0 while the page is visible, so a
  * repeat of the pitch before then can still take the voice over). The timers
  * go into `pending`, so a stop can let go of what hasn't started while what
- * sounds still ends on time.
+ * sounds still ends on time. What's already due to be handed over goes now,
+ * not on a timer of 0: a hidden page would run that up to a second late, and
+ * the first notes of a pulse or a garden slot would all sound at once.
  */
 function scheduleSound(out: MidiOutput, s: Sound, atMs: number, lead: number, pending?: Pending, offLead = 0): void {
   const gateMs = Math.max(10, beatsToMs(s.gate));
   const ids: [number, number][] = [];
-  const on: Timer = setTimeout(() => {
-    pending?.on.delete(on);
-    s.notes.forEach(n => { if (n >= 0 && n <= 127) ids.push([n, startVoice(out, s.chan, n, s.vel, atMs)]); });
-  }, Math.max(0, atMs - performance.now() - lead));
-  const off: Timer = setTimeout(() => {
-    pending?.off.delete(off);
-    ids.forEach(([n, id]) => endVoice(out, s.chan, n, id, atMs + gateMs));
-  }, Math.max(0, atMs + gateMs - performance.now() - offLead));
-  pending?.on.add(on);
+  const start = () => s.notes.forEach(n => { if (n >= 0 && n <= 127) ids.push([n, startVoice(out, s.chan, n, s.vel, atMs)]); });
+  const end = () => ids.forEach(([n, id]) => endVoice(out, s.chan, n, id, atMs + gateMs));
+  const now = performance.now();
+  const onIn = atMs - now - lead, offIn = atMs + gateMs - now - offLead;
+  if (onIn <= 0) start();
+  else {
+    const on: Timer = setTimeout(() => { pending?.on.delete(on); start(); }, onIn);
+    pending?.on.add(on);
+  }
+  if (onIn <= 0 && offIn <= 0) { end(); return; }
+  const off: Timer = setTimeout(() => { pending?.off.delete(off); end(); }, Math.max(0, offIn));
   pending?.off.add(off);
 }
 
@@ -158,10 +165,13 @@ export function playOnce(
 
 const TICK_MS = 25;
 const LOOKAHEAD_MS = 100;
+// A step this far behind its time when the loop gets to it was missed (the
+// page stalled, the machine slept, a list stood empty for a while): it's
+// passed over in silence. Played late, the whole backlog would sound at once.
+const MISSED_MS = LOOKAHEAD_MS;
 
 interface LoopState {
   bloom: Bloom;
-  out: MidiOutput;
   stop: () => void;
   nextEventTime: number; // ms absolute
   /** Persistent counter across loop boundaries — each list wraps at its own length */
@@ -170,8 +180,8 @@ interface LoopState {
   /** Called at the start of every notes cycle with the effective vel/time/chan/intervals/figures arrays for that cycle */
   onCycleUpdate?: (vel: number[], time: number[], chan: number[], intervals: IntervalVal[], figures: Figure[]) => void;
   onLoop?: () => void;
-  /** Locked to a running MIDI clock: the clock's beat the loop started on, and the beats played since */
-  lock: { start: number; beats: number } | null;
+  /** Locked to a running MIDI clock: the clock's beat the loop started on, the beats played since, and which count of beats that is (clockSync's epoch) */
+  lock: { start: number; beats: number; epoch: number } | null;
   pending: Pending;
   /** Changes waiting for the loop to come round (launch quantize), given the tick it had reached and each list's place; the loop then starts its lists afresh */
   atCycle: CycleFn[];
@@ -405,7 +415,6 @@ export function startLooper(
 
   const state: LoopState = {
     bloom,
-    out,
     stop: () => {},
     nextEventTime: Math.max(performance.now(), startAt ?? 0),
     globalTick: 0,
@@ -430,6 +439,11 @@ export function startLooper(
       if (b.notes.length === 0 || b.velocities.length === 0
         || b.timeIntervals.length === 0 || b.chans.length === 0) break;
 
+      // the clock began its count again (Live stopped and started, or jumped): the beat
+      // the loop was waiting for is a number of the old count, so it lets go, carries on
+      // in its own time and locks again when it next comes round
+      if (state.lock && (timebase()?.epoch ?? 0) !== state.lock.epoch) state.lock = null;
+
       // Each list cycles at its own independent rate via globalTick
       const noteIdx = state.globalTick % b.notes.length;
 
@@ -450,7 +464,7 @@ export function startLooper(
         const at = tb && !state.lock ? tb.beatAt(state.nextEventTime) : null;
         if (tb && at !== null) {
           const start = Math.ceil(at - 0.02);
-          state.lock = { start, beats: 0 };
+          state.lock = { start, beats: 0, epoch: tb.epoch ?? 0 };
           state.nextEventTime = tb.timeAtBeat(start) ?? state.nextEventTime;
           if (state.nextEventTime >= horizon) break;
         }
@@ -468,20 +482,27 @@ export function startLooper(
       }
 
       const view = b.sounding(state.globalTick - noteIdx);   // a raga's notes as they sound
-      const time = view.stepAt(noteIdx, state.globalTick);   // an inserted figure takes its own length
+      const step = view.stepAt(noteIdx, state.globalTick);   // an inserted figure takes its own length
+      // a time list of nothing but 0s would never reach the horizon: it gets the smallest step
+      const time = step > 0 || b.timeIntervals.some(t => t > 0) ? step : STILL_BEATS;
       const atMs = state.nextEventTime;
 
-      // the note, the notes its intervals add, or its figure; a figure's steps follow a running clock too
-      const lock = state.lock;
-      view.soundsAt(noteIdx, state.globalTick).forEach(s => {
-        const t = lock && s.at ? timebase()?.timeAtBeat(lock.start + lock.beats + s.at) ?? null : null;
-        scheduleSound(out, s, t ?? atMs + beatsToMs(s.at), lookahead, state.pending, lookahead - LOOKAHEAD_MS);
-      });
+      // a step missed by more than a moment isn't sounded or lit: the loop counts through
+      // what it missed, every list moving on as it would have, and comes back in on the
+      // first step still to come, at the time it always had (so two voices stay in step)
+      if (atMs >= now - MISSED_MS) {
+        // the note, the notes its intervals add, or its figure; a figure's steps follow a running clock too
+        const lock = state.lock;
+        view.soundsAt(noteIdx, state.globalTick).forEach(s => {
+          const t = lock && s.at ? timebase()?.timeAtBeat(lock.start + lock.beats + s.at) ?? null : null;
+          scheduleSound(out, s, t ?? atMs + beatsToMs(s.at), lookahead, state.pending, lookahead - LOOKAHEAD_MS);
+        });
 
-      // Fire visual callback at actual note-on time
-      const idxSnap = noteIdx, tickSnap = state.globalTick, shiftSnap = state.shift;
-      const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap, shiftSnap); }, Math.max(0, atMs - now));
-      state.pending.visual.add(v);
+        // Fire visual callback at actual note-on time
+        const idxSnap = noteIdx, tickSnap = state.globalTick, shiftSnap = state.shift;
+        const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap, shiftSnap); }, Math.max(0, atMs - now));
+        state.pending.visual.add(v);
+      }
 
       state.globalTick++;
       if (state.lock) {
@@ -533,16 +554,19 @@ interface PulsarState {
 }
 
 let _pulsar: PulsarState | null = null;
+/** Beats between pulses: the bloom's pulsar and the garden's share it, and it's kept while neither runs */
+let _pulseRate = 8;
 
 export function startPulsar(
   bloom: Bloom,
   out: MidiOutput,
-  rateBeats = 8,
+  rateBeats = _pulseRate,
   onNoteOn?: (index: number, tick: number) => void,
   onFire?: () => void,
   startTick = 0,
 ): void {
   stopPulsar();
+  _pulseRate = rateBeats;
 
   const state: PulsarState = {
     bloom,
@@ -575,14 +599,16 @@ export function updatePulsar(bloom: Bloom): void {
   if (_pulsar) _pulsar.bloom = bloom;
 }
 
+/** Set the pulse rate. A running pulsar starts again at it; the garden's takes it from its next pulse. */
 export function setPulsarRate(rateBeats: number): void {
+  _pulseRate = Math.max(1, rateBeats);
   if (!_pulsar) return;
   const { bloom, out, onNoteOn, onFire, tick } = _pulsar;
-  startPulsar(bloom, out, rateBeats, onNoteOn, onFire, tick);
+  startPulsar(bloom, out, _pulseRate, onNoteOn, onFire, tick);
 }
 
 export function getPulsarRate(): number {
-  return _pulsar?.rateBeats ?? 8;
+  return _pulseRate;
 }
 
 export function stopPulsar(): void {
@@ -611,7 +637,6 @@ const NIL_PAUSE_BEATS = 1; // beats to wait at empty garden slots
 
 interface GardenLoopState {
   slots: (Bloom | null)[];  // live reference — changes take effect next cycle
-  out: MidiOutput;
   slotIndex: number;
   cancelNext: (() => void) | null;
   nextAt: number;
@@ -631,7 +656,6 @@ export function startGardenLooper(
 
   const state: GardenLoopState = {
     slots,
-    out,
     slotIndex: 0,
     cancelNext: null,
     nextAt: performance.now(),
@@ -648,7 +672,7 @@ export function startGardenLooper(
     if (slot) {
       state.cancelCurrent?.();
       state.cancelCurrent = playOnce(slot, out, undefined, undefined, state.onNoteOn);
-      durMs = beatsToMs(slot.dur());
+      durMs = beatsToMs(Math.max(STILL_BEATS, slot.dur()));
     } else {
       durMs = beatsToMs(NIL_PAUSE_BEATS);
     }
@@ -678,10 +702,9 @@ export function isGardenLooping(): boolean {
 
 interface GardenPulsarState {
   slots: (Bloom | null)[];  // live reference
-  out: MidiOutput;
   slotIndex: number;
-  rateBeats: number;
-  stop: () => void;
+  nextAt: number;
+  cancelNext: (() => void) | null;
   cancelCurrent: (() => void) | null;
   onNoteOn?: (index: number) => void;
 }
@@ -691,40 +714,42 @@ let _gardenPulsar: GardenPulsarState | null = null;
 export function startGardenPulsar(
   slots: (Bloom | null)[],
   out: MidiOutput,
-  rateBeats = 8,
+  rateBeats = _pulseRate,
   onNoteOn?: (index: number) => void,
 ): void {
   stopGardenPulsar();
   if (slots.every(s => s === null)) return;
+  _pulseRate = rateBeats;
 
   const state: GardenPulsarState = {
     slots,
-    out,
     slotIndex: 0,
-    rateBeats,
-    stop: () => {},
+    nextAt: performance.now(),
+    cancelNext: null,
     cancelCurrent: null,
     onNoteOn,
   };
   _gardenPulsar = state;
 
   const fire = () => {
-    if (!_gardenPulsar) return;
+    if (_gardenPulsar !== state) return;
     const slot = state.slots[state.slotIndex];
     if (slot) {
       state.cancelCurrent?.();
       state.cancelCurrent = playOnce(slot, out, undefined, undefined, state.onNoteOn);
     }
     state.slotIndex = (state.slotIndex + 1) % Math.max(1, state.slots.length);
+    // each pulse from when the last was due, at the rate and tempo of the moment (as the bloom's pulsar)
+    state.nextAt += beatsToMs(_pulseRate);
+    state.cancelNext = after(Math.max(0, state.nextAt - performance.now()), fire);
   };
 
-  state.stop = every(beatsToMs(rateBeats), fire);   // a fixed pulse: setPulsarRate restarts it
   fire(); // fire immediately
 }
 
 export function stopGardenPulsar(): void {
   if (_gardenPulsar) {
-    _gardenPulsar.stop();
+    _gardenPulsar.cancelNext?.();
     _gardenPulsar.cancelCurrent?.();
     _gardenPulsar = null;
   }

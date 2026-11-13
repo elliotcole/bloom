@@ -4,7 +4,7 @@
 // close. Nothing sounds until a tuning is chosen.
 
 import type { Tuning } from '../lib/tuning';
-import { Overlay, onKeys } from './overlay';
+import { Picker, hasWords } from './picker';
 
 export interface TuningPickerHost {
   /** The loaded tunings, 12-TET first */
@@ -17,79 +17,34 @@ export interface TuningPickerHost {
 
 /** The tunings whose name or description has every word typed, in library order */
 export function filterTunings(lib: Tuning[], q: string): Tuning[] {
-  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return lib.filter(t => words.every(w => `${t.name} ${t.description ?? ''}`.toLowerCase().includes(w)));
+  return lib.filter(t => hasWords(`${t.name} ${t.description ?? ''}`, q));
 }
 
-export class TuningPicker extends Overlay {
-  private input: HTMLInputElement;
-  private listEl: HTMLElement;
-  private rows: { t: Tuning; el: HTMLElement }[] = [];
-  private active = -1;
+export class TuningPicker extends Picker<Tuning> {
   private host: TuningPickerHost;
 
   constructor(host: TuningPickerHost) {
-    super(document.createElement('div'), { backdrop: true });
+    super({ id: 'tuning-picker', hint: 'type to filter · ↑↓ move · ↵ or click chooses · esc closes', placeholder: 'tuning' });
     this.host = host;
-    this.el.id = 'tuning-picker';
-    this.el.className = 'picker';
-    this.el.innerHTML = `
-      <div class="picker-box">
-        <div class="cp-hint">type to filter · ↑↓ move · ↵ or click chooses · esc closes</div>
-        <input class="cp-input" type="text" spellcheck="false" autocomplete="off" placeholder="tuning">
-        <div class="sp-list"></div>
-      </div>`;
-    this.input = this.el.querySelector('input')!;
-    this.listEl = this.el.querySelector('.sp-list')!;
-    this.input.addEventListener('input', () => this.render());
-    onKeys(this.input, {
-      Escape: () => this.close(),
-      ArrowDown: () => this.setActive(Math.min(this.rows.length - 1, this.active + 1)),
-      ArrowUp: () => this.setActive(Math.max(0, this.active - 1)),
-      Enter: () => this.choose(this.active),
-    });
   }
 
-  open(): void {
-    this.input.value = '';
-    this.render();
-    this.show(this.input);
+  open(): void { this.openList(); }
+
+  protected rows(query: string): Tuning[] { return filterTunings(this.host.library(), query); }
+
+  protected row(t: Tuning): HTMLElement {
+    const el = this.rowEl(t.name, t.description ?? '');
+    el.classList.toggle('current', t.name === this.host.current());
+    return el;
   }
 
-  private render(): void {
+  protected override start(rows: Tuning[]): number {
     const cur = this.host.current();
-    this.listEl.innerHTML = '';
-    this.rows = [];
-    this.active = -1;
-    for (const t of filterTunings(this.host.library(), this.input.value)) {
-      const row = document.createElement('div');
-      row.className = 'cp-sug';
-      row.innerHTML = `<span class="cp-sug-name"></span><span class="cp-sug-desc"></span>`;
-      row.querySelector('.cp-sug-name')!.textContent = t.name;
-      row.querySelector('.cp-sug-desc')!.textContent = t.description ?? '';
-      if (t.name === cur) row.classList.add('current');
-      const i = this.rows.length;
-      row.addEventListener('mousemove', () => this.setActive(i));
-      row.addEventListener('click', () => this.choose(i));
-      this.rows.push({ t, el: row });
-      this.listEl.appendChild(row);
-    }
-    if (this.rows.length) this.setActive(Math.max(0, this.rows.findIndex(r => r.el.classList.contains('current'))));
+    return rows.findIndex(t => t.name === cur);
   }
 
-  private setActive(i: number): void {
-    this.rows[this.active]?.el.classList.remove('active');
-    this.active = i;
-    const r = this.rows[i];
-    if (!r) return;
-    r.el.classList.add('active');
-    r.el.scrollIntoView({ block: 'nearest' });
-  }
-
-  private choose(i: number): void {
-    const r = this.rows[i];
-    if (!r) return;
-    this.host.apply(r.t);
-    this.close();
+  protected choose(t: Tuning): boolean {
+    this.host.apply(t);
+    return true;
   }
 }

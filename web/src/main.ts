@@ -791,6 +791,7 @@ async function main() {
     viz.setMode(mode);
     gardenViz.setMode(mode);
     updateResetCameraVisibility(mode);
+    vizModeSelect.blur();
   });
 
   resetCameraBtn?.addEventListener('click', () => { viz.resetCamera(); });
@@ -801,6 +802,7 @@ async function main() {
     viz.setTheme(themeId);
     gardenViz.setTheme(themeId);
     document.body.dataset.theme = themeId === 'dark' ? '' : themeId;
+    vizThemeSelect.blur();   // or the next keys pick skins by their first letter
   });
 
   document.getElementById('help-toggle')?.addEventListener('click', toggleFullHelp);

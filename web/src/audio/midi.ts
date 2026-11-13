@@ -16,7 +16,6 @@ export interface MidiState {
   outputs: MidiOutput[];
   inputs: MidiInput[];
   selectedOutput: MidiOutput | null;
-  available: boolean;
   error: string | null;
 }
 
@@ -24,11 +23,13 @@ const state: MidiState = {
   outputs: [],
   inputs: [],
   selectedOutput: null,
-  available: false,
   error: null,
 };
 
 let midiAccess: MIDIAccess | null = null;
+
+/** A note-on that sounds (one at velocity 0 is a note-off) */
+export const isNoteOn = (d: ArrayLike<number>): boolean => (d[0] & 0xf0) === 0x90 && d[2] > 0;
 
 // Outputs that aren't MIDI ports (the built-in piano): always offered, first,
 // and kept selected when a port comes or goes
@@ -70,7 +71,6 @@ export async function initMidi(): Promise<MidiState> {
 
   try {
     midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-    state.available = true;
     _refreshOutputs();
     _refreshInputs();
 
@@ -87,22 +87,37 @@ export async function initMidi(): Promise<MidiState> {
   return state;
 }
 
-function _refreshOutputs(): void {
-  if (!midiAccess) return;
-  state.outputs = [..._virtual];
-  midiAccess.outputs.forEach(output => {
-    state.outputs.push({
-      name: output.name ?? 'Unknown',
+// One MidiOutput for each port, by the port's id, for as long as the page
+// lives: the list is made again whenever a port comes or goes, and a loop
+// that's playing, and the voices the scheduler holds for it, are kept by the
+// output they were given. A new one for the same port would lose them.
+const _ports = new Map<string, { out: MidiOutput; port: MIDIOutput }>();
+
+function outputFor(port: MIDIOutput): MidiOutput {
+  const known = _ports.get(port.id);
+  if (known) { known.port = port; return known.out; }   // the same port, back again
+  const entry = {
+    port,
+    out: {
+      name: port.name ?? 'Unknown',
       send(data: number[], timestampMs?: number) {
-        if ((data[0] & 0xf0) === 0x90 && data[2] > 0) _echoes.out(data[1], data[2], timestampMs ?? performance.now());
+        if (isNoteOn(data)) _echoes.out(data[1], data[2], timestampMs ?? performance.now());
         try {
-          output.send(data, timestampMs);
+          entry.port.send(data, timestampMs);
         } catch (_) {
           // ignore stale port errors
         }
       },
-    });
-  });
+    } as MidiOutput,
+  };
+  _ports.set(port.id, entry);
+  return entry.out;
+}
+
+function _refreshOutputs(): void {
+  if (!midiAccess) return;
+  state.outputs = [..._virtual];
+  midiAccess.outputs.forEach(output => { state.outputs.push(outputFor(output)); });
 
   // Auto-select first output if none selected
   if (!state.selectedOutput && state.outputs.length > 0) {
@@ -122,16 +137,17 @@ function _refreshInputs(): void {
     if (/bloom tuning/i.test(input.name ?? '')) return;   // the helper's cues, for the DAW, not for playing
     const name = input.name ?? 'Unknown';
     state.inputs.push({ name, id: input.id });
-    // Attach message handler (safe to re-attach — browser deduplicates)
+    // Attach message handler (set afresh each time: it replaces the last)
     input.onmidimessage = (ev: MIDIMessageEvent) => {
       if (!ev.data) return;
       const data = ev.data as Uint8Array;
       // the event's own timestamp is when it arrived, before the page got round to it
       const at = ev.timeStamp || performance.now();
-      _onActivity?.(name);
+      // clock pulses and active sensing come many times a second and aren't playing: they light nothing
+      if (data[0] !== 0xf8 && data[0] !== 0xfe) _onActivity?.(name);
       // the bus Bloom sends on comes back as an input (our own playing), and a muted one isn't heard
       if (inputRole(name, state.selectedOutput?.name ?? null) !== 'listening') return;
-      if ((data[0] & 0xf0) === 0x90 && data[2] > 0 && _echoes.heard(name, data[1], data[2], at)) {
+      if (isNoteOn(data) && _echoes.heard(name, data[1], data[2], at)) {
         setInputMuted(name, true);   // Bloom's own notes coming back: kept out of takes from here
         _onEcho?.(name);
         return;
@@ -175,15 +191,17 @@ export function onOutputChange(cb: (outputs: MidiOutput[]) => void): void {
 }
 
 // ─── The tap: a take hears every message on its way out ──────────────────────
-// Returns false to hold a message back (a take that has ended lets nothing more out)
+// Returns false to hold a message back (a take that has ended lets nothing more
+// out). An urgent message (everything off: the panic key, the page closing) is
+// heard by the tap like any other but goes out whatever it says.
 
 type MidiTap = (data: number[], atMs: number | undefined) => boolean;
 let _tap: MidiTap | null = null;
 
 export function setMidiTap(tap: MidiTap | null): void { _tap = tap; }
 
-function emit(out: MidiOutput, data: number[], atMs?: number): void {
-  if (_tap && !_tap(data, atMs)) return;
+function emit(out: MidiOutput, data: number[], atMs?: number, urgent = false): void {
+  if (_tap && !_tap(data, atMs) && !urgent) return;
   out.send(data, atMs);
 }
 
@@ -196,10 +214,10 @@ export function noteOn(out: MidiOutput, chan: number, note: number, vel: number,
   emit(out, [0x90 | ch, n, v], atMs);
 }
 
-export function noteOff(out: MidiOutput, chan: number, note: number, atMs?: number): void {
+export function noteOff(out: MidiOutput, chan: number, note: number, atMs?: number, urgent = false): void {
   const ch = Math.max(0, Math.min(15, chan)) & 0x0f;
   const n = Math.max(0, Math.min(127, Math.round(note)));
-  emit(out, [0x80 | ch, n, 0], atMs);
+  emit(out, [0x80 | ch, n, 0], atMs, urgent);
 }
 
 export function controlChange(out: MidiOutput, chan: number, cc: number, value: number, atMs?: number): void {
@@ -207,9 +225,9 @@ export function controlChange(out: MidiOutput, chan: number, cc: number, value: 
   emit(out, [0xb0 | ch, cc & 0x7f, value & 0x7f], atMs);
 }
 
-export function allNotesOff(out: MidiOutput | null): void {
+export function allNotesOff(out: MidiOutput | null, urgent = false): void {
   if (!out) return;
   for (let ch = 0; ch < 16; ch++) {
-    emit(out, [0xb0 | ch, 123, 0]);
+    emit(out, [0xb0 | ch, 123, 0], undefined, urgent);
   }
 }

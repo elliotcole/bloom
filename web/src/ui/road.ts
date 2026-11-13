@@ -11,6 +11,7 @@
 // (intervals) is an outline; a figure's step a smaller tile.
 
 import { Bloom } from '../core/Bloom';
+import { chanHue, ink as themeInk, pc } from './draw';
 import type { Theme } from './theme';
 
 /** One sound on the road: `at` in beats from the reference onset (negative: past) */
@@ -102,8 +103,6 @@ const HORIZON = 32;          // beats ahead that are drawn
 const BEHIND = -2.2;         // beats behind that are drawn (then they're past the rim)
 const SUBDIV = 5;            // segments per tile edge, so straight edges curve
 
-const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
-const chanHue = (c: number) => (c * 360) / 16;
 
 /** Subdivide a polygon's edges so the fisheye bends them */
 function bend(pts: [number, number][]): [number, number][] {
@@ -133,6 +132,7 @@ export function drawRoadAt(
   playing = false,
   hit?: Hit,
 ): void {
+  const ink = (a: number) => themeInk(theme, a);
   const chans = [...new Set(tiles.map(t => t.chan))].sort((a, b) => a - b);
   const lanes = Math.max(1, chans.length);
   const laneW = (ROAD_HALF * 2) / lanes;
@@ -182,7 +182,7 @@ export function drawRoadAt(
     const y = lift(Math.min(...t.notes));
     const current = t.at <= 0 && t.at + t.dur > 0;
     const f = current ? (flash[t.i] ?? 0) : 0;
-    const [h, s, l, a] = theme.noteHsla(((Math.round(t.notes[0]) % 12) + 12) % 12, t.vel, f);
+    const [h, s, l, a] = theme.noteHsla(pc(t.notes[0]), t.vel, f);
     // fog ahead, dissolving behind
     const near = 0.12 + 0.88 * Math.exp(-Math.max(0, t.at) / 5);
     const behind = t.at + t.dur <= 0 ? Math.max(0, 1 - (-(t.at + t.dur)) / -BEHIND) : 1;

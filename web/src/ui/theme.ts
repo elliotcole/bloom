@@ -1,10 +1,15 @@
 // Visual theme definitions — shared by all visualization modes
 
-export type VizMode =
-  | 'flower' | 'field' | 'orbit'
-  | 'tonal' | 'spiral' | 'set' | 'helix' | 'deep' | 'score' | 'orrery' | 'road' | 'weave';
+/** Every view, in no particular order (the table of draw functions in visualization.ts has one entry for each) */
+export const VIZ_MODES = [
+  'flower', 'field', 'orbit', 'tonal', 'spiral', 'set', 'helix', 'deep', 'score', 'orrery', 'road', 'weave',
+] as const;
+export type VizMode = typeof VIZ_MODES[number];
 
 export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal';
+
+/** Red, green, blue (0–255): a colour whose opacity the drawing chooses (ui/draw.ts ink, mark) */
+export type Rgb = readonly [number, number, number];
 
 export interface Theme {
   id: ThemeId;
@@ -23,8 +28,6 @@ export interface Theme {
   glowScale: number;
   /** Stroke outlines only — no fills (minimal theme). */
   strokeOnly: boolean;
-  /** Show CRT scanline overlay (phosphor theme, applied via CSS on body). */
-  scanlines: boolean;
   blendMode: GlobalCompositeOperation;
   /** Color for playhead bead, active rings, highlights. */
   accent: string;
@@ -32,7 +35,34 @@ export interface Theme {
   text: string;
   /** Color for guide / grid lines. */
   grid: string;
+  /** The lines and lettering drawn over the picture: connectors, rings, beads, the lanes, orrery, road and weave */
+  ink: Rgb;
+  /** Pitch-name labels on the notes (the | key) */
+  noteLabel: string;
+  /** Tonal and set: the ring round a pitch class of the scale, its name when the bloom has it, and when it hasn't */
+  scaleRing: string;
+  labelActive: string;
+  labelDim: string;
+  /** Orbit: the central star's glow, [centre, edge] */
+  starGlow: [string, string];
+  /** The lanes: the list being worked on, a cell just changed or breezed */
+  mark: Rgb;
+  /** The lanes: a frozen list */
+  frozen: string;
 }
+
+const WHITE: Rgb = [255, 255, 255];
+const rgba = (c: Rgb, a: number | string) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+/** The label and star colours of a skin with none of its own: its ink, at the opacities white had */
+const inked = (c: Rgb) => ({
+  ink: c,
+  noteLabel: rgba(c, '0.40'),
+  scaleRing: rgba(c, 0.55),
+  labelActive: rgba(c, 0.85),
+  labelDim: rgba(c, 0.38),
+  starGlow: [rgba(c, 0.3), rgba(c, 0)] as [string, string],
+});
+const ICE = '#7ab8e8';
 
 // ─── Dark (default) ───────────────────────────────────────────────────────────
 const DARK: Theme = {
@@ -47,11 +77,13 @@ const DARK: Theme = {
   polyFill: f => [`rgba(160,190,255,${0.11 + f * 0.09})`, `rgba(140,170,220,${0.03 + f * 0.03})`],
   glowScale: 1,
   strokeOnly: false,
-  scanlines: false,
   blendMode: 'source-over',
   accent: 'rgba(100,180,255,0.55)',
   text: 'rgba(255,255,255,0.14)',
   grid: 'rgba(255,255,255,0.04)',
+  ...inked(WHITE),
+  mark: [232, 163, 58],
+  frozen: ICE,
 };
 
 // ─── Phosphor (CRT green) ─────────────────────────────────────────────────────
@@ -67,11 +99,18 @@ const PHOSPHOR: Theme = {
   polyFill: f => [`rgba(20,180,20,${0.10 + f * 0.10})`, `rgba(10,80,10,${0.03 + f * 0.04})`],
   glowScale: 1.6,
   strokeOnly: false,
-  scanlines: true,
   blendMode: 'source-over',
   accent: '#ffb000',
   text: 'rgba(57,255,20,0.40)',
   grid: 'rgba(57,255,20,0.07)',
+  ink: [57, 255, 20],
+  noteLabel: 'rgba(57,255,20,0.55)',
+  scaleRing: 'rgba(57,255,20,0.55)',
+  labelActive: 'rgba(57,255,20,0.90)',
+  labelDim: 'rgba(57,255,20,0.40)',
+  starGlow: ['rgba(255,176,0,0.4)', 'rgba(255,255,255,0)'],
+  mark: [255, 176, 0],
+  frozen: ICE,
 };
 
 // ─── Ember (firelight) ────────────────────────────────────────────────────────
@@ -87,11 +126,13 @@ const EMBER: Theme = {
   polyFill: f => [`rgba(255,140,0,${0.10 + f * 0.10})`, `rgba(180,60,0,${0.03 + f * 0.04})`],
   glowScale: 1.8,
   strokeOnly: false,
-  scanlines: false,
   blendMode: 'source-over',
   accent: '#ff8800',
   text: 'rgba(255,160,30,0.35)',
   grid: 'rgba(255,90,0,0.06)',
+  ...inked([255, 160, 30]),
+  mark: [255, 136, 0],
+  frozen: ICE,
 };
 
 // ─── Arctic (ice / glacier) ───────────────────────────────────────────────────
@@ -107,11 +148,13 @@ const ARCTIC: Theme = {
   polyFill: f => [`rgba(0,200,255,${0.10 + f * 0.08})`, `rgba(0,100,200,${0.03 + f * 0.03})`],
   glowScale: 0.8,
   strokeOnly: false,
-  scanlines: false,
   blendMode: 'screen',
   accent: '#00ccff',
   text: 'rgba(100,220,255,0.30)',
   grid: 'rgba(0,180,255,0.06)',
+  ...inked([100, 220, 255]),
+  mark: [0, 204, 255],
+  frozen: ICE,
 };
 
 // ─── Solar (max-saturation full-spectrum, additive) ───────────────────────────
@@ -127,11 +170,13 @@ const SOLAR: Theme = {
   polyFill: f => [`rgba(255,255,100,${0.08 + f * 0.10})`, `rgba(255,200,0,${0.02 + f * 0.04})`],
   glowScale: 2.2,
   strokeOnly: false,
-  scanlines: false,
   blendMode: 'screen',
   accent: '#ffee00',
   text: 'rgba(255,240,80,0.32)',
   grid: 'rgba(255,220,0,0.05)',
+  ...inked([255, 240, 80]),
+  mark: [255, 238, 0],
+  frozen: ICE,
 };
 
 // ─── UV / Blacklight ─────────────────────────────────────────────────────────
@@ -147,11 +192,18 @@ const UV: Theme = {
   polyFill: f => [`rgba(200,0,255,${0.10 + f * 0.10})`, `rgba(100,0,200,${0.03 + f * 0.04})`],
   glowScale: 3,
   strokeOnly: false,
-  scanlines: false,
   blendMode: 'screen',
   accent: '#ff00ff',
   text: 'rgba(255,0,255,0.30)',
   grid: 'rgba(180,0,255,0.06)',
+  ink: [200, 100, 255],
+  noteLabel: 'rgba(200,100,255,0.55)',
+  scaleRing: 'rgba(200,100,255,0.55)',
+  labelActive: 'rgba(220,160,255,0.90)',
+  labelDim: 'rgba(200,100,255,0.40)',
+  starGlow: ['rgba(200,100,255,0.3)', 'rgba(200,100,255,0)'],
+  mark: [255, 0, 255],
+  frozen: ICE,
 };
 
 // ─── Minimal / Wireframe ─────────────────────────────────────────────────────
@@ -166,11 +218,13 @@ const MINIMAL: Theme = {
   polyFill: f => [`rgba(255,255,255,${0.05 + f * 0.07})`, `rgba(255,255,255,${0.01 + f * 0.02})`],
   glowScale: 0,
   strokeOnly: true,
-  scanlines: false,
   blendMode: 'source-over',
   accent: 'rgba(255,255,255,0.85)',
   text: 'rgba(255,255,255,0.20)',
   grid: 'rgba(255,255,255,0.05)',
+  ...inked(WHITE),
+  mark: WHITE,
+  frozen: ICE,
 };
 
 // ─── Exports ─────────────────────────────────────────────────────────────────

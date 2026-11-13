@@ -7,6 +7,14 @@
 
 type Stop = () => void;
 
+/**
+ * A page that's covered or in a background tab gets its own timers once a
+ * second at best, so whatever plays (a loop, a take, the piece player) hands
+ * its notes to the output this far ahead while hidden, stamped with their time
+ */
+export const HIDDEN_LOOKAHEAD_MS = 1500;
+export const pageHidden = (): boolean => typeof document !== 'undefined' && document.hidden;
+
 let _worker: Worker | null | undefined;
 const _fns = new Map<number, () => void>();
 let _next = 1;

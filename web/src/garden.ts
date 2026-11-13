@@ -18,12 +18,12 @@ export class Garden {
   }
 
   save(bloom: Bloom): void {
-    this.slots[this.cursor] = bloom.clone();
+    this.slots[this.cursor] = bloom.snapshot();
   }
 
   lift(): Bloom | null {
     const s = this.slots[this.cursor];
-    return s ? s.clone() : null;
+    return s ? s.snapshot() : null;
   }
 
   /** Delete the slot: the rest close up (the only slot is emptied instead) */
@@ -39,7 +39,7 @@ export class Garden {
   /** Insert the bloom at the cursor, sliding this slot and the rest right. Fills an empty slot instead. */
   insert(bloom: Bloom): void {
     if (this.current === null) { this.save(bloom); return; }
-    this.slots.splice(this.cursor, 0, bloom.clone());
+    this.slots.splice(this.cursor, 0, bloom.snapshot());
   }
 
   /** Insert empty slot at cursor */

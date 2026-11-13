@@ -10,6 +10,9 @@ import * as Tone from 'tone';
 import { Bloom } from './core/Bloom';
 import { noteOn, noteOff, allNotesOff } from './audio/midi';
 import { loadSynth, pianoOutput } from './audio/synth';
+import { HIDDEN_LOOKAHEAD_MS, pageHidden } from './audio/clock';
+import { offsAtPause } from './audio/pieceOffs';
+import type { PendingOff } from './audio/pieceOffs';
 import { BloomVisualization } from './ui/visualization';
 import type { VizMode, ThemeId } from './ui/theme';
 
@@ -39,8 +42,6 @@ const THEME_IDS: ThemeId[] = ['dark', 'phosphor', 'ember', 'arctic', 'solar', 'u
 
 const TICK_MS = 25;
 const LOOKAHEAD_MS = 200;
-// Hidden tabs only get a timer tick about once a second
-const LOOKAHEAD_HIDDEN_MS = 1500;
 
 function formatTime(s: number): string {
   const t = Math.max(0, Math.floor(s));
@@ -83,6 +84,11 @@ async function main() {
   }
 
   const { events, blooms, duration } = piece;
+  // nothing to play, or no length to place it on: say so, and leave the button off
+  if (!events.length || !(duration > 0)) {
+    startStatus.textContent = `"${pieceName}" has no notes`;
+    return;
+  }
   const loopCount = blooms.reduce((n, b) => (b.loop !== null ? Math.max(n, b.loop + 1) : n), 0);
   startTitle.textContent = piece.title;
   document.title = piece.title;
@@ -133,7 +139,7 @@ async function main() {
   let nextEvent = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   let visualTimers: ReturnType<typeof setTimeout>[] = [];
-  let pendingOffs: { atMs: number; pitch: number }[] = [];
+  let pendingOffs: PendingOff[] = [];
 
   function now(): number {
     return playing ? (performance.now() - startedAtMs) / 1000 : position;
@@ -149,7 +155,7 @@ async function main() {
   }
 
   function tick(): void {
-    const horizon = performance.now() + (document.hidden ? LOOKAHEAD_HIDDEN_MS : LOOKAHEAD_MS);
+    const horizon = performance.now() + (pageHidden() ? HIDDEN_LOOKAHEAD_MS : LOOKAHEAD_MS);
 
     // Releases first: the sampler can only release a note whose attack it has
     // already registered, and those queued here were attacked on an earlier tick
@@ -165,7 +171,7 @@ async function main() {
       if (atMs >= horizon) break;
 
       noteOn(pianoOutput, 0, pitch, vel, atMs);
-      pendingOffs.push({ atMs: atMs + dur * 1000, pitch });
+      pendingOffs.push({ onMs: atMs, atMs: atMs + dur * 1000, pitch });
       visualTimers.push(setTimeout(() => {
         showBloom(bloomIndex);
         viz.activateNote(pos);
@@ -180,10 +186,11 @@ async function main() {
   function silence(): void {
     visualTimers.forEach(clearTimeout);
     visualTimers = [];
+    // every note still to be released is: one handed to the sampler inside the lookahead
+    // as it starts (a jump plays on at once, so there's no coming back for it later)
+    offsAtPause(pendingOffs, performance.now()).forEach(off => noteOff(pianoOutput, 0, off.pitch, off.atMs));
     pendingOffs = [];
     allNotesOff(pianoOutput);
-    // Notes already handed to the sampler inside the lookahead still sound; catch them
-    setTimeout(() => { if (!playing) allNotesOff(pianoOutput); }, LOOKAHEAD_MS + 50);
   }
 
   function play(): void {

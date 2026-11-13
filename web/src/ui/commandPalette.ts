@@ -1,6 +1,6 @@
 // Command palette — open with Cmd+K, dot-chain commands, Tab/↑↓ to complete, ↵ to execute
 
-import { Bloom } from '../core/Bloom';
+import type { Bloom } from '../core/Bloom';
 import { Overlay, onKeys } from './overlay';
 
 export interface PaletteCommand {
@@ -10,6 +10,11 @@ export interface PaletteCommand {
   description: string;
   /** Execute the command on the given bloom */
   fn: (bloom: Bloom) => void;
+}
+
+/** `text` with its last segment (what's after the last dot) made `name`, the suggestion taken */
+export function withSuggestion(text: string, name: string): string {
+  return text.slice(0, text.lastIndexOf('.') + 1) + name;
 }
 
 export class CommandPalette extends Overlay {
@@ -113,9 +118,7 @@ export class CommandPalette extends Overlay {
   }
 
   private _applySuggestion(name: string): void {
-    const val = this._input.value;
-    const dot = val.lastIndexOf('.');
-    this._input.value = (dot === -1 ? '' : val.slice(0, dot + 1)) + name;
+    this._input.value = withSuggestion(this._input.value, name);
     this._refreshSuggestions();
     this._input.focus();
   }
@@ -128,6 +131,9 @@ export class CommandPalette extends Overlay {
   }
 
   private _execute(): void {
+    // ↑↓ then ↵ takes the highlighted suggestion for the last segment, as in the pickers
+    const picked = this._suggestEl.querySelector<HTMLElement>('.cp-sug.active')?.dataset.name;
+    if (picked) this._applySuggestion(picked);
     const raw = this._input.value.trim();
     if (!raw) { this.close(); return; }
 
@@ -136,18 +142,25 @@ export class CommandPalette extends Overlay {
     const errors: string[] = [];
     const executed: string[] = [];
 
-    for (const seg of segments) {
-      const cmd = this._findCommand(seg);
-      if (!cmd) { errors.push(`unknown: "${seg}"`); continue; }
+    // find every command before running any: a typo late in a chain leaves the bloom untouched
+    const cmds = segments.map(seg => this._findCommand(seg) ?? (errors.push(`unknown: "${seg}"`), null));
+    if (errors.length) {
+      this._showStatus('⚠ ' + errors.join(' · '), 'err');
+      return;
+    }
+
+    for (const [i, cmd] of cmds.entries()) {
       try {
-        cmd.fn(bloom);
-        executed.push(cmd.names[0]);
+        cmd!.fn(bloom);
+        executed.push(cmd!.names[0]);
       } catch (err) {
-        errors.push(`error in "${seg}": ${(err as Error).message ?? err}`);
+        errors.push(`error in "${segments[i]}": ${(err as Error).message ?? err}`);
+        break;
       }
     }
 
     if (errors.length) {
+      if (executed.length) this._onExecute(bloom);   // what ran before the error is in the bloom: draw it, record it
       this._showStatus('⚠ ' + errors.join(' · '), 'err');
       return;
     }

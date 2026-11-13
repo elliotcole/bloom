@@ -13,8 +13,7 @@ const atEvent = <T>(list: T[], i: number): T => copy(list[i % list.length]);
 
 /** The selected events (indices into the bloom's notes) as a bloom of their own */
 export function extractSelection(full: Bloom, sel: number[]): Bloom {
-  const sub = full.clone();
-  sub.stack = [];
+  const sub = full.snapshot();
   for (const f of FIELDS) {
     const list = full[f] as unknown[];
     // a single value stays single: the selection shares it
@@ -38,7 +37,7 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   out.stack = full.stack;
   // settings a key may change (ranges, legato …) come from the worked bloom;
   // the scale and key belong to the whole bloom (transposing a few notes doesn't change the key)
-  const settings = worked.clone();
+  const settings = worked.snapshot();
   settings.notes = out.notes; settings.timeIntervals = out.timeIntervals;
   settings.velocities = out.velocities; settings.chans = out.chans; settings.intervals = out.intervals; settings.figures = out.figures;
   settings.appliedScale = full.appliedScale; settings.keyRoot = full.keyRoot;

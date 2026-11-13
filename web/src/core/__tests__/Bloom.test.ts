@@ -105,11 +105,6 @@ describe('scale snapping', () => {
     b.dTranspose(1);
     expect(flat(b)).toEqual([63, 66, 70]);
   });
-  it('setRoot takes a negative root', () => {
-    const b = bloom([60, 64, 67]).applyScale(SCALES.major, 0);
-    b.addFlat();
-    expect(b.keyRoot).toBe(5);
-  });
 });
 
 describe('removeDoubles', () => {
@@ -179,15 +174,6 @@ describe('order', () => {
     expect(b.scrambleChunks(1)).toBe(false);
     expect(b.scrambleChunks(99)).toBe(true);
     expect(flat(b).sort()).toEqual([60, 62, 64]);
-  });
-});
-
-describe('velocities', () => {
-  it('mutateVelocities keeps rests', () => {
-    const b = bloom([60, 62, 64], [80, 0, 70]);
-    for (let i = 0; i < 20; i++) b.mutateVelocities();
-    expect(b.velocities[1]).toBe(0);
-    expect(b.velocities[0]).toBeGreaterThan(0);
   });
 });
 
@@ -512,5 +498,100 @@ describe('key centre (opt-k)', () => {
     b.transpose(2);
     expect(b.keyTuningRoot()).toBe(4);
     expect(b.appliedScale!.tonic).toBe(4);
+  });
+});
+
+describe('small fixes (audit, Nov 2026)', () => {
+  it('softer never makes a quiet note louder', () => {
+    const b = bloom([60, 62, 64], [10, 100, 0]);
+    expect(b.softer().velocities).toEqual([10, 83, 0]);
+    const c = bloom([60, 62], [10, 100]);
+    c.shapeList('vel', 'octaveDown');
+    expect(c.velocities[0]).toBe(10);
+  });
+
+  it('unGap fills rests with a whole velocity', () => {
+    expect(bloom([60, 62, 64], [0, 61, 62]).unGap().velocities).toEqual([62, 61, 62]);
+  });
+
+  it('a fixed duration of 0 or NaN leaves the bloom alone', () => {
+    for (const d of [0, NaN, -1]) {
+      for (const mode of ['trim', 'scale'] as const) {
+        const b = bloom([60, 62, 64]);
+        b.fixedDur = d; b.fixedDurMode = mode;
+        b.resolveFixed();
+        expect(b.notes).toEqual([60, 62, 64]);
+        expect(b.timeIntervals).toEqual([0.5, 0.25, 0.25]);
+      }
+    }
+  });
+
+  it('a capped bake ends on a whole pass of the notes', () => {
+    const b = bloom([60, 62, 64, 65, 67, 69, 71]);
+    b.intervals = Array.from({ length: 100 }, (_, i) => (i % 2 ? 7 : 0));
+    b.bakeIntervals();
+    expect(b.notes.length % 7).toBe(0);
+    expect(b.notes.length).toBeLessThanOrEqual(256);
+  });
+});
+
+describe('holds: the freezes and the fixed duration and grid', () => {
+  it('a snapshot has no push stack; the garden keeps snapshots', async () => {
+    const { Garden } = await import('../../garden');
+    const b = bloom([60, 62, 64]);
+    for (let i = 0; i < 5; i++) b.push();
+    expect(b.snapshot().stack).toEqual([]);
+    expect(b.stack.length).toBe(5);
+    const g = new Garden();
+    g.save(b);
+    expect(g.slots[0]!.stack).toEqual([]);
+    expect(g.lift()!.stack).toEqual([]);
+  });
+
+  it('import leaves the holds alone: a lifted bloom comes under them', () => {
+    const b = bloom([60, 62, 64]).applyScale(SCALES.major, 0);
+    b.freeze('pitch', true);
+    b.import(bloom([61, 63, 66]));
+    expect(b.frozen.pitch).not.toBe(false);
+    b.resolveFixed();
+    expect(inCMajor(b)).toBe(true);
+  });
+
+  it('holds() and setHolds() put back a palette a verb moved (undo of a tempo change)', () => {
+    const b = bloom([60, 62, 64, 65], [80], [0.25, 0.5, 0.25, 0.5]);
+    b.freeze('time', true);
+    const before = b.snapshot(), holds = b.holds();
+    b.slower(2);
+    expect(b.frozen.time).toEqual([0.5, 1]);
+    b.import(before).setHolds(holds);   // what undo does
+    b.resolveFixed();
+    expect(b.timeIntervals).toEqual([0.25, 0.5, 0.25, 0.5]);
+    holds.frozen.time = [9];            // a copy, not the bloom's own
+    expect(b.frozen.time).toEqual([0.25, 0.5]);
+  });
+
+  it('a frozen scale moves with a transposition', () => {
+    const b = bloom([60, 62, 64, 65]).applyScale(SCALES.major, 0);
+    b.freeze('pitch', true);
+    b.transpose(1);
+    b.resolveFixed();
+    expect(flat(b)).toEqual([61, 63, 65, 66]);
+  });
+
+  it('are saved with the file and come back', async () => {
+    const { Garden } = await import('../../garden');
+    const { sessionNow, restoreSession } = await import('../../io/garden-io');
+    const b = bloom([60, 62, 64]).applyScale(SCALES.major, 0);
+    b.freeze('pitch', true).freeze('vel', true);
+    b.fixedDur = 3; b.fixedDurMode = 'scale'; b.fixedGrid = 8;
+    const raw = sessionNow(b, new Garden());
+    const c = bloom([72]);
+    restoreSession(raw, c, new Garden());
+    expect(c.holds()).toEqual(b.holds());
+    // an older file has none: everything off
+    const old = JSON.parse(raw); delete old.holds;
+    c.freeze('time', true);
+    restoreSession(JSON.stringify(old), c, new Garden());
+    expect(c.holds()).toEqual(new Bloom().holds());
   });
 });

@@ -2,8 +2,7 @@
 
 `?` shows the keys on screen at any time, and there's a two-page
 [printable cheat sheet](https://bloom.ecc.xyz/cheatsheet.pdf) (US letter). This page explains how the pieces fit
-together. The keyboard was reorganised in October 2026. The version from before
-that is still playable at [bloom.ecc.xyz/legacy](https://bloom.ecc.xyz/legacy/).
+together. The keyboard was reorganised in October 2026.
 
 ---
 

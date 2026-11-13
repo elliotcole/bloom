@@ -156,7 +156,7 @@ export class BloomEditor extends Overlay {
     ov.querySelector('#be-apply')!.addEventListener('click', () => this._apply());
     ov.querySelector('#be-close')!.addEventListener('click', () => this.close());
     // esc closes, shift-↵ applies; typing's own keys (↵ for a new line among them) stand
-    onKeys(ov, {
+    onKeys(ov.querySelector<HTMLElement>('#be-box')!, {
       Escape: () => this.close(),
       Enter: e => (e.shiftKey ? this._apply() : false),
     });

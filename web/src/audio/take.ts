@@ -14,16 +14,15 @@ import type { Bloom } from '../core/Bloom';
 import type { Garden } from '../garden';
 import { bloomToJSON, bloomFromJSON } from '../io/garden-io';
 import type { BloomJSON } from '../io/garden-io';
-import { setMidiTap, onMidiMessage } from './midi';
+import { setMidiTap, onMidiMessage, isNoteOn } from './midi';
 import type { MidiOutput } from './midi';
 import { setTuningTap, tuningNow, setReplaying, replayHelper, replayPiano } from './tuningOut';
-import { every } from './clock';
-import { takeFrom, dueAfter } from './takeFrom';
+import { every, HIDDEN_LOOKAHEAD_MS, pageHidden } from './clock';
+import { takeFrom, dueAfter, due } from './takeFrom';
 
 const HOLD_MS = 10_000;        // what's sounding at the stop rings this long
 const DELAY_MS = 40;           // a replay sends each message this far ahead of its time
 const AHEAD_MS = 10;           // how far ahead of its time a message is handed to the output
-const AHEAD_HIDDEN_MS = 1500;  // in a covered or background tab, whose timers run once a second
 const SAVE_EVERY_MS = 60_000;  // a take being recorded is kept this often, in case the page goes
 
 /** Times are ms from the start of the take, when the message was sent (or arrived) */
@@ -172,13 +171,17 @@ export function stopTake(): void {
   _phase = 'ending';   // the tap lets nothing through now
   _host?.silence();
   const file = finish(sorted(rec.file), end);
+  // a note handed over ahead of the stop, to sound after it: it isn't in the take, its own
+  // note-off won't get out now, and all-notes-off isn't always honoured. Let go as it starts.
+  const port = _host?.out();
+  if (port) for (const [key, at] of sentAhead(rec.file, end)) port.send([0x80 | (key >> 7), key & 127, 0], rec.t0 + at + 1);
   _host?.changed();
   setTimeout(() => {
-    // let go of what held, as the take does, and of anything sent ahead of the stop
+    // let go of what held, as the take does, and of anything else
     const out = _host?.out();
     if (out) {
       for (const e of file.events) if (e[1] === 'm' && e[0] >= end) out.send(e[2]);
-      for (let ch = 0; ch < 16; ch++) out.send([0xb0 | ch, 123, 0]);
+      allOff(out);
     }
     _rec = null;
     _take = file;
@@ -207,7 +210,22 @@ function begin(atMs: number): void {
   _host.changed();
 }
 
-const isNoteOn = (d: ArrayLike<number>) => (d[0] & 0xf0) === 0x90 && d[2] > 0;
+/** All-notes-off on every channel (straight to the output: past the tap, and into no take), the pedal lifted too if asked */
+function allOff(out: MidiOutput, atMs?: number, pedal = false): void {
+  for (let ch = 0; ch < 16; ch++) {
+    if (pedal) out.send([0xb0 | ch, 64, 0], atMs);
+    out.send([0xb0 | ch, 123, 0], atMs);
+  }
+}
+
+/** Note-ons sent before `end` ms to sound after it: channel and pitch (ch · 128 + note), and when each sounds */
+export function sentAhead(f: TakeFile, end: number): Map<number, number> {
+  const ahead = new Map<number, number>();
+  for (const e of f.events) {
+    if (e[1] === 'm' && isNoteOn(e[2]) && due(e) > end) ahead.set((e[2][0] & 0x0f) * 128 + e[2][1], due(e));
+  }
+  return ahead;
+}
 
 function midiTap(data: number[], atMs: number | undefined): boolean {
   if (_phase === 'ending') return false;
@@ -255,7 +273,7 @@ function sorted(f: TakeFile): TakeFile {
 }
 
 function lastTime(f: TakeFile): number {
-  return f.events.reduce((m, e) => Math.max(m, e[0] + (e[1] === 'm' ? e[3] : 0)), 0);
+  return f.events.reduce((m, e) => Math.max(m, due(e)), 0);
 }
 
 /**
@@ -263,7 +281,6 @@ function lastTime(f: TakeFile): number {
  * sounding then holds HOLD_MS and is released (the pedal lifted too)
  */
 export function finish(f: TakeFile, end: number): TakeFile {
-  const due = (e: TakeEvent) => e[0] + (e[1] === 'm' ? e[3] : 0);
   const events = f.events.filter(e => due(e) <= end);
   const on = new Map<number, number>();   // ch * 128 + note → on
   const pedal = new Set<number>();
@@ -283,8 +300,27 @@ export function finish(f: TakeFile, end: number): TakeFile {
 
 // ─── Playing a take ───────────────────────────────────────────────────────────
 
-let _play: { T0: number; stop: () => void; gen: number } | null = null;
+/** A replay: its start, its stop, and the notes it has handed to the output with no note-off yet (ch · 128 + note → when each sounds) */
+let _play: { T0: number; stop: () => void; handed: Map<number, number> } | null = null;
 let _gen = 0;
+
+/**
+ * Let go of what a replay leaves: a note-off now for every note it has
+ * sounding, and for a note handed over ahead of its time (a loop's notes are,
+ * a lookahead ahead) one as it starts. All-notes-off alone comes before
+ * those, and some instruments and hosts ignore it anyway. Returns the time
+ * of the last of them.
+ */
+function letGo(out: MidiOutput, handed: Map<number, number>, now: number): number {
+  let last = now;
+  for (const [key, at] of handed) {
+    const off = [0x80 | (key >> 7), key & 127, 0];
+    out.send(off, now);
+    if (at > now) { out.send(off, at + 1); last = Math.max(last, at + 1); }
+  }
+  handed.clear();
+  return last;
+}
 
 /** Two voices: what the other voice's view shows, a note of it, its dark */
 export function takeOtherShown(b: Bloom | null): void {
@@ -315,8 +351,13 @@ export function seekTake(ms: number): void {
   _play.stop();
   _gen++;
   const out = _host.out(), now = performance.now();
-  // let go of what sounds, and of what was already handed over, a little ahead
-  if (out) for (const at of [now, now + DELAY_MS + AHEAD_MS]) for (let ch = 0; ch < 16; ch++) out.send([0xb0 | ch, 123, 0], at);
+  // let go of what sounds, and of what was already handed over, a little ahead (all-notes-off
+  // no later than that: the take is sounding again by then)
+  if (out) {
+    letGo(out, _play.handed, now);
+    allOff(out, now);
+    allOff(out, now + DELAY_MS + AHEAD_MS);
+  }
   run(_take, _host, ms);
   _host.changed();
 }
@@ -333,6 +374,15 @@ function run(take: TakeFile, host: TakeHost, fromMs: number): void {
   };
   const later = (atMs: number, fn: () => void) => setTimeout(() => { if (_gen === gen) fn(); }, Math.max(0, atMs - performance.now()));
   const ev = take.events;
+  const handed = new Map<number, number>();
+  // a MIDI message to the output at its time, the notes it leaves sounding kept for the stop
+  const send = (out: MidiOutput | null, m: number[], atMs: number) => {
+    const st = m[0] & 0xf0, key = (m[0] & 0x0f) * 128 + m[1];
+    if (isNoteOn(m)) handed.set(key, atMs);
+    else if (st === 0x80 || st === 0x90) handed.delete(key);
+    else if (st === 0xb0 && m[1] === 123) [...handed.keys()].filter(k => k >> 7 === (m[0] & 0x0f)).forEach(k => handed.delete(k));
+    out?.send(m, atMs);
+  };
   let i = 0;
   if (from > 0) {
     // what's in force at that moment, then on from there
@@ -346,19 +396,19 @@ function run(take: TakeFile, host: TakeHost, fromMs: number): void {
       if (at.garden !== null) { const g = take.gardens[at.garden]; host.garden(g.slots.map(s => (s < 0 ? null : bloomAt(s))), g.cursor); }
       if (at.shown) host.show(bloomAt(at.shown[0]), at.shown[1] === 1, at.shown[2] === 1);
       if (at.other !== null) host.other?.show(at.other < 0 ? null : bloomAt(at.other));
-      for (const k of dueAfter(take, at, from)) { const e = ev[k] as [number, 'm', number[], number]; out?.send(e[2], T0 + DELAY_MS + e[0] + e[3]); }
+      for (const k of dueAfter(take, at, from)) { const e = ev[k] as [number, 'm', number[], number]; send(out, e[2], T0 + DELAY_MS + e[0] + e[3]); }
       i = at.index;
     }
   }
   const tick = () => {
     const now = performance.now() - T0;
     const out = host.out();
-    const ahead = document.hidden ? AHEAD_HIDDEN_MS : AHEAD_MS;
+    const ahead = pageHidden() ? HIDDEN_LOOKAHEAD_MS : AHEAD_MS;
     while (i < ev.length && ev[i][0] <= now + ahead) {
       const e = ev[i++];
       const at = T0 + DELAY_MS + e[0];
       switch (e[1]) {
-        case 'm': out?.send(e[2], at + e[3]); break;
+        case 'm': send(out, e[2], at + e[3]); break;
         case 'h': replayHelper(take.sysex[e[2]], at); break;
         case 'p': replayPiano(e[2] < 0 ? null : take.tables[e[2]]); break;   // before the notes after it, as it went
         case 'b': { const [, , ix, trace, main] = e; later(at, () => host.show(bloomAt(ix), trace === 1, main === 1)); break; }
@@ -373,17 +423,23 @@ function run(take: TakeFile, host: TakeHost, fromMs: number): void {
     }
     if (i >= ev.length && now > take.length + DELAY_MS + 50) stopPlaying();
   };
-  _play = { T0, stop: every(5, tick), gen };
+  _play = { T0, stop: every(5, tick), handed };
   tick();
 }
 
 export function stopPlaying(): void {
   if (!_play) return;
   _play.stop();
+  const handed = _play.handed;
   _play = null;
   _gen++;
   const out = _host?.out();
-  if (out) for (let ch = 0; ch < 16; ch++) { out.send([0xb0 | ch, 64, 0]); out.send([0xb0 | ch, 123, 0]); }
+  if (out) {
+    const now = performance.now();
+    const last = letGo(out, handed, now);
+    allOff(out, undefined, true);
+    if (last > now) allOff(out, last, true);   // and again once the last note handed ahead has started
+  }
   _phase = 'idle';
   setReplaying(false);
   _host?.changed();
@@ -435,7 +491,13 @@ export function loadTakeFile(done: (err?: string) => void): void {
 
 const DB = 'bloom-takes', STORE = 'takes', KEY = 'last';
 
+let _db: Promise<IDBDatabase> | null = null;
+/** The one connection, opened at first use (a failed open is tried again) */
 function db(): Promise<IDBDatabase> {
+  return _db ??= openDb().catch(err => { _db = null; throw err; });
+}
+
+function openDb(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
     const r = indexedDB.open(DB, 1);
     r.onupgradeneeded = () => r.result.createObjectStore(STORE);

@@ -59,22 +59,6 @@ export function indexIn(arr: number[], val: number): number {
   return (val - arr[hi - 1]) <= (arr[hi] - val) ? hi - 1 : hi;
 }
 
-/** Linearly interpolated index in sorted array */
-export function indexInBetween(arr: number[], val: number): number {
-  const n = arr.length;
-  if (n === 0) return 0;
-  let lo = 0, hi = n;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (arr[mid] <= val) lo = mid + 1;
-    else hi = mid;
-  }
-  if (hi === n) return n - 1;
-  if (hi === 0) return 0;
-  const a = arr[hi - 1], b = arr[hi];
-  return b === a ? hi - 1 : (hi - 1) + (val - a) / (b - a);
-}
-
 export function nearestInList(val: number, list: number[]): number {
   return list[indexIn(list, val)];
 }
@@ -145,23 +129,6 @@ export function perfectShuffle<T>(arr: T[]): T[] {
 export function mirror<T>(arr: T[]): T[] {
   if (arr.length <= 1) return [...arr];
   return [...arr, ...arr.slice(0, -1).reverse()];
-}
-
-export function permute<T>(arr: T[], n: number): T[] {
-  // nth lexicographic permutation
-  const a = [...arr];
-  const factoriadic: number[] = [];
-  let m = n;
-  for (let i = 1; i <= a.length; i++) {
-    factoriadic.unshift(m % i);
-    m = Math.floor(m / i);
-  }
-  const result: T[] = [];
-  const pool = [...a];
-  for (const f of factoriadic) {
-    result.push(pool.splice(f, 1)[0]);
-  }
-  return result;
 }
 
 // ─── Pattern operations ───────────────────────────────────────────────────────
@@ -276,15 +243,6 @@ export function matchNesting(sourceArray: number[], template: NoteArray): NoteAr
   return nest(template);
 }
 
-export function flattenSingletons(arr: any[]): any[] {
-  return arr.map(item => {
-    if (!Array.isArray(item)) return item;
-    if (item.length === 0) return undefined;
-    if (item.length === 1) return item[0];
-    return item;
-  }).filter(x => x !== undefined);
-}
-
 // ─── Doubles ─────────────────────────────────────────────────────────────────
 
 export function indexOfDoubles(arr: number[]): number[][] {
@@ -301,17 +259,6 @@ export function removeDoubles(arr: number[]): number[] {
   const toRemove = new Set<number>();
   doubles.forEach(set => set.slice(1).forEach(i => toRemove.add(i)));
   return arr.filter((_, i) => !toRemove.has(i));
-}
-
-export function moveDoublesUpOctave(arr: number[]): number[] {
-  const result = [...arr];
-  const doubles = indexOfDoubles(result);
-  doubles.forEach(set => {
-    set.forEach((idx, i) => {
-      if (i > 0) result[idx] = result[idx] + 12 * i;
-    });
-  });
-  return result;
 }
 
 // ─── All tuples (Cartesian product) ──────────────────────────────────────────

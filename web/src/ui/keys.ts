@@ -5,7 +5,12 @@ import {
   alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, recentre, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
-import type { ListKey, ListVerb, NoteEvent, PatternOp, IntervalVal } from '../core/Bloom';
+import type { ListKey, NoteEvent, IntervalVal, Holds } from '../core/Bloom';
+import {
+  MODE_KEYS, KEY_OF_MODE, MODE_TAG, MODE_NAME, LIST_OF_MODE, LIST_VERBS, LIST_MODE_KEYS, TUNING_KEYS, TUNING_HINT,
+  FREEZE_ITEMS, FREEZE_KEYS, findModeKey, passesHome, own,
+} from './modeKeys';
+import type { ListMode, ListCtx, TuningCtx, FreezeCtx, FreezeItem } from './modeKeys';
 import { Garden } from '../garden';
 import type { MidiOutput } from '../audio/midi';
 import type { CueContext } from './cues';
@@ -34,97 +39,8 @@ import {
 import { spell } from '../lib/numbers';
 import { worldColor, worldHues, worldOf } from './worlds';
 
-// ─── Quantize cycle ───────────────────────────────────────────────────────────
-
-const QUANTIZE_OPTIONS = [4, 3, 2, 1, 8, 7, 6, 5];
-let _quantizeIdx = 4; // starts at 8
-function currentQuantize(): number { return QUANTIZE_OPTIONS[_quantizeIdx]; }
-function nextQuantize(): number {
-  _quantizeIdx = (_quantizeIdx + 1) % QUANTIZE_OPTIONS.length;
-  return currentQuantize();
-}
-
-// ─── List modes ───────────────────────────────────────────────────────────────
-
-type ListMode = 'pitch' | 'time' | 'vel' | 'chan' | 'iv' | 'fig';
-
-const MODE_KEYS: Record<string, ListMode> = { p: 'pitch', t: 'time', v: 'vel', c: 'chan', '5': 'iv', b: 'fig' };
-const KEY_OF_MODE: Record<ListMode, string> = { pitch: 'p', time: 't', vel: 'v', chan: 'c', iv: '5', fig: 'b' };
-const MODE_TAG: Record<ListMode, string> = { pitch: 'P', time: 'T', vel: 'V', chan: 'CH', iv: 'IV', fig: 'FIG' };
-const MODE_NAME: Record<ListMode, string> = { pitch: 'pitch', time: 'time', vel: 'velocity', chan: 'channel', iv: 'intervals', fig: 'figures' };
-const LIST_OF_MODE: Record<ListMode, ListKey> = { pitch: 'notes', time: 'time', vel: 'vel', chan: 'chan', iv: 'iv', fig: 'fig' };
-
-/** One key, one verb, in every list mode. `labels` names what the verb does to a particular list. */
-type ListAction = { label: string; labels?: Partial<Record<ListMode, string>> } &
-  ({ pattern: PatternOp } | { verb: ListVerb });
-
-const LIST_KEYS: Record<string, ListAction> = {
-  // order and length
-  s: { pattern: 'scramble', label: 'scramble' },
-  R: { pattern: 'mirror', label: 'mirror' },
-  '9': { pattern: 'rotate<', label: 'rotate <<' },
-  '0': { pattern: 'rotate>', label: 'rotate >>' },
-  u: { pattern: 'stutter', label: 'stutter' },
-  U: { pattern: 'sputter', label: 'sputter' },
-  o: { verb: 'sortUp', label: 'sort up', labels: { pitch: 'sort low → high', time: 'sort short → long', vel: 'crescendo', fig: 'shorter figures first' } },
-  O: { verb: 'sortDown', label: 'sort down', labels: { pitch: 'sort high → low', time: 'sort long → short', vel: 'decrescendo', fig: 'longer figures first' } },
-  z: { verb: 'dropLast', label: 'drop last' },
-  a: { verb: 'addFromPalette', label: 'add one (palette)', labels: { pitch: 'add one in scale', fig: 'add one (a figure in use)' } },
-  A: { verb: 'addRandom', label: 'add one (any)', labels: { pitch: 'add one (any pitch)', fig: 'add one (a new figure)' } },
-  // values
-  '1': { verb: 'nudgeDown', label: 'down', labels: { pitch: 'semitone down', time: 'a little faster', vel: 'a little softer', chan: 'shift −1', iv: 'all one lower', fig: 'every step a scale step lower' } },
-  '2': { verb: 'nudgeUp', label: 'up', labels: { pitch: 'semitone up', time: 'a little slower', vel: 'a little louder', chan: 'shift +1', iv: 'all one higher', fig: 'every step a scale step higher' } },
-  '!': { verb: 'octaveDown', label: 'octave down', labels: { time: 'double time', vel: 'much softer', iv: 'an octave lower' } },
-  '@': { verb: 'octaveUp', label: 'octave up', labels: { time: 'half time', vel: 'much louder', iv: 'an octave higher' } },
-  '3': { verb: 'stepDown', label: 'palette step down', labels: { pitch: 'scale step down' } },
-  '4': { verb: 'stepUp', label: 'palette step up', labels: { pitch: 'scale step up' } },
-  '#': { verb: 'breezeDown', label: 'breeze: some a step down' },
-  '$': { verb: 'breezeUp', label: 'breeze: some a step up' },
-  '-': { verb: 'converge', label: 'converge', labels: { pitch: 'narrower range', time: 'evener', vel: 'flatter dynamics', iv: 'evener spacing' } },
-  '=': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
-  '+': { verb: 'diverge', label: 'diverge', labels: { pitch: 'wider range', time: 'more uneven', vel: 'wider dynamics', iv: 'more uneven spacing' } },
-  y: { verb: 'unify', label: 'unify', labels: { pitch: 'unify (all the commonest pitch)', fig: 'unify (every figure the commonest)' } },
-  i: { verb: 'invert', label: 'invert', labels: { pitch: 'invert high ↔ low', time: 'invert long ↔ short', vel: 'invert loud ↔ quiet', iv: 'invert above ↔ below', fig: 'invert up ↔ down' } },
-  I: { verb: 'invertMid', label: 'invert around middle', labels: { pitch: 'invert around the mean', iv: 'invert wide ↔ close' } },
-  w: { verb: 'curve', label: 'curve', labels: { pitch: 'contour', time: 'rubato curve', vel: 'hairpins', iv: 'swell of widths' } },
-  // vocabulary
-  m: { verb: 'mutate', label: 'mutate (palette)', labels: { pitch: 'mutate (scale steps)', fig: 'mutate (a step in a few)' } },
-  M: { verb: 'mutateWild', label: 'mutate (wild)', labels: { pitch: 'mutate (chromatic)', fig: 'mutate (a few new figures)' } },
-  h: { verb: 'fewer', label: 'fewer distinct values', labels: { pitch: 'one pitch class fewer', fig: 'one kind of figure fewer' } },
-  H: { verb: 'more', label: 'more distinct values', labels: { pitch: 'one pitch class more', fig: 'one kind of figure more' } },
-  n: { verb: 'renew', label: 'new list', labels: { pitch: 'new pitches in scale', chan: 'new channels (the ones in use)', iv: 'new chords, same places', fig: 'new figures, same places' } },
-  N: { verb: 'renewWild', label: 'new list', labels: { pitch: 'new pitches (any)', chan: 'new channels (any)', iv: 'new chords and places', fig: 'new figures and places' } },
-};
-
-// l tilts down and L up, in every list
-const TILT_LABELS: Record<'tiltDown' | 'tiltUp', Record<ListMode, string>> = {
-  tiltDown: { pitch: 'tilt down', time: 'accelerando', vel: 'decrescendo', chan: 'drift down', iv: 'closing in', fig: 'tilt' },
-  tiltUp: { pitch: 'tilt up', time: 'ritardando', vel: 'crescendo', chan: 'drift up', iv: 'opening out', fig: 'tilt' },
-};
-function tiltKey(e: KeyboardEvent): 'tiltDown' | 'tiltUp' | null {
-  if (e.code !== 'KeyL' || e.altKey) return null;
-  return e.shiftKey ? 'tiltUp' : 'tiltDown';
-}
-
-function own<T extends object>(obj: T, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-// ─── Freeze menu ──────────────────────────────────────────────────────────────
-
-interface FreezeItem { key: string; alias?: string; name: string; selector: string }
-
-/** F, then one of these. Keys match the list modes where there is one (t, v, c). */
-const FREEZE_ITEMS: FreezeItem[] = [
-  { key: 'p', name: 'pitch', selector: '.freeze-palette[data-list="pitch"]' },
-  { key: 't', alias: 'r', name: 'rhythm', selector: '.freeze-palette[data-list="time"]' },
-  { key: 'v', name: 'dynamics', selector: '.freeze-palette[data-list="vel"]' },
-  { key: 'c', name: 'channels', selector: '.freeze-palette[data-list="chan"]' },
-  { key: 'd', name: 'duration', selector: '#fixed-dur-enabled' },
-  { key: '5', name: 'intervals', selector: '.freeze-palette[data-list="iv"]' },
-  { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
-  { key: 'l', name: "the other voice's length", selector: '#voice-lock' },
-];
+/** A step back in the undo history: the bloom, what was pinned, and the freezes in force */
+interface HistoryEntry { bloom: Bloom; pins: number[]; holds: Holds }
 
 // ─── App state ────────────────────────────────────────────────────────────────
 
@@ -218,7 +134,7 @@ export interface KeyHandlerState {
   setVizModeFn: ((mode: VizMode) => void) | null;
   /** Called after every refresh, so the tuning editor follows the bloom */
   afterRefreshFn?: () => void;
-  /** The tuning view (opt-t) */
+  /** The tuning view (T) */
   /** ↵ in a list mode: type the list (main.ts gives it the line to type on) */
   typeList?: (label: string, text: string, commit: (text: string, complete: boolean, values: string[]) => string | null, fields?: TyperField[]) => void;
   /** d: the pattern palette over a list of `n`; `bake` writes it out and returns what's wrong, or null */
@@ -264,7 +180,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   const HISTORY_MAX = 300;
   // each step remembers the pins with the bloom: a key can move them (events
   // added before a pin), and undo must put them back on the same events
-  const _undo: { bloom: Bloom; pins: number[] }[] = [];
+  const _undo: HistoryEntry[] = [];
   // what the asking keys offered last time: } (split at home, divide in time mode), " and S
   const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3, fitTo: 8 };
 
@@ -273,9 +189,6 @@ export function createKeyHandler(state: KeyHandlerState) {
    * returns what to say. A selection the key was working on is lifted out
    * again when the answer comes, so the count applies to those events alone.
    */
-  /** opt-z: the longest a list can be cut or looped to */
-  const FIT_MAX = 512;
-
   function askCount(e: KeyboardEvent, label: string, last: number, act: (n: number) => string, max = 16, min = 2): boolean {
     if (!state.typeList) return false;
     e.preventDefault();   // the line takes focus now: the key mustn't land in it
@@ -338,23 +251,25 @@ export function createKeyHandler(state: KeyHandlerState) {
     });
   }
 
-  const _redo: { bloom: Bloom; pins: number[] }[] = [];
-  const snapshotOf = (b: Bloom) => { const c = b.clone(); c.stack = []; return c; };
+  const _redo: HistoryEntry[] = [];
+  const snapshotOf = (b: Bloom) => b.snapshot();
   let _prevBloom = snapshotOf(state.bloom);
   let _prevSnap = snap(state.bloom);
   let _prevPins: number[] = [];   // the pins that go with _prevBloom
+  let _prevHolds = state.bloom.holds();   // and the freezes: undo puts back the palettes a verb moved (a tempo change, a transposition)
   const vizArea = document.getElementById('viz-area');
   const _notice = vizArea ? new Notice(vizArea) : null;
 
   /** Record the current state; returns what changed since the last one ('' if nothing) */
   function record(): string {
     const now = snap(state.bloom);
-    if (sameSnap(now, _prevSnap)) { _prevBloom = snapshotOf(state.bloom); return ''; }   // only a setting changed (a name, say): the record keeps it
+    if (sameSnap(now, _prevSnap)) { _prevBloom = snapshotOf(state.bloom); _prevHolds = state.bloom.holds(); return ''; }   // only a setting changed (a name, say): the record keeps it
     const what = describeChange(_prevSnap, now);
-    _undo.push({ bloom: _prevBloom, pins: _prevPins });
+    _undo.push({ bloom: _prevBloom, pins: _prevPins, holds: _prevHolds });
     if (_undo.length > HISTORY_MAX) _undo.shift();
     _redo.length = 0;
     _prevBloom = snapshotOf(state.bloom);
+    _prevHolds = state.bloom.holds();
     _prevPins = [..._pinned];
     _prevSnap = now;
     return what;
@@ -364,10 +279,12 @@ export function createKeyHandler(state: KeyHandlerState) {
     const from = redo ? _redo : _undo, to = redo ? _undo : _redo;
     const target = from.pop();
     if (!target) { status(redo ? 'nothing to redo' : 'nothing to undo'); return; }
-    to.push({ bloom: snapshotOf(state.bloom), pins: [..._pinned] });
+    to.push({ bloom: snapshotOf(state.bloom), pins: [..._pinned], holds: state.bloom.holds() });
     const before = _prevSnap;
     const stack = state.bloom.stack;
     state.bloom.import(target.bloom);
+    state.bloom.setHolds(target.holds);
+    _prevHolds = state.bloom.holds();
     _pinned.clear();
     target.pins.forEach(i => _pinned.add(i));
     _prevPins = [...target.pins];
@@ -491,7 +408,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** Keys that play, view, move through the garden or switch modes see the whole bloom (homeKeys: `whole`) */
   function worksOnSelection(e: KeyboardEvent): boolean {
-    if (e.metaKey || e.ctrlKey || _freezeMenu || e.key === 'F') return false;
+    if (e.metaKey || e.ctrlKey || _freezeMenu || keyChar(e) === 'F') return false;
     if (state.tuningView?.isOpen()) return false;   // tuning: the whole bloom's
     if (!e.altKey && own(MODE_KEYS, keyChar(e))) return false;
     // in a list mode other than pitch, a key that changes the list's length works on the whole list:
@@ -729,6 +646,7 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   /** hold = false lets a change through pinned events (an edit by hand, a lift, a load) */
   function refresh(msg = '', hold = true) {
+    syncFreezeUi();   // a load, an undo or the other voice may have changed the holds under the boxes
     // Cancel any in-progress garden preview
     if (_previewResetId !== null) { clearTimeout(_previewResetId); _previewResetId = null; }
     const settled = _working !== null;   // pins were kept out of the key's way
@@ -801,6 +719,28 @@ export function createKeyHandler(state: KeyHandlerState) {
     return freezeBox(f)?.checked ?? false;
   }
 
+  /**
+   * The settings bar's boxes set from the bloom's holds, and the badge after
+   * them. The boxes drive the bloom when clicked or keyed; this is the other
+   * way, for when the holds change under them: undo, a load, the other voice.
+   */
+  function syncFreezeUi() {
+    const h = state.bloom.holds();
+    const set = (sel: string, fn: (el: HTMLInputElement & HTMLSelectElement) => void) => {
+      const el = document.querySelector<HTMLInputElement & HTMLSelectElement>(sel);
+      if (el) fn(el);
+    };
+    for (const k of ['pitch', 'time', 'vel', 'chan', 'iv'] as const) {
+      set(`.freeze-palette[data-list="${k}"]`, el => { el.checked = h.frozen[k] !== false; });
+    }
+    set('#fixed-dur-enabled', el => { el.checked = h.fixedDur !== false; });
+    set('#fixed-dur-amount', el => { el.disabled = h.fixedDur === false; if (h.fixedDur !== false) el.value = String(h.fixedDur); });
+    set('#fixed-dur-mode', el => { el.disabled = h.fixedDur === false; el.value = h.fixedDurMode; });
+    set('#fixed-grid-enabled', el => { el.checked = h.fixedGrid !== false; });
+    set('#fixed-grid-size', el => { el.disabled = h.fixedGrid === false; if (h.fixedGrid !== false) el.value = String(h.fixedGrid); });
+    updateFreezeBadge();
+  }
+
   /** Show what's frozen in the header, e.g. ❄ p t g */
   function updateFreezeBadge() {
     const badge = document.getElementById('freeze-badge');
@@ -827,34 +767,31 @@ export function createKeyHandler(state: KeyHandlerState) {
    * opt keys pass through (returns false); anything else is held with a hint.
    */
   function onFreezeKey(e: KeyboardEvent): boolean {
-    if (e.code === 'Escape' || (e.key === 'F' && !e.altKey)) { setFreezeMenu(false); return true; }
-    if (e.altKey || e.metaKey || e.ctrlKey) return false;
-    if (e.key === 'e') {
-      const n = _pinned.size;
-      if (n) { clearPins(); status(`${n} event${n === 1 ? '' : 's'} unpinned`); }
-      else status('no pinned events — click a node to pin it');
-      return true;
-    }
-    const f = FREEZE_ITEMS.find(item => item.key === e.key || item.alias === e.key);
-    if (!f) {
-      const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?']);
-      if (PASS.has(e.key)) return false;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete'].includes(e.code)) return false;
-      status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
-      return true;
-    }
-    const box = freezeBox(f);
-    if (!box) return true;
-    if (f.key === 'd') { cycleDuration(box); return true; }
-    box.checked = !box.checked;
-    box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click (the lock, below)
-    updateFreezeBadge();
-    refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
-    status(f.key === 'l'
-      ? box.checked ? `held to the other voice's length ❄${_voices ? ` (${otherName()}: ${_voices.other.bloom.passDur()} beats)` : ', once there are two voices (opt-tab)'}` : 'length free of the other voice'
-      : `${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
+    const k = keyChar(e);   // caps lock aside
+    const key = findModeKey(FREEZE_KEYS, e, k);
+    if (key) return key.act!(freezeCtx) !== false;
+    if (e.altKey || passesHome(e, k)) return false;
+    status(`[freeze] nothing on ${e.key}: ${FREEZE_ITEMS.map(i => i.key).join(' ')}, F or esc closes`);
     return true;
   }
+
+  const freezeCtx: FreezeCtx = {
+    status: msg => status(msg),
+    close: () => setFreezeMenu(false),
+    unpin: () => { const n = _pinned.size; if (n) clearPins(); return n; },
+    toggle: f => {
+      const box = freezeBox(f);
+      if (!box) return;
+      if (f.key === 'd') { cycleDuration(box); return; }
+      box.checked = !box.checked;
+      box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click (the lock, below)
+      updateFreezeBadge();
+      refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
+      status(f.key === 'l'
+        ? box.checked ? `held to the other voice's length ❄${_voices ? ` (${otherName()}: ${_voices.other.bloom.passDur()} beats)` : ', once there are two voices (opt-tab)'}` : 'length free of the other voice'
+        : `${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
+    },
+  };
 
   function durMode(): string {
     return (document.getElementById('fixed-dur-mode') as HTMLSelectElement | null)?.value ?? 'trim';
@@ -887,254 +824,105 @@ export function createKeyHandler(state: KeyHandlerState) {
   document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-dur-mode, #fixed-grid-enabled, #voice-lock')
     .forEach(el => el.addEventListener('change', updateFreezeBadge));
 
-  /** Handle a key in a list mode. Returns true if the key was consumed. */
+  /** ↵ in a list mode: the list as text to type over (shift-↵: what was typed, round and round, as long as the notes) */
+  function typeTheList(m: ListMode, tag: string): boolean {
+    if (!state.typeList) return false;
+    const b = state.bloom;
+    const typed = listAsText(b, m);
+    const extra = listFields(b, m);
+    state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete, values) => {
+      const wrong = extra?.check(values) ?? null;
+      if (wrong) return wrong;
+      const problem = typed.set(text);
+      if (problem) return problem;
+      extra?.set(values);
+      if (complete) {
+        const want = b.notes.length;
+        const list = b.getList(LIST_OF_MODE[m]);
+        if (list.length && want) b.setList(LIST_OF_MODE[m], Array.from({ length: want }, (_, i) => list[i % list.length]));
+      }
+      const how = m === 'fig' ? ` · ${b.figureTime}${b.figureTime !== 'divide' ? ` ${b.figureDurs.join(' ')}` : ''} · vel ${b.figureVel}%`
+        : m === 'iv' ? ` · vel ${b.intervalVel}%` : '';
+      const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}`;
+      status(msg);
+      refresh(msg, false);
+      return null;
+    }, extra?.fields);
+    return true;
+  }
+
+  /** What a list-mode key's action can reach (modeKeys.ts ListCtx) */
+  function listCtx(e: KeyboardEvent, ch: string, m: ListMode): ListCtx {
+    const b = state.bloom;
+    const tag = `[${MODE_TAG[m].toLowerCase()}]`;
+    const say = (msg: string) => { status(`${tag} ${msg}`); refresh(`${tag} ${msg}`); };
+    return {
+      e, ch, m, k: LIST_OF_MODE[m], tag, name: MODE_NAME[m], b, g: state.garden,
+      status, say,
+      apply: (msg, fn) => { status(`${tag} ${msg}`); fn(); refresh(`${tag} ${msg}`); },
+      askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
+      memo: _memo,
+      other: () => (_voices ? { bloom: _voices.other.bloom, name: otherName() } : null),
+      pattern: again => patternKey(e, LIST_OF_MODE[m], again, `the ${MODE_NAME[m]} list`, `${tag} `),
+      type: () => typeTheList(m, tag),
+      text: () => listAsText(state.bloom, m).text,
+      leave: () => setListMode(null),
+    };
+  }
+
+  /**
+   * Handle a key in a list mode. Returns true if the key was consumed. The
+   * mode's own keys first (modeKeys.ts LIST_MODE_KEYS), then the keys that pass
+   * to home, then the verbs every list shares (LIST_VERBS).
+   */
   function onListKey(e: KeyboardEvent, m: ListMode): boolean {
     const ch = keyChar(e);
-    const b = state.bloom;
-    const g = state.garden;
-    const tag = `[${MODE_TAG[m].toLowerCase()}]`;
-
-    // l / L tilt this list, as they tilt the pitches at home
-    const tilt = tiltKey(e);
-    if (tilt) {
-      const label = TILT_LABELS[tilt][m];
-      if (m === 'fig') { status(`${tag} no figures version of tilt`); return true; }
-      b.shapeList(LIST_OF_MODE[m], tilt);
-      status(`${tag} ${label}`);
-      refresh(`${tag} ${label}`);
-      return true;
-    }
-    // with two voices, opt-f / opt-x copy or lace this list from the other voice
-    // (f / x take it from the garden slot); at home opt-x copies the whole voice across
-    if (e.altKey && !e.shiftKey && (e.code === 'KeyF' || e.code === 'KeyX')) {
-      if (!_voices) { status(`${tag} opt-${e.code === 'KeyF' ? 'f' : 'x'} takes from the other voice: opt-tab brings one in`); return true; }
-      const k = LIST_OF_MODE[m];
-      const from = _voices.other.bloom;
-      if (!from.getList(k).length) { status(`${tag} ${otherName()} has no ${MODE_NAME[m]} list`); return true; }
-      const msg = e.code === 'KeyX' ? `${tag} laced with ${otherName()}'s ${MODE_NAME[m]}` : `${tag} ${otherName()}'s ${MODE_NAME[m]}`;
-      if (e.code === 'KeyX') b.laceList(k, from); else b.copyList(k, from);
-      status(msg);
-      refresh(msg);
-      return true;
-    }
-    // opt-z cuts or loops this list to a length it asks for, as Z fits it to the notes
-    if (e.altKey && !e.shiftKey && e.code === 'KeyZ') {
-      const k = LIST_OF_MODE[m];
-      if (k === 'notes') { status(`${tag} opt-z fits the other lists to a length; the notes are what they fit against`); return true; }
-      return askCount(e, `${MODE_NAME[m]} list, how long:`, _memo.fitTo, n => {
-        _memo.fitTo = n;
-        const { cut, looped } = b.fitListsTo(n, [k]);
-        return `${tag} ${cut ? 'cut' : looped ? 'looped round' : 'already'} to ${n}: ${listAsText(b, m).text}`;
-      }, FIT_MAX, 1) || true;
-    }
+    const key = findModeKey(LIST_MODE_KEYS, e, ch, m);
+    if (key) return !key.home && key.act!(listCtx(e, ch, m)) !== false;
     if (e.altKey) return false;   // all other opt combos keep their home meaning
+    if (passesHome(e, ch) || e.code === 'Escape') return false;   // shift-esc (esc itself leaves the mode) inverts at home
 
-    if (e.code === 'Escape' && !e.shiftKey) {
-      setListMode(null);
-      status(`${MODE_NAME[m]} mode off`);
-      return true;
-    }
-
-    // ↵ types the list: the same in every list mode
-    if (e.code === 'Enter' && state.typeList) {
-      const typed = listAsText(b, m);
-      const extra = listFields(b, m);
-      state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete, values) => {
-        const wrong = extra?.check(values) ?? null;
-        if (wrong) return wrong;
-        const problem = typed.set(text);
-        if (problem) return problem;
-        extra?.set(values);
-        // shift-↵: what was typed, round and round, as long as the notes
-        if (complete) {
-          const want = b.notes.length;
-          const list = b.getList(LIST_OF_MODE[m]);
-          if (list.length && want) b.setList(LIST_OF_MODE[m], Array.from({ length: want }, (_, i) => list[i % list.length]));
-        }
-        const how = m === 'fig' ? ` · ${b.figureTime}${b.figureTime !== 'divide' ? ` ${b.figureDurs.join(' ')}` : ''} · vel ${b.figureVel}%`
-          : m === 'iv' ? ` · vel ${b.intervalVel}%` : '';
-        const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}`;
-        status(msg);
-        refresh(msg, false);
-        return null;
-      }, extra?.fields);
-      return true;
-    }
-
-    const PASS = new Set([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?', 'F', 'T']);
-    if (PASS.has(ch)) return false;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape', 'Tab'].includes(e.code)) {
-      return false;   // tab moves between voices; shift-esc (esc itself left the mode above) inverts at home
-    }
-
-    const apply = (msg: string, fn: () => void) => {
-      status(`${tag} ${msg}`);
-      fn();
-      refresh(`${tag} ${msg}`);
-    };
-
-    // Pitch keys that live at home too: scales, center range, intervals
-    if (m === 'pitch' && 'kKjJeE'.includes(ch)) return false;
-    // the home interval keys mean the same in pitch and intervals mode
-    if ((m === 'pitch' || m === 'iv') && '6^7&8*%'.includes(ch)) return false;
-    if (m === 'pitch' && (ch === '(' || ch === ')')) {
-      apply(ch === '(' ? 'pivot (highest)' : 'pivot (loudest)', () => (ch === '(' ? b.pivot() : b.pivotLoudest()));
-      return true;
-    }
-    if (m === 'pitch' && (ch === '[' || ch === ']')) {
-      const dir = ch === ']' ? 1 : -1;
-      const name = dir === 1 ? 'sharpward' : 'flatward';
-      const moved = b.fifthsward(dir);
-      if (moved) { status(`${tag} ${name}: ${moved}`); refresh(`${tag} ${name}`); }
-      else status(`${tag} no ${name} step from here`);
-      return true;
-    }
-    if (m === 'pitch' && (ch === 'q' || ch === 'Q')) {
-      if (ch === 'q') apply('snap to the scale', () => b.shapeList('notes', 'quantize'));
-      else status(`${tag} q snaps to the scale; k K j J choose it`);
-      return true;
-    }
-    // intervals: q puts them in the scale, as it puts pitches in it in pitch mode
-    if (m === 'iv' && (ch === 'q' || ch === 'Q')) {
-      if (ch === 'Q') status(`${tag} q snaps the intervals to the scale (m3 → 3rd)`);
-      else if (b.shapeList('iv', 'quantize')) { status(`${tag} snap to the scale: ${formatIntervals(b.intervals)}`); refresh(`${tag} snap to the scale`); }
-      else status(`${tag} already in the scale`);
-      return true;
-    }
-    // and ; : thicken and thin the chords, as they clump and flatten them at home
-    if (m === 'iv' && (ch === ';' || ch === ':')) {
-      const more = ch === ';';
-      if (b.thickenIntervals(more)) { const msg = `${tag} ${more ? 'thicker' : 'thinner'} chords: ${formatIntervals(b.intervals)}`; status(msg); refresh(msg); }
-      else status(`${tag} ${more ? 'no voice left to add' : 'every chord is one interval already'}`);
-      return true;
-    }
-    // { merges two neighbours in any list (as it merges two notes at home)
-    if (ch === '{') {
-      const k = LIST_OF_MODE[m];
-      const msg = b.mergeList(k) ? `${tag} merge: two become one, ${b.getList(k).length} long` : `${tag} nothing to merge`;
-      status(msg);
-      refresh(msg);
-      return true;
-    }
-    // } divides in time mode (as it splits at home), asking how many
-    if (m === 'time' && ch === '}' && askCount(e, 'divide long durations into:', _memo.splitSlices, n => {
-      _memo.splitSlices = n;
-      return b.divideTimes(n) ? `${tag} divide: a few long durations into ${n} (no notes added)` : `${tag} no duration is long enough for ${n} parts`;
-    })) return true;
-    // " repeats this list, Z fits it to the notes, as they do every list at home
-    if (ch === '"' && askCount(e, `repeat the ${MODE_NAME[m]} list, times:`, _memo.repeatTimes, n => {
-      _memo.repeatTimes = n;
-      b.repeatLists(n, [LIST_OF_MODE[m]]);
-      return `${tag} repeated ${n} times: ${b.getList(LIST_OF_MODE[m]).length} long`;
-    })) return true;
-    if (ch === 'Z') {
-      const k = LIST_OF_MODE[m];
-      const fit = k === 'notes' ? null : b.fitLists([k]);
-      const msg = !fit ? `${tag} Z fits the other lists to the notes (at home)` : fit.cut ? `${tag} cut to the ${b.notes.length} notes` : fit.looped ? `${tag} looped round to the ${b.notes.length} notes` : `${tag} already the notes' length`;
-      status(msg);
-      if (k !== 'notes') refresh(msg);
-      return true;
-    }
-    // figures: q puts their steps in the scale, ; : make every run a step longer / shorter
-    if (m === 'fig' && (ch === 'q' || ch === 'Q')) {
-      if (ch === 'Q') status(`${tag} q snaps the figures' steps to the scale (+M2 → 2)`);
-      else if (b.shapeList('fig', 'quantize')) { status(`${tag} snap to the scale: ${formatFigures(b.figures)}`); refresh(`${tag} snap to the scale`); }
-      else status(`${tag} already in the scale`);
-      return true;
-    }
-    if (m === 'fig' && (ch === ';' || ch === ':')) {
-      const more = ch === ';';
-      if (b.lengthenFigures(more)) { const msg = `${tag} ${more ? 'longer' : 'shorter'} figures: ${formatFigures(b.figures)}`; status(msg); refresh(msg); }
-      else status(`${tag} ${b.figures.some(f => Array.isArray(f)) ? (more ? 'the figures are as long as they go' : 'every figure is two steps already') : 'no figures to lengthen: n makes some'}`);
-      return true;
-    }
-    // * bakes and B clears, as at home
-    if (m === 'fig' && (ch === '*' || ch === 'B')) return false;
-    if (ch === 'q') {
-      const q = currentQuantize();
-      apply(m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`, () => b.shapeList(LIST_OF_MODE[m], 'quantize', q));
-      return true;
-    }
-    if (ch === 'Q') {
-      const q = nextQuantize();
-      status(`${tag} (q to apply) ${m === 'time' ? `quantize [1/${q}]` : `≤ ${q} levels`}`);
-      return true;
-    }
-    if (ch === 'x' || ch === 'f') {
-      const src = g.current;
-      if (!src) { status('no bloom in slot'); return true; }
-      const k = LIST_OF_MODE[m];
-      if (ch === 'x') apply('lace with slot', () => b.laceList(k, src));
-      else apply('copy from slot', () => b.copyList(k, src));
-      return true;
-    }
-
-    // S scrambles this list in chunks, as it does the notes at home
-    if (ch === 'S' && askCount(e, `scramble the ${MODE_NAME[m]} list in chunks, how many:`, _memo.chunks, n => {
-      _memo.chunks = n;
-      return b.scrambleChunksList(LIST_OF_MODE[m], n) ? `${tag} scrambled in ${n} chunks` : `${tag} nothing to reorder`;
-    }, b.getList(LIST_OF_MODE[m]).length)) return true;
-
-    // d opens the pattern palette over this list, D bakes the last pattern again
-    if (ch === 'd' || ch === 'D') {
-      patternKey(e, LIST_OF_MODE[m], ch === 'D', `the ${MODE_NAME[m]} list`, `${tag} `);
-      return true;
-    }
-
-    const action = own(LIST_KEYS, ch) ? LIST_KEYS[ch] : undefined;
+    const c = listCtx(e, ch, m);
+    const action = own(LIST_VERBS, ch) ? LIST_VERBS[ch] : undefined;
     if (action) {
       const label = action.labels?.[m] ?? action.label;
-      if ('pattern' in action) {
-        apply(label, () => b.patternList(LIST_OF_MODE[m], action.pattern));
-      } else if (b.shapeList(LIST_OF_MODE[m], action.verb)) {
-        // intervals and figures say what they now are
-        const said = m === 'iv' ? `${tag} ${label}: ${formatIntervals(b.intervals)}` : m === 'fig' ? `${tag} ${label}: ${formatFigures(b.figures)}` : `${tag} ${label}`;
-        status(said);
-        refresh(said);
-      } else {
-        status(`${tag} no ${MODE_NAME[m]} version of ${label}`);
-      }
+      if ('pattern' in action) c.apply(label, () => c.b.patternList(c.k, action.pattern));
+      // intervals and figures say what they now are
+      else if (c.b.shapeList(c.k, action.verb)) c.say(m === 'iv' || m === 'fig' ? `${label}: ${c.text()}` : label);
+      else status(`${c.tag} no ${MODE_NAME[m]} version of ${label}`);
       return true;
     }
 
     // Everything else is consumed with a hint, so home-mode muscle memory
     // can't accidentally change the notes while sculpting one list
-    status(`${tag} no ${MODE_NAME[m]} version — ${KEY_OF_MODE[m]} or esc goes home`);
+    status(`${c.tag} no ${MODE_NAME[m]} version — ${KEY_OF_MODE[m]} or esc goes home`);
     return true;
   }
 
   /** Handle a key in tuning mode (the tuning view). Returns true if the key was consumed. */
   function onTuningKey(e: KeyboardEvent): boolean {
     const ch = keyChar(e);
-    if (e.altKey && e.code === 'KeyK') { recentreKey(e.shiftKey); return true; }
+    const key = findModeKey(TUNING_KEYS, e, ch);
+    if (key) return key.act!(tuningCtx(e, ch)) !== false;
     if (e.altKey) return false;   // opt-t holds; views, push / pop as at home
-    const helpOpen = document.getElementById('help-full')?.style.display === 'block';
-    const leaving = e.code === 'Escape' && !e.shiftKey && !helpOpen && !document.body.classList.contains('clean');
-    if (leaving && state.tuningView?.picked().length) {   // esc first lets go of the selected slices
-      state.tuningView.clearPick();
-      status('slices unselected');
-      return true;
-    }
-    if (ch === 'T' || leaving) {
-      state.tuningView?.close();
-      status('tuning mode off');
-      return true;
-    }
-    if (ch === ']' || ch === '[') { stepTuningBy(ch === ']' ? 1 : -1); return true; }
-    if (ch === 'l') {   // the menu: a tuning chosen on purpose, nothing on the way sounding
-      e.preventDefault();   // the l mustn't land in the menu's filter
-      if (tuningLibrary().length < 2) status('no tunings loaded — load .scl (here, or bloom ▾ → tuning)');
-      else state.pickTuning?.();
-      return true;
-    }
-    if ('129034#$'.includes(ch) && alterKey(ch)) return true;
-    // the list mode keys switch straight across, as they do between list modes
-    if (own(MODE_KEYS, ch)) { state.tuningView?.close(); return false; }
-    // playback, garden, display and help pass through, as in the list modes
-    if ([' ', ',', '.', '/', '<', '>', '~', '`', '\\', '|', '?'].includes(ch)) return false;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Backspace', 'Delete', 'Escape'].includes(e.code)) return false;
-    status('tuning mode: ] [ base · l menu · 1 on/off · 2 clear · 9 0 rotate · 3 4 comma · # $ breeze · click slices · opt-k 1/1 here · opt-t holds · T or esc leaves');
+    if (passesHome(e, ch) || e.code === 'Escape') return false;   // playback, garden, display and help, as in the list modes
+    status(TUNING_HINT);
     return true;
+  }
+
+  function tuningCtx(e: KeyboardEvent, ch: string): TuningCtx {
+    const view = state.tuningView!;
+    return {
+      e, ch, status,
+      leaving: () => document.getElementById('help-full')?.style.display !== 'block' && !document.body.classList.contains('clean'),
+      picked: () => view.picked(),
+      clearPick: () => view.clearPick(),
+      close: () => view.close(),
+      stepTuning: stepTuningBy,
+      pick: () => { if (tuningLibrary().length < 2) return false; state.pickTuning?.(); return true; },
+      alter: c => { alterKey(c); },
+      recentre: recentreKey,
+    };
   }
 
   function onKey(e: KeyboardEvent): void {
@@ -1276,15 +1064,15 @@ export function createKeyHandler(state: KeyHandlerState) {
   // aside and comes back with the next opt-tab.
   interface Voice {
     bloom: Bloom;
-    undo: { bloom: Bloom; pins: number[] }[];
-    redo: { bloom: Bloom; pins: number[] }[];
+    undo: HistoryEntry[];
+    redo: HistoryEntry[];
     prevBloom: Bloom;
     prevSnap: ReturnType<typeof snap>;
     prevPins: number[];
     pinned: number[];
     selection: number[];
-    frozen: Bloom['frozen'];
-    fixed: [Bloom['fixedDur'], Bloom['fixedDurMode'], Bloom['fixedGrid']];
+    prevHolds: Holds;
+    holds: Holds;
   }
   const VOICE_NAMES = ['A', 'B'] as const;
   let _voices: { other: Voice; focus: 0 | 1 } | null = null;
@@ -1292,7 +1080,6 @@ export function createKeyHandler(state: KeyHandlerState) {
   const focusName = () => (_voices ? VOICE_NAMES[_voices.focus] : '');
   const otherName = () => (_voices ? VOICE_NAMES[1 - _voices.focus] : '');
   const ghostLight = (i: number, t: number, sh?: Shift) => state.ghost?.activateNote(i, t, sh);
-  const copyOf = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
   /** The focused voice as it stands, taken out of the handler (its history moves with it) */
   function takeFocused(): Voice {
@@ -1301,7 +1088,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       bloom: b.clone(), undo: _undo.splice(0), redo: _redo.splice(0),
       prevBloom: _prevBloom, prevSnap: _prevSnap, prevPins: _prevPins,
       pinned: [..._pinned], selection: [..._selection],
-      frozen: copyOf(b.frozen), fixed: [b.fixedDur, b.fixedDurMode, b.fixedGrid],
+      prevHolds: _prevHolds, holds: b.holds(),
     };
   }
 
@@ -1310,8 +1097,8 @@ export function createKeyHandler(state: KeyHandlerState) {
     const b = state.bloom;
     b.import(v.bloom);
     b.stack = v.bloom.stack.map(s => s.clone());
-    b.frozen = copyOf(v.frozen);
-    [b.fixedDur, b.fixedDurMode, b.fixedGrid] = v.fixed;
+    b.setHolds(v.holds);
+    _prevHolds = v.prevHolds;
     _undo.push(...v.undo); _redo.push(...v.redo);
     _prevBloom = v.prevBloom; _prevSnap = v.prevSnap; _prevPins = v.prevPins;
     _pinned.clear(); v.pinned.forEach(i => _pinned.add(i));
@@ -1323,7 +1110,7 @@ export function createKeyHandler(state: KeyHandlerState) {
     const c = b.clone();
     return {
       bloom: c, undo: [], redo: [], prevBloom: snapshotOf(c), prevSnap: snap(c), prevPins: [],
-      pinned: [], selection: [], frozen: copyOf(b.frozen), fixed: [b.fixedDur, b.fixedDurMode, b.fixedGrid],
+      pinned: [], selection: [], prevHolds: b.holds(), holds: b.holds(),
     };
   }
 
@@ -1423,12 +1210,12 @@ export function createKeyHandler(state: KeyHandlerState) {
   function duplicateVoice(): void {
     if (!_voices) { status('one bloom: opt-tab brings in a second voice'); return; }
     const v = _voices.other;
-    v.undo.push({ bloom: snapshotOf(v.bloom), pins: [...v.pinned] });
+    v.undo.push({ bloom: snapshotOf(v.bloom), pins: [...v.pinned], holds: v.holds });
     v.redo.length = 0;
     v.bloom = state.bloom.clone();
     v.prevBloom = snapshotOf(v.bloom); v.prevSnap = snap(v.bloom); v.prevPins = [];
     v.pinned = []; v.selection = [];
-    v.frozen = copyOf(state.bloom.frozen); v.fixed = [state.bloom.fixedDur, state.bloom.fixedDurMode, state.bloom.fixedGrid];
+    v.holds = state.bloom.holds(); v.prevHolds = state.bloom.holds();
     const other = otherName();
     let how = '';
     if (isParkedLooping(other) && isLooping() && state.out) {
@@ -1462,5 +1249,6 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   markOnScreen();   // a restored session marks where its bloom came from
+  syncFreezeUi();   // a restored autosave brings its holds
   return { voicesShown, otherVoice: () => _voices?.other.bloom ?? null, cueContext, onKey, togglePin, clearPins: () => clearPins(false), select, clearSelection, refresh, mergeGarden, curdle, stepTuningBy, setBaseTuning, setClean, syncTuning, toggleHold, leaveListMode: () => { if (_mode) setListMode(null); } };
 }

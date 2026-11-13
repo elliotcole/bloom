@@ -100,17 +100,9 @@ function ragaScale(name: string, up: number[], down: number[]): Scale {
   return s;
 }
 
-export const RAGA_SCALES: Scale[] = RAGAS.map(r => SCALES[r.id]);
-
 export const ALL_SCALES = Object.values(SCALES);
 
 // ─── Scale operations ─────────────────────────────────────────────────────────
-
-export function scaleChoose(size: number = 7): Scale {
-  const candidates = ALL_SCALES.filter(s => s.degrees.length === size && s.pitchesPerOctave === 12);
-  if (candidates.length === 0) return SCALES.major;
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
 
 /** Find scales with the most pitch classes in common with targetDegrees */
 export function mostSimilarTo(targetDegrees: number[]): Scale[] {
@@ -211,10 +203,19 @@ export function centreOn(pcs: number[], tonic: number): Scale {
   return { degrees: set, pitchesPerOctave: 12, name: match ? `${PC_NAMES[t]} ${match.name}` : fromTonic.map(p => PC_NAMES[p]).join(' '), tonic: t };
 }
 
+/** A name that carries its notes moves with them: "D Dorian" up one is "Eb Dorian", "C E G" is "C# F Ab". A bare "Major" stays. */
+function transposeName(name: string, t: number): string {
+  const up = (w: string) => PC_NAMES[(((PC_NAMES.indexOf(w) + t) % 12) + 12) % 12];
+  const words = name.split(' ');
+  if (words.every(w => PC_NAMES.includes(w))) return words.map(up).join(' ');
+  if (words.length > 1 && PC_NAMES.includes(words[0])) return [up(words[0]), ...words.slice(1)].join(' ');
+  return name;
+}
+
 /** Transpose scale degrees by t semitones (mod 12, sorted); a raga's forms and Sa go with them */
 export function scaleTranspose(s: Scale, t: number): Scale {
   const move = (pcs: number[]) => pcs.map(d => (((d + t) % 12) + 12) % 12).sort((a, b) => a - b);
-  const out: Scale = { degrees: move(s.degrees), pitchesPerOctave: s.pitchesPerOctave, name: s.name };
+  const out: Scale = { degrees: move(s.degrees), pitchesPerOctave: s.pitchesPerOctave, name: transposeName(s.name, t) };
   if (s.up && s.down) { out.up = move(s.up); out.down = move(s.down); }
   if (s.root !== undefined) out.root = (((s.root + t) % 12) + 12) % 12;
   if (s.tonic !== undefined) out.tonic = (((s.tonic + t) % 12) + 12) % 12;
@@ -263,22 +264,6 @@ export function notesToScale(notes: number[], ppo: number = 12): Scale {
 
 // ─── Per-note scale operations (applied to arrays) ────────────────────────────
 
-export function applyScaleToDegrees(
-  notes: number[],
-  scaleDegrees: number[],
-  stepsPerOctave: number = 12
-): number[] {
-  return nearestInScaleUniqueArr(notes, scaleDegrees, stepsPerOctave);
-}
-
-export function keyToDegreeArr(notes: number[], scaleDegrees: number[], stepsPerOctave: number = 12): number[] {
-  return notes.map(n => keyToDegree(n, scaleDegrees, stepsPerOctave));
-}
-
-export function degreeToKeyArr(degrees: number[], scaleDegrees: number[], stepsPerOctave: number = 12): number[] {
-  return degrees.map(d => degreeToKey(d, scaleDegrees, stepsPerOctave));
-}
-
 /**
  * Snap notes to the scale. A note midway between two degrees takes whichever
  * leaves the most distinct pitch classes, so a cluster snaps to a chord rather
@@ -310,46 +295,4 @@ export function nearestInScaleUniqueArr(
     return [...best, ...notes.slice(12).map(n => nearestInScale(n, scaleDegrees, stepsPerOctave))];
   }
   return best;
-}
-
-/** Build diatonic chords from a scale */
-export function diatonicChords(scaleDegrees: number[], chordTones: number[] = [1, 3, 5]): number[][] {
-  const zeroIndexed = chordTones.map(t => t - 1);
-  const bigScale = Array.from({ length: 10 }, (_, i) =>
-    scaleDegrees.map(d => d + 12 * i)
-  ).flat();
-  return scaleDegrees.map((_, i) => zeroIndexed.map(t => bigScale[t + i]));
-}
-
-/** Get harmonizing chord options for a single note */
-export function harmoniesForNote(
-  note: number,
-  scale: Scale,
-  chordTones: number[] = [1, 3, 5],
-  root: number = 0,
-  depth: number = 0
-): number[][] {
-  if (depth > 12) return []; // prevent infinite recursion
-  const pc = ((Math.round(note) % 12) + 12) % 12;
-  const chords = diatonicChords(scale.degrees, chordTones);
-  // Add root offset
-  const options = chords
-    .map(chord => chord.map(d => (d + root) % 12))
-    .filter(chord => chord.includes(pc));
-
-  if (options.length === 0) {
-    // Try next root
-    return harmoniesForNote(note, scale, chordTones, (root + 1) % 12, depth + 1);
-  }
-
-  // Move chords to just below the melody note
-  return options.map(chord =>
-    chord.map(d => {
-      const target = note;
-      let pitch = d;
-      while (pitch > target) pitch -= 12;
-      while (pitch < target - 12) pitch += 12;
-      return pitch;
-    })
-  );
 }

@@ -64,3 +64,22 @@ describe('perfectShuffle', () => {
     expect(perfectShuffle([1])).toEqual([1]);
   });
 });
+
+describe('small fixes (audit, Nov 2026)', () => {
+  it('a one-note chord off the white keys inverts the way it was asked', async () => {
+    const { invertChord } = await import('../numbers');
+    expect(invertChord([61])).toEqual([62]);
+    expect(invertChord([61], -1)).toEqual([60]);
+    expect(invertChord([60])).toEqual([62]);
+    expect(invertChord([60, 64, 67])).toEqual([64, 67, 72]);
+  });
+
+  it('a scale name that carries its root moves with a transposition', async () => {
+    const { scaleTranspose, SCALES } = await import('../scales');
+    const dorian = { degrees: [0, 2, 4, 5, 7, 9, 11], pitchesPerOctave: 12, name: 'D Dorian', tonic: 2 };
+    expect(scaleTranspose(dorian, 1).name).toBe('Eb Dorian');
+    expect(scaleTranspose(dorian, -3).name).toBe('B Dorian');
+    expect(scaleTranspose({ ...dorian, name: 'C E G' }, 1).name).toBe('C# F Ab');
+    expect(scaleTranspose(SCALES.major, 5).name).toBe(SCALES.major.name);
+  });
+});

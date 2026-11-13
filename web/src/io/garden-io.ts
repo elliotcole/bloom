@@ -4,7 +4,7 @@ import { Bloom } from '../core/Bloom';
 import { Garden } from '../garden';
 import type { Scale } from '../lib/scales';
 import type { Tuning } from '../lib/tuning';
-import type { ListKey } from '../core/Bloom';
+import type { Holds, ListKey } from '../core/Bloom';
 
 // ─── JSON types ───────────────────────────────────────────────────────────────
 
@@ -42,6 +42,7 @@ interface GardenFile {
   version: 1;
   savedAt?: number;         // ms since epoch — autosave only
   bloom: BloomJSON;
+  holds?: Holds;            // the freezes and the fixed duration and grid (absent in older files: none)
   garden: {
     cursor: number;
     slots: (BloomJSON | null)[];
@@ -100,8 +101,8 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   if (Array.isArray(json.intervals) && json.intervals.length > 0) {
     b.intervals = json.intervals as Bloom['intervals'];
   }
-  b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);
-  if (Array.isArray(json.figures) && json.figures.length > 0) b.figures = json.figures as Bloom['figures'];   // older saves: one unit for every interval
+  b.adoptLegacyIntervals(json.intervalsDiatonic ?? false);   // older saves: one unit for every interval
+  if (Array.isArray(json.figures) && json.figures.length > 0) b.figures = json.figures as Bloom['figures'];
   if (json.figureTime === 'insert' || json.figureTime === 'superimpose' || json.figureTime === 'divide') b.figureTime = json.figureTime;
   // saved before figures chose their time: garden figures were superimposed, runs divided
   else if (b.figures.some(f => typeof f === 'object' && f !== null && !Array.isArray(f)) && !b.figures.some(Array.isArray)) b.figureTime = 'superimpose';
@@ -128,10 +129,28 @@ export function bloomFromJSON(json: BloomJSON): Bloom {
   return b;
 }
 
+/** The holds a file carries, each checked; anything missing or odd is off */
+function holdsFromJSON(h: unknown): Holds {
+  const j = (h && typeof h === 'object' ? h : {}) as Partial<Holds>;
+  const f = (j.frozen && typeof j.frozen === 'object' ? j.frozen : {}) as Partial<Holds['frozen']>;
+  const nums = (x: unknown) => (Array.isArray(x) && x.length > 0 && x.every(isNum) ? (x as number[]) : false);
+  const some = <T>(x: unknown) => (Array.isArray(x) && x.length > 0 ? (x as T[]) : false);
+  return {
+    frozen: {
+      pitch: f.pitch && Array.isArray(f.pitch.degrees) && f.pitch.degrees.every(isNum) ? f.pitch : false,
+      time: nums(f.time), vel: nums(f.vel), chan: nums(f.chan), iv: some(f.iv),
+    },
+    fixedDur: isNum(j.fixedDur) && j.fixedDur > 0 ? j.fixedDur : false,
+    fixedDurMode: j.fixedDurMode === 'scale' ? 'scale' : 'trim',
+    fixedGrid: isNum(j.fixedGrid) && j.fixedGrid >= 1 ? Math.round(j.fixedGrid) : false,
+  };
+}
+
 function toGardenFile(bloom: Bloom, garden: Garden): GardenFile {
   return {
     version: 1,
     bloom: bloomToJSON(bloom),
+    holds: bloom.holds(),
     garden: {
       cursor: garden.cursor,
       slots: garden.slots.map(s => (s ? bloomToJSON(s) : null)),
@@ -141,8 +160,14 @@ function toGardenFile(bloom: Bloom, garden: Garden): GardenFile {
 
 function applyGardenFile(data: GardenFile, bloom: Bloom, garden: Garden): void {
   if (data.version !== 1) throw new Error(`unknown version ${data.version}`);
-  bloom.import(bloomFromJSON(data.bloom));
-  garden.slots = data.garden.slots.map(s => (s ? bloomFromJSON(s) : null));
+  // read the whole file before touching anything, so a bad one leaves the session as it was
+  const loaded = bloomFromJSON(data.bloom);
+  const slots = data.garden.slots.map(s => (s ? bloomFromJSON(s) : null));
+  if (slots.length === 0) slots.push(null);
+  const holds = holdsFromJSON(data.holds);
+  bloom.import(loaded);
+  bloom.setHolds(holds);
+  garden.slots = slots;
   garden.cursor = Math.max(0, Math.min(data.garden.cursor, garden.slots.length - 1));
 }
 

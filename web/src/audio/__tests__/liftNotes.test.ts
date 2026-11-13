@@ -52,10 +52,11 @@ describe('opt-↑ while looping', () => {
     updateLooper(live);
     vi.advanceTimersByTime(3000);
     const ons = out.ons;
-    // the note already sent ahead plays; from the next the new notes, read on from the same place
+    // the note already handed over (a lookahead before its time) was the old one; from the
+    // next the new notes, read on from the same place
     const NEW = [72, 74, 76, 77, 79, 81, 83];
-    expect(ons[heard].note).toBe([60, 62, 64, 65, 67][pos]);
-    expect(ons.slice(heard + 1, heard + 12).map(o => o.note)).toEqual(Array.from({ length: 11 }, (_, i) => NEW[(pos + 1 + i) % 7]));
+    expect(ons[heard - 1].note).toBe([60, 62, 64, 65, 67][pos - 1]);
+    expect(ons.slice(heard, heard + 12).map(o => o.note)).toEqual(Array.from({ length: 12 }, (_, i) => NEW[(pos + i) % 7]));
     // the accents and the channel walk never restart, before or after
     expect(ons.map(o => o.vel)).toEqual(ons.map((_, i) => ACCENTS[i % 6]));
     expect(ons.map(o => o.chan)).toEqual(ons.map((_, i) => WALK[i % 4]));

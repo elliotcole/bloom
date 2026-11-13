@@ -326,7 +326,7 @@
       }
       body.voices #voice-canvas { display: block; }
 
-      /* ─── Tuning view (opt-t): the pie in the main area, controls either side ── */
+      /* ─── Tuning view (T): the pie in the main area, controls either side ── */
       #tuning-view {
         display: none;
         position: absolute;
@@ -406,7 +406,8 @@
       body.help-freeze .hf-sec:not(#hf-freeze-sec) { display: none; }
       /* their sections show only there, not at home */
       #hf-tuning-sec, #hf-freeze-sec { display: none; }
-      body.help-tuning #hf-tuning-sec, body.help-freeze #hf-freeze-sec { display: block; }
+      /* (.hf-sec repeated so these outweigh the list-mode rule above: the freeze menu can open inside a list mode) */
+      body.help-tuning #hf-tuning-sec.hf-sec, body.help-freeze #hf-freeze-sec.hf-sec { display: block; }
       /* in a list mode, the lines for that mode alone */
       .hf-only { display: none; }
       body[data-list-mode="pitch"] .hf-pitch, body[data-list-mode="time"] .hf-time,
@@ -719,39 +720,32 @@
       #list-typer .lt-choice span { color: #556; padding: 1px 5px; }
       #list-typer .lt-choice span.on { color: #9ab; background: #1a1f36; }
 
-      /* Scale and tuning pickers (ui/scalePicker.ts, ui/tuningPicker.ts), styled as the command palette */
-      #scale-picker, #tuning-picker {
+      /* The pickers (ui/picker.ts: scales, tunings, patterns), styled as the command palette */
+      .picker {
         display: none; position: fixed; inset: 0; z-index: 400;
         background: rgba(0, 0, 0, 0.55);
         align-items: flex-start; justify-content: center; padding-top: 10vh;
       }
-      #scale-picker.open, #tuning-picker.open { display: flex; }
-      #sp-box, #tuning-picker .picker-box {
+      .picker.open { display: flex; }
+      .picker-box {
         background: #0c0c18; border: 1px solid #2a2a44; width: min(560px, 92vw);
         padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px;
       }
-      .sp-top { display: flex; gap: 10px; align-items: center; }
+      .picker-top { display: flex; gap: 10px; align-items: center; }
+      .picker-list { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; }
+      .picker-group { font-size: 9px; color: #445; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 8px 2px; }
+      .picker .cp-sug-name { flex: 0 0 190px; }
+      .picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
+
+      /* Scale picker (ui/scalePicker.ts): the root beside the field */
       .sp-root { font-size: 11px; color: #556; white-space: nowrap; }
       .sp-root select { background: #07070f; color: #9ab; border: 1px solid #252540; font-family: inherit; }
-      .sp-list { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; }
-      .sp-group { font-size: 9px; color: #445; text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 8px 2px; }
-      #scale-picker .cp-sug-name, #tuning-picker .cp-sug-name { flex: 0 0 190px; }
-      #scale-picker .cp-sug.current .cp-sug-name::after, #tuning-picker .cp-sug.current .cp-sug-name::after { content: '  ●'; color: #5a9; }
       #scale-badge.active { cursor: pointer; }
 
-      /* Pattern palette (ui/patternPicker.ts), styled as the command palette */
-      #pattern-picker {
-        display: none; position: fixed; inset: 0; z-index: 400;
-        background: rgba(0, 0, 0, 0.55);
-        align-items: flex-start; justify-content: center; padding-top: 10vh;
-      }
-      #pattern-picker.open { display: flex; }
-      #pp-box {
-        background: #0c0c18; border: 1px solid #2a2a44; width: min(640px, 92vw);
-        padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 6px;
-      }
+      /* Pattern palette (ui/patternPicker.ts): wider, a title over the field, a note under the list */
+      #pattern-picker .picker-box { width: min(640px, 92vw); }
+      #pattern-picker .picker-list { max-height: 50vh; }
       .pp-title { font-size: 11px; color: #667; }
-      .pp-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; }
       #pattern-picker .cp-sug-name { flex: 0 0 120px; }
       #pattern-picker .pp-spec { flex: 0 0 90px; color: #9ab; white-space: pre; }
       #pattern-picker .cp-sug-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -788,7 +782,8 @@
 
       /* Clean view (opt+c): the picture alone, for recording */
       body.clean { grid-template-rows: 1fr; }
-      body.clean > *:not(#canvas-area) { display: none !important; }
+      /* an overlay that opens in clean view still shows: hidden, it would hold the keyboard with no way out */
+      body.clean > *:not(#canvas-area):not(.open) { display: none !important; }
       body.clean #canvas-area { grid-row: 1; }
       body.clean #garden-area, body.clean #console-overlay { display: none !important; }
       body.clean #bloom-canvas { cursor: none !important; }

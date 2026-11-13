@@ -125,3 +125,20 @@ describe('patterns: what goes wrong is said', () => {
     }
   });
 });
+
+describe('patterns: a wildcard in a window that wraps', () => {
+  it('picks inside the list wherever the window has got to', () => {
+    for (const spec of ['2* +1 ~', '1* -1 ~', '*** +2 ~']) {
+      for (const r of [0, 0.5, 0.999]) {
+        const out = bakePattern([10, 20, 30, 40, 50], spec, () => r);
+        if (typeof out === 'string') throw new Error(out);
+        expect(out.values.every(v => typeof v === 'number')).toBe(true);
+      }
+    }
+  });
+
+  it('the pick comes back round past the end', () => {
+    expect(resolveStep({ any: 'window', lo: 4, hi: 6 }, 5, () => 0.999)).toBe(1);
+    expect(resolveStep({ any: 'window', lo: -1, hi: 1 }, 5, () => 0)).toBe(4);
+  });
+});

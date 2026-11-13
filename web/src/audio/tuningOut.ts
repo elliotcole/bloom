@@ -127,6 +127,7 @@ export function heldForBloom(): Tuning | null {
 const HELPER_PORT = /bloom tuning/i;
 let _access: MIDIAccess | null = null;
 let _asking: Promise<void> | null = null;
+let _denied = false;   // SysEx was refused: not asked for again (the browser remembers, and would only refuse again)
 let _onStatus: ((s: string) => void) | null = null;
 
 export function onHelperStatus(cb: (s: string) => void) { _onStatus = cb; }
@@ -138,13 +139,14 @@ function helperPort(): MIDIOutput | null {
 }
 
 export function helperStatus(): string {
+  if (_denied) return 'helper: SysEx not allowed in this browser';
   if (!_access) return 'helper: not asked yet (load a tuning)';
   return helperPort() ? 'helper: connected' : 'helper: not running (start bloom-mts)';
 }
 
 /** Ask for MIDI with SysEx (the browser asks once) and watch for the helper's port */
 export function connectHelper(): Promise<void> {
-  if (_access || _asking || !navigator.requestMIDIAccess) return _asking ?? Promise.resolve();
+  if (_access || _asking || _denied || !navigator.requestMIDIAccess) return _asking ?? Promise.resolve();
   _asking = navigator.requestMIDIAccess({ sysex: true }).then(acc => {
     _access = acc;
     let had = !!helperPort();
@@ -155,8 +157,11 @@ export function connectHelper(): Promise<void> {
       if (_last) applyTuning(_last);
       _onStatus?.(helperStatus());
     });
+    // a helper already running when MIDI was allowed gets what's sounding now
+    if (had && _last) { _sentKey = ''; applyTuning(_last); }
     _onStatus?.(helperStatus());
   }).catch(() => {
+    _denied = true;
     _onStatus?.('helper: SysEx not allowed in this browser');
   }).finally(() => { _asking = null; });
   return _asking;
@@ -196,7 +201,9 @@ export function applyTuning(bloom: Bloom): void {
     for (const msg of mtsMessages(freqs)) toHelper(port, msg);
     sendCue(t, soundingRoot(bloom));
   }
-  _sentKey = port || !t ? key : '';
+  // sent, helper or none: one that starts later is sent it then (connectHelper), so
+  // without one the table isn't worked out and the piano retuned at every play
+  _sentKey = key;
 }
 
 // ─── Takes: what went to the helper and the piano, heard and played again ────

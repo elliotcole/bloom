@@ -410,8 +410,8 @@ export const HOME_KEYS: HomeKey[] = [
       else { startGardenPulsar(c.g.slots, c.state.out, getPulsarRate(), idx => c.state.viz?.activateNote(idx)); c.status(`pulse garden [${getPulsarRate()}b]`); }
     },
   },
-  { key: '<', whole: true, label: 'slower pulse', act: c => { const r = Math.max(1, getPulsarRate() - 1); setPulsarRate(r); c.status(`pulse rate ${r}b`); } },
-  { key: '>', whole: true, label: 'faster pulse', act: c => { const r = getPulsarRate() + 1; setPulsarRate(r); c.status(`pulse rate ${r}b`); } },
+  { key: '<', whole: true, label: 'slower pulse', act: c => { const r = getPulsarRate() + 1; setPulsarRate(r); c.status(`pulse rate ${r}b`); } },
+  { key: '>', whole: true, label: 'faster pulse', act: c => { const r = Math.max(1, getPulsarRate() - 1); setPulsarRate(r); c.status(`pulse rate ${r}b`); } },
   {
     key: '~', whole: true, label: 'sustain pedal',
     act: c => {

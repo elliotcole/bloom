@@ -16,6 +16,19 @@ history if wanted: `chord`, `chords`, `chordsShorten`, `chordsRand`,
 flattened at random), `avgTime`, `lower`, `negHarmony` (the function stays in
 `lib/numbers`), `mutate`, `mutateD`, `mutateShape`, `thickenLengthen`.
 
+Removed 12 Nov 2026, for the same reason (`oneRandChan` and `cycleChans` were
+kept on purpose): `newNotes`, `deepScramble`, `deepShuffle`, `compress`,
+`moveDoublesUpOctave`, `removeChords`, `pivotBass`, `asDegrees`, `addSharp`,
+`addFlat`, `setRoot`, `fan`, `addComma`, `rotateTime`, `rotateVelocities`,
+`rotateChans`, `wrapTime`, `wrapVel`, `wrapChan`, `mutateVelocities`,
+`thinShorten`, `trimTo`, `randChans`, `incrementSomeChans`, `clearChans`,
+`save`, `restore`, `popAny`, `lowestNote`, `highestNote`, `loudestNote`,
+`report`. From the libraries: `negHarmony`, `permute`, `linlin`,
+`indexInBetween`, `flattenSingletons`, `efficientMotionFrom`, `scaleChoose`,
+`applyScaleToDegrees`, `keyToDegreeArr`, `degreeToKeyArr`, `diatonicChords`,
+`harmoniesForNote`, `readCue`. From the drawing: `drawPianoAt` and the
+hand-drawn treble clef, bass clef and staff (`glyphs.ts`).
+
 ## Part 1 — Missing Bloom.ts Methods
 
 Functions present in `bloom.sc` but not yet in `Bloom.ts`.

@@ -5,7 +5,7 @@
 import type { Scale } from '../lib/scales';
 import { ALL_SCALES, scaleTranspose } from '../lib/scales';
 import { spell } from '../lib/numbers';
-import { Overlay, onKeys } from './overlay';
+import { Picker } from './picker';
 
 export interface ScalePickerHost {
   /** The attached scale, if any, and the root a new one goes on */
@@ -26,96 +26,70 @@ function groups(): { title: string; scales: Scale[] }[] {
   ];
 }
 
-export class ScalePicker extends Overlay {
-  private input: HTMLInputElement;
+/** A row of the picker: a scale, as it reads on the chosen root */
+export interface ScaleRow {
+  scale: Scale;
+  /** the header it sits under */
+  group: string;
+  name: string;
+  /** its notes from the root up (a raga's rising and falling forms) */
+  notes: string;
+  /** it's the one attached */
+  current: boolean;
+}
+
+const sorted = (pcs: number[]) => [...pcs].sort((a, b) => a - b).join();
+
+/** The scales whose name has what's typed, group by group, spelled on `root`; `cur` is the attached one */
+export function scaleRows(query: string, root: number, cur: Scale | null): ScaleRow[] {
+  const q = query.trim().toLowerCase();
+  const curKey = cur ? `${cur.name}|${sorted(cur.degrees)}` : '';
+  const notes = (pcs: number[]) => [...pcs].sort((a, b) => (a - root + 12) % 12 - (b - root + 12) % 12).map(p => spell(p)).join(' ');
+  return groups().flatMap(g => g.scales.filter(s => !q || s.name.toLowerCase().includes(q)).map(s => {
+    const on = scaleTranspose(s, root);
+    return {
+      scale: s,
+      group: g.title,
+      name: `${s.name}${s.up ? ' ↕' : ''}`,
+      notes: on.up && on.down ? `↑ ${notes(on.up)}  ↓ ${notes(on.down)}` : notes(on.degrees),
+      current: `${s.name}|${sorted(on.degrees)}` === curKey,
+    };
+  }));
+}
+
+export class ScalePicker extends Picker<ScaleRow> {
   private rootSel: HTMLSelectElement;
-  private listEl: HTMLElement;
-  private rows: { scale: Scale; el: HTMLElement }[] = [];
-  private active = -1;
   private host: ScalePickerHost;
 
   constructor(host: ScalePickerHost) {
-    super(document.createElement('div'), { backdrop: true });
+    super({ id: 'scale-picker', hint: 'type to filter · ↑↓ move · ↵ or click attaches · esc closes', placeholder: 'scale or raga' });
     this.host = host;
-    this.el.id = 'scale-picker';
-    this.el.innerHTML = `
-      <div id="sp-box">
-        <div class="cp-hint">type to filter · ↑↓ move · ↵ or click attaches · esc closes</div>
-        <div class="sp-top">
-          <input class="cp-input" type="text" spellcheck="false" autocomplete="off" placeholder="scale or raga">
-          <label class="sp-root">on <select></select></label>
-        </div>
-        <div class="sp-list"></div>
-      </div>`;
-    this.input = this.el.querySelector('input')!;
-    this.rootSel = this.el.querySelector('select')!;
-    this.listEl = this.el.querySelector('.sp-list')!;
+    const label = document.createElement('label');
+    label.className = 'sp-root';
+    label.append('on ', this.rootSel = document.createElement('select'));
+    this.top.appendChild(label);
     for (let pc = 0; pc < 12; pc++) this.rootSel.append(new Option(spell(pc), String(pc)));
-    this.input.addEventListener('input', () => this.render());
     this.rootSel.addEventListener('change', () => { this.render(); this.input.focus(); });
-    onKeys(this.input, {
-      Escape: () => this.close(),
-      ArrowDown: () => this.setActive(Math.min(this.rows.length - 1, this.active + 1)),
-      ArrowUp: () => this.setActive(Math.max(0, this.active - 1)),
-      Enter: () => this.choose(this.active),
-    });
   }
 
   open(): void {
     this.rootSel.value = String(this.host.root());
-    this.input.value = '';
-    this.render();
-    this.show(this.input);
+    this.openList();
   }
 
-  private render(): void {
-    const q = this.input.value.trim().toLowerCase();
-    const root = Number(this.rootSel.value);
-    const cur = this.host.current();
-    const curKey = cur ? `${cur.name}|${[...cur.degrees].sort((a, b) => a - b).join()}` : '';
-    this.listEl.innerHTML = '';
-    this.rows = [];
-    this.active = -1;
-    for (const g of groups()) {
-      const hits = g.scales.filter(s => !q || s.name.toLowerCase().includes(q));
-      if (!hits.length) continue;
-      const h = document.createElement('div');
-      h.className = 'sp-group';
-      h.textContent = g.title;
-      this.listEl.appendChild(h);
-      for (const s of hits) {
-        const on = scaleTranspose(s, root);
-        const row = document.createElement('div');
-        row.className = 'cp-sug';
-        const notes = (pcs: number[]) => [...pcs].sort((a, b) => (a - root + 12) % 12 - (b - root + 12) % 12).map(p => spell(p)).join(' ');
-        const forms = on.up && on.down ? `↑ ${notes(on.up)}  ↓ ${notes(on.down)}` : notes(on.degrees);
-        row.innerHTML = `<span class="cp-sug-name"></span><span class="cp-sug-desc"></span>`;
-        row.querySelector('.cp-sug-name')!.textContent = `${s.name}${s.up ? ' ↕' : ''}`;
-        row.querySelector('.cp-sug-desc')!.textContent = forms;
-        if (`${s.name}|${[...on.degrees].sort((a, b) => a - b).join()}` === curKey) row.classList.add('current');
-        const i = this.rows.length;
-        row.addEventListener('mousemove', () => this.setActive(i));
-        row.addEventListener('click', () => this.choose(i));
-        this.rows.push({ scale: s, el: row });
-        this.listEl.appendChild(row);
-      }
-    }
-    if (this.rows.length) this.setActive(Math.max(0, this.rows.findIndex(r => r.el.classList.contains('current'))));
+  protected rows(query: string): ScaleRow[] { return scaleRows(query, Number(this.rootSel.value), this.host.current()); }
+
+  protected row(r: ScaleRow): HTMLElement {
+    const el = this.rowEl(r.name, r.notes);
+    el.classList.toggle('current', r.current);
+    return el;
   }
 
-  private setActive(i: number): void {
-    this.rows[this.active]?.el.classList.remove('active');
-    this.active = i;
-    const r = this.rows[i];
-    if (!r) return;
-    r.el.classList.add('active');
-    r.el.scrollIntoView({ block: 'nearest' });
-  }
+  protected override start(rows: ScaleRow[]): number { return rows.findIndex(r => r.current); }
+  protected override group(r: ScaleRow): string { return r.group; }
 
-  private choose(i: number): void {
-    const r = this.rows[i];
-    if (!r) return;
+  protected choose(r: ScaleRow): boolean {
     this.host.apply(r.scale, Number(this.rootSel.value));
-    this.close();
+    return true;
   }
 }

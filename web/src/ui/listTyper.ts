@@ -6,20 +6,39 @@
 // parentheses, -P5/10), so typing replaces just that one.
 //
 // A line can carry more fields after the list (figures: how they take their
-// time, their durations, their velocity): tab moves between them, ↵ in any
-// sets the lot. A choice is changed with ← → or its first letter.
+// time, their durations, their velocity): tab moves between them, round from
+// the last to the first, ↵ in any sets the lot. A choice is changed with ← →
+// or its first letter.
+//
+// The line closes when the focus goes elsewhere on the page, unless something
+// was typed: then it stays, saying so, and the next key comes back to it.
 
 /** A field after the list: a choice of words, or a line of text (shown only while `when` holds) */
 export type TyperField =
   | { kind: 'choice'; label: string; options: string[]; value: string }
   | { kind: 'text'; label: string; value: string; size?: number; when?: (values: string[]) => boolean };
 
-import { Overlay } from './overlay';
+import { Overlay, onKeys, tabStop } from './overlay';
 
 /** The entries of a typed list, as [start, end) ranges: (…) and […] groups whole, else runs of non-space */
 function entries(text: string): [number, number][] {
   return [...text.matchAll(/\([^)]*\)?|\[[^\]]*\]?|\S+/g)].map(m => [m.index!, m.index! + m[0].length]);
 }
+
+/**
+ * The focus has left the line. With the window itself out of focus (cmd-tab)
+ * nothing happens: what's typed waits. Gone elsewhere on the page, the line
+ * closes if nothing was changed, and is kept (with a word about it) if
+ * something was: nothing typed is lost without a say.
+ */
+export function onLeave(windowFocused: boolean, changed: boolean): 'wait' | 'close' | 'keep' {
+  if (!windowFocused) return 'wait';
+  return changed ? 'keep' : 'close';
+}
+
+const NOT_SET = 'not set yet: ↵ sets it, esc leaves it';
+
+type Keys = Record<string, (e: KeyboardEvent) => void | false>;
 
 export class ListTyper extends Overlay {
   private label: HTMLElement;
@@ -29,6 +48,8 @@ export class ListTyper extends Overlay {
   private fieldsEl: HTMLElement;
   private fields: TyperField[] = [];
   private values: string[] = [];
+  /** The text and values the line opened with: any difference is something typed */
+  private opened = '';
 
   constructor(parent: HTMLElement) {
     super(document.createElement('div'), { parent });
@@ -38,25 +59,41 @@ export class ListTyper extends Overlay {
     this.input = this.el.querySelector('input')!;
     this.fieldsEl = this.el.querySelector('.lt-fields')!;
     this.err = this.el.querySelector('.lt-err')!;
-    this.input.addEventListener('keydown', e => this.keyIn(e, this.input));
+    onKeys(this.input, this.textKeys(this.input));
     this.el.addEventListener('input', () => { this.err.textContent = ''; });
-    // closes when the focus leaves the line, not when it moves between its fields
+    // a click on the label or the message leaves the focus where it is
+    this.el.addEventListener('mousedown', e => { if (!(e.target as HTMLElement).closest('input, .lt-choice')) e.preventDefault(); });
+    // the focus has left the line (not moved between its fields)
     this.el.addEventListener('focusout', (e: FocusEvent) => {
       const to = e.relatedTarget as Node | null;
-      if (!document.hasFocus()) return;   // the window lost focus (cmd-tab): what's typed waits
-      if (!to || !this.el.contains(to)) this.close();
+      if (!this.isOpen() || (to && this.el.contains(to))) return;
+      const what = onLeave(document.hasFocus(), this.state() !== this.opened);
+      if (what === 'close') this.close();
+      else if (what === 'keep') this.err.textContent = NOT_SET;
     });
   }
 
-  /** A key in the list or a text field: esc leaves, ↵ sets, ← → step through the entries */
-  private keyIn(e: KeyboardEvent, input: HTMLInputElement): void {
-    e.stopPropagation();
-    if (e.key === 'Escape') { e.preventDefault(); this.close(); }
-    else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      this.step(input, e.key === 'ArrowRight' ? 1 : -1);
-    }
-    else if (e.key === 'Enter') { e.preventDefault(); this.done(e.shiftKey); }
+  /** Everything that can be typed here, as one string to compare */
+  private state(): string { return JSON.stringify([this.input.value, this.values]); }
+
+  /** The keys every field has: esc leaves, ↵ sets, tab goes round the fields */
+  private readonly keys: Keys = {
+    Escape: () => this.close(),
+    Enter: e => this.done(e.shiftKey),
+    Tab: e => this.tab(e.shiftKey),
+  };
+
+  /** The keys of the list or a text field: the shared ones, and ← → step through the entries */
+  private textKeys(input: HTMLInputElement): Keys {
+    const step = (dir: 1 | -1) => (e: KeyboardEvent) =>
+      e.shiftKey || e.altKey || e.metaKey || e.ctrlKey ? false : this.step(input, dir);   // with a modifier, the browser's own
+    return { ...this.keys, ArrowLeft: step(-1), ArrowRight: step(1) };
+  }
+
+  /** Tab: on to the next field showing, round from the last to the first (shift: back) */
+  private tab(back: boolean): void {
+    const stops = [...this.el.querySelectorAll<HTMLElement>('input, .lt-choice')].filter(el => el.offsetParent !== null);
+    stops[tabStop(stops.indexOf(document.activeElement as HTMLElement), stops.length, back)]?.focus();
   }
 
   private done(complete: boolean): void {
@@ -77,6 +114,7 @@ export class ListTyper extends Overlay {
     this.fields = fields;
     this.values = fields.map(f => f.value);
     this.buildFields();
+    this.opened = this.state();
     this.show(this.input);
     this.input.select();
   }
@@ -95,29 +133,21 @@ export class ListTyper extends Overlay {
         box.className = 'lt-choice';
         box.tabIndex = 0;
         const paint = () => box.querySelectorAll('span').forEach(o => o.classList.toggle('on', o.textContent === this.values[k]));
+        const set = (opt: string) => { this.values[k] = opt; paint(); this.showFields(); };
         f.options.forEach(opt => {
           const o = document.createElement('span');
           o.textContent = opt;
-          o.addEventListener('mousedown', ev => { ev.preventDefault(); this.values[k] = opt; paint(); this.showFields(); box.focus(); });
+          o.addEventListener('mousedown', ev => { ev.preventDefault(); set(opt); box.focus(); });
           box.appendChild(o);
         });
-        box.addEventListener('keydown', e => {
-          e.stopPropagation();
-          const at = f.options.indexOf(this.values[k]);
-          const byLetter = f.options.find(o => o[0] === e.key.toLowerCase());
-          if (e.key === 'Escape') { e.preventDefault(); this.close(); return; }
-          if (e.key === 'Enter') { e.preventDefault(); this.done(e.shiftKey); return; }
-          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-            e.preventDefault();
-            const d = e.key === 'ArrowRight' ? 1 : -1;
-            this.values[k] = f.options[(at + d + f.options.length) % f.options.length];
-          } else if (byLetter && !e.metaKey && !e.ctrlKey && !e.altKey) {
-            e.preventDefault();
-            this.values[k] = byLetter;
-          } else return;
-          paint();
-          this.showFields();
-        });
+        const turn = (d: 1 | -1) => () => set(f.options[(f.options.indexOf(this.values[k]) + d + f.options.length) % f.options.length]);
+        // an option's first letter chooses it (the first of two that share one), in either case
+        const letters: Keys = {};
+        for (const opt of f.options) {
+          const pick = (e: KeyboardEvent) => (e.metaKey || e.ctrlKey || e.altKey ? false : set(opt));
+          for (const key of [opt[0].toLowerCase(), opt[0].toUpperCase()]) letters[key] ??= pick;
+        }
+        onKeys(box, { ...letters, ...this.keys, ArrowLeft: turn(-1), ArrowRight: turn(1) });
         paint();
         wrap.appendChild(box);
       } else {
@@ -127,7 +157,7 @@ export class ListTyper extends Overlay {
         inp.autocomplete = 'off';
         inp.value = f.value;
         inp.size = f.size ?? 6;
-        inp.addEventListener('keydown', e => this.keyIn(e, inp));
+        onKeys(inp, this.textKeys(inp));
         inp.addEventListener('input', () => { this.values[k] = inp.value; this.showFields(); });
         inp.addEventListener('focus', () => inp.select());
         wrap.appendChild(inp);

@@ -11,6 +11,8 @@
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
 import { isFigure } from '../lib/figures';
+import { spellOctave } from '../lib/numbers';
+import { chanHue, ink as themeInk, pc } from './draw';
 import type { Theme } from './theme';
 import type { Shift } from '../audio/playhead';
 
@@ -56,10 +58,6 @@ export function handAngle(len: number, tick: number, progress = 0): number {
 type Hit = (i: number, x: number, y: number, r: number) => void;
 
 const TOP = -Math.PI / 2;
-const chanHue = (c: number) => (c * 360) / 16;
-const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
-const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-const nameOf = (m: number) => NAMES[((Math.round(m) % 12) + 12) % 12] + (Math.floor(Math.round(m) / 12) - 1);
 
 function arc(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, a0: number, a1: number, w: number, style: string): void {
   if (a1 <= a0 || w <= 0) return;
@@ -89,6 +87,7 @@ export function drawOrreryAt(
   shift?: Shift,
 ): void {
   const b = bloom.sounding();   // a raga's notes as they sound
+  const ink = (a: number) => themeInk(theme, a);
   const R = rings(b);
   if (!R.length) return;
   const n = b.notes.length;
@@ -149,7 +148,7 @@ export function drawOrreryAt(
             const rr = r0 + 4 + h * (w - 8);
             const a = am + (ci - (chord.length - 1) / 2) * Math.min(0.06, cell * 0.25);
             const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
-            const [hh, s, l, al] = theme.noteHsla(((Math.round(p) % 12) + 12) % 12, vel, f);
+            const [hh, s, l, al] = theme.noteHsla(pc(p), vel, f);
             const dot = 3 + radius * 0.012 + f * 3;
             if (ci === 0) hit?.(i, x, y, Math.max(9, dot + 3));
             ctx.beginPath();
@@ -162,7 +161,7 @@ export function drawOrreryAt(
             }
             if (showLabels) {
               ctx.fillStyle = ink(0.55);
-              ctx.fillText(nameOf(p), cx + Math.cos(a) * (r1 + radius * 0.05), cy + Math.sin(a) * (r1 + radius * 0.05));
+              ctx.fillText(spellOctave(p), cx + Math.cos(a) * (r1 + radius * 0.05), cy + Math.sin(a) * (r1 + radius * 0.05));
             }
           });
           break;

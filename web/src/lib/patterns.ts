@@ -206,7 +206,7 @@ export function expandPattern(p: Pattern, n: number, cap = PATTERN_CAP): Expande
       idx = down ? run.reverse() : run;
     }
     if (!p.wrap && (idx.some(x => typeof x === 'number' && (x < 0 || x >= n)) || (fixed && (lo < 0 || lo + span >= n)))) break;
-    let win: Step[] = idx.map((x): Step => (x === '*' ? { any: 'window', lo: Math.max(0, lo), hi: Math.min(n - 1, lo + span) }
+    let win: Step[] = idx.map((x): Step => (x === '*' ? (p.wrap ? { any: 'window', lo, hi: lo + span } : { any: 'window', lo: Math.max(0, lo), hi: Math.min(n - 1, lo + span) })
       : x === '**' ? { any: 'all' } : p.wrap ? wrapAt(x) : x));
     if (p.rev !== (p.alt && r % 2 === 1)) win = win.reverse();
     raw.push(win);
@@ -234,7 +234,9 @@ export function expandPattern(p: Pattern, n: number, cap = PATTERN_CAP): Expande
 export function resolveStep(s: Step, n: number, rng: () => number = Math.random): number {
   if (typeof s === 'number') return s;
   if (s.any === 'all') return Math.floor(rng() * n);
-  return s.lo + Math.floor(rng() * (s.hi - s.lo + 1));
+  // a wrapping window's ends run past the list: the pick comes back round
+  const i = s.lo + Math.floor(rng() * (s.hi - s.lo + 1));
+  return ((i % n) + n) % n;
 }
 
 /** The windows as indices from 1, as typed: 123 234 345, or 1 2 10 · 2 3 11 for a long list */

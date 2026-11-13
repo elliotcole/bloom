@@ -1,8 +1,8 @@
 // MIDI recorder — captures note-on events and assembles them into a Bloom
 
 import { Bloom } from '../core/Bloom';
-import { onMidiMessage, offMidiMessage } from './midi';
-import { getBpm } from './scheduler';
+import { onMidiMessage, offMidiMessage, isNoteOn } from './midi';
+import { beatsToMs } from './scheduler';
 
 interface CapturedNote {
   note: number;
@@ -17,13 +17,12 @@ let _recording = false;
 let _captured: CapturedNote[] = [];
 
 function _handler(data: Uint8Array, atMs: number): void {
-  const status = data[0] & 0xf0;
   const chan = data[0] & 0x0f;
   const note = data[1];
   const vel = data[2];
 
   // Note-on with velocity > 0
-  if (status === 0x90 && vel > 0) {
+  if (isNoteOn(data)) {
     _captured.push({ note, vel, chan, onTimeMs: atMs });
   }
   // Note-offs are ignored — timeIntervals derive from consecutive note-on gaps,
@@ -42,7 +41,7 @@ export function stopRecording(bloom: Bloom): void {
   _recording = false;
   if (_captured.length === 0) return;
 
-  const msPerBeat = 60_000 / getBpm();
+  const msPerBeat = beatsToMs(1);
 
   // notes struck together (within CHORD_MS of the first) are one chord, at the loudest's velocity
   const groups: CapturedNote[][] = [];

@@ -1,4 +1,4 @@
-// The tuning view (opt-t): the bloom's tuning as a pie in the main area (drawn
+// The tuning view (T): the bloom's tuning as a pie in the main area (drawn
 // by the visualization, see tuningPie.ts), with these controls either side.
 // Click a slice to hear and select the note, move it by commas, set it to a
 // ratio; shift-click a second to see and set the interval between them; paste
@@ -164,7 +164,7 @@ export class TuningEditor {
       <div class="tv-palette${t.alterOff ? ' off' : ''}"><span class="tv-pal-lbl">alterations${t.alterOff ? ' (off)' : ''}</span>${palette}</div>
       <div class="tv-side">
         <div class="tv-title"><span>${held ? 'held ' : ''}tuning: <b>${escapeHtml(t.name)}${own?.edited ? ' *' : ''}</b>${t.notes ? ` <span class="te-dim" title="each key sounds the scale's nearest note">${t.notes} notes on 12 keys</span>` : ''}</span>
-          <button data-act="close" title="close the tuning view (opt-t)">×</button></div>
+          <button data-act="close" title="close the tuning view (T)">×</button></div>
         <div class="te-row"><span class="te-lbl">root</span><select id="te-root">${rootOpts}</select></div>
         <div class="te-row te-col"><span class="te-lbl">paste a scale <span class="te-dim">ratios or cents: 11 (1/1 implied), 12, fewer (each key takes the nearest), or a .scl</span></span>
           <textarea id="te-paste" class="te-inp" rows="3" spellcheck="false" placeholder="16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 9/5 15/8"></textarea>

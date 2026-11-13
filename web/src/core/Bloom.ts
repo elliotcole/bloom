@@ -12,7 +12,6 @@ import {
   sputter as sputterArr, curdle as curdleArr, lace, slide as slideArr,
   pyramid as pyramidArr, rotate as rotateArr,
   matchNesting, resamp1, normalizeSum,
-  moveDoublesUpOctave as moveDoublesUpOctaveArr,
 } from '../lib/arrays';
 import {
   spell, spellToPC, justAbove, justBelow,
@@ -23,8 +22,23 @@ import type { Scale } from '../lib/scales';
 import { bakePattern } from '../lib/patterns';
 import {
   SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
-  notesToScale, nearestInScaleUniqueArr, keyToDegreeArr, nameScaleDegrees, pcsKey, centreOn as centreScaleOn,
+  notesToScale, nearestInScaleUniqueArr, nameScaleDegrees, pcsKey, centreOn as centreScaleOn,
 } from '../lib/scales';
+
+/** The palette each list is frozen to, or false */
+export interface Freezes {
+  pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false;
+  iv: IntervalVal[] | false;
+}
+const NO_FREEZES: Freezes = { pitch: false, time: false, vel: false, chan: false, iv: false };
+
+/** The freezes and the fixed duration and grid: see Bloom.holds() */
+export interface Holds {
+  frozen: Freezes;
+  fixedDur: number | false;
+  fixedDurMode: 'trim' | 'scale';
+  fixedGrid: number | false;
+}
 
 // ─── Class-level defaults ──────────────────────────────────────────────────────
 
@@ -67,6 +81,8 @@ export interface Sound {
 const CHROMATIC_INTERVALS = [-12, -9, -8, -7, -5, -4, -3, 3, 4, 5, 7, 8, 9, 12];
 const DIATONIC_INTERVALS = [-7, -5, -4, -3, -2, 2, 3, 4, 5, 7].map(k => makeIv(true, k));
 const MAX_BAKED_LENGTH = 256;
+/** The longest a bake of n notes may run: whole passes of the notes, so a capped bake still ends at the end of the phrase */
+const bakeCap = (n: number) => Math.max(n, Math.floor(MAX_BAKED_LENGTH / n) * n);
 
 // An intervals step as its added intervals (0s dropped), and back: [] → 0, [x] → x
 const ivArr = (s: IntervalVal): number[] => (Array.isArray(s) ? s : [s]).filter(x => x !== 0);
@@ -299,7 +315,6 @@ export class Bloom {
   turned: Partial<Record<ListKey, [number, number]>> = {};
 
   stack: Bloom[];
-  private saved: Bloom | null = null;
   private nest: NoteArray | null = null;
 
   static maxChan = BloomDefaults.maxChan;
@@ -381,9 +396,37 @@ export class Bloom {
     b.tuningRoot = this.tuningRoot;
     b.turned = JSON.parse(JSON.stringify(this.turned));
     b.stack = this.stack.map(s => s.clone());
-    b.saved = this.saved ? this.saved.clone() : null;
     b.nest = this.nest ? JSON.parse(JSON.stringify(this.nest)) : null;
     return b;
+  }
+
+  /** A copy without the push stack: what the garden, the undo history and a selection keep */
+  snapshot(): Bloom {
+    const b = this.clone();
+    b.stack = [];
+    return b;
+  }
+
+  /**
+   * What's held over the bloom whatever is done to it: the palette freezes and
+   * the fixed duration and grid. They belong to the session (or the voice), not
+   * to the notes: clone() and import() leave them alone, so a bloom lifted from
+   * the garden comes under the holds in force. Undo, a saved file and each of
+   * two voices carry them with holds() and setHolds().
+   */
+  holds(): Holds {
+    return JSON.parse(JSON.stringify({
+      frozen: this.frozen, fixedDur: this.fixedDur, fixedDurMode: this.fixedDurMode, fixedGrid: this.fixedGrid,
+    })) as Holds;
+  }
+
+  setHolds(h: Holds): this {
+    const c = JSON.parse(JSON.stringify(h)) as Holds;
+    this.frozen = { ...NO_FREEZES, ...c.frozen };
+    this.fixedDur = c.fixedDur;
+    this.fixedDurMode = c.fixedDurMode;
+    this.fixedGrid = c.fixedGrid;
+    return this;
   }
 
   import(bloom: Bloom): this {
@@ -463,14 +506,6 @@ export class Bloom {
     return this.seed(numNotes || undefined);
   }
 
-  newNotes(): this {
-    this.notes = (this.notes as number[]).map(() =>
-      Math.round(exprand(this.lowestSeedNote, this.highestSeedNote)),
-    );
-    this.enforceRange();
-    return this;
-  }
-
   newShape(): this {
     const n = this.notes.length;
     this.velocities = Array.from({ length: n }, () => Math.round(exprand(40, 100)))
@@ -510,16 +545,6 @@ export class Bloom {
     return this;
   }
 
-  mutateVelocities(maxChange = 30): this {
-    this.velocities = this.velocities.map(vel => {
-      if (vel === 0) return 0;   // a rest stays a rest
-      const change = Math.round(Math.random() * maxChange * (Math.random() < 0.5 ? 1 : -1));
-      // Clamp to 1..127: mutation should never silence a note (vel 0 = skip at playback)
-      return Math.max(1, Math.min(127, vel + change));
-    });
-    return this;
-  }
-
   mutateTime(): this {
     const possibilities = [0.25, 0.5, 1, 1, 1, 1.5, 2];
     if (coin(0.5)) {
@@ -538,13 +563,6 @@ export class Bloom {
   /** Scramble whole notes: each keeps its own time, velocity and channel */
   scramble(): this {
     return this.patternEvents('scramble');
-  }
-
-  deepScramble(): this {
-    this.saveNest();
-    this.notes = scramble(flatNotes(this.notes) as number[]);
-    this.restoreNest();
-    return this;
   }
 
   shuffle(): this {
@@ -571,13 +589,6 @@ export class Bloom {
     return true;
   }
 
-  deepShuffle(): this {
-    this.saveNest();
-    this.notes = perfectShuffle(flatNotes(this.notes) as number[]);
-    this.restoreNest();
-    return this;
-  }
-
   // ─── Rotation ──────────────────────────────────────────────────────────────
 
   /** Rotate whole notes */
@@ -587,21 +598,6 @@ export class Bloom {
 
   rotateNotes(n = 1): this {
     this.notes = rotateArr(this.notes, n) as NoteArray;
-    return this;
-  }
-
-  rotateVelocities(n = 1): this {
-    this.velocities = rotateArr(this.velocities, n);
-    return this;
-  }
-
-  rotateTime(n = 1): this {
-    this.timeIntervals = rotateArr(this.timeIntervals, n);
-    return this;
-  }
-
-  rotateChans(n = 1): this {
-    this.chans = rotateArr(this.chans, n);
     return this;
   }
 
@@ -629,12 +625,7 @@ export class Bloom {
 
   softer(multiplier = 1.2): this {
     // rests (0) stay rests
-    this.velocities = this.velocities.map(v => (v === 0 ? 0 : Math.max(20, Math.round(v / multiplier))));
-    return this;
-  }
-
-  fan(): this {
-    this.timeIntervals = [...this.timeIntervals].sort((a, b) => a - b);
+    this.velocities = this.velocities.map(v => (v === 0 ? 0 : Math.min(v, Math.max(20, Math.round(v / multiplier)))));   // 20 is the floor, and a note already under it stays put
     return this;
   }
 
@@ -686,16 +677,8 @@ export class Bloom {
     return this;
   }
 
-  trimTo(length?: number): this {
-    const len = length ?? this.notes.length;
-    this.notes = this.notes.slice(0, len);
-    this.timeIntervals = this.timeIntervals.slice(0, len);
-    this.velocities = this.velocities.slice(0, len);
-    this.chans = this.chans.slice(0, len);
-    return this;
-  }
-
   trimToDur(dur = 4): this {
+    if (!Number.isFinite(dur) || dur <= 0) return this;   // an emptied number field: nothing to fit to
     // Lists of other lengths (phasing): trim the notes so one pass fits, and
     // leave the velocities and channels cycling as they were.
     if (this.timeIntervals.length !== this.notes.length
@@ -739,6 +722,7 @@ export class Bloom {
 
   /** Stretch one pass of the notes to `dur` beats. A time list of another length is first written out to the notes, since it's the pass that must fit. */
   scaleToDur(dur = 4): this {
+    if (!Number.isFinite(dur) || dur <= 0) return this;
     if (this.timeIntervals.length === 0 || this.notes.length === 0) return this;
     const times = this.timeIntervals.length === this.notes.length
       ? this.timeIntervals : this.notes.map((_, i) => wrapAt(this.timeIntervals, i));
@@ -772,26 +756,6 @@ export class Bloom {
       else if (kept.length) kept[kept.length - 1] = { ...kept[kept.length - 1], time: roundTime(kept[kept.length - 1].time + ev.time) };
     });
     if (kept.length > 1 && kept.length < evs.length) this.setEvents(kept);
-    return this;
-  }
-
-  thinShorten(probability = 0.3): this {
-    const newNotes: NoteVal[] = [];
-    const newVels: number[] = [];
-    const newTimes: number[] = [];
-    const newChans: number[] = [];
-    this.notes.forEach((note, i) => {
-      if (!coin(probability)) {
-        newNotes.push(note);
-        newVels.push(wrapAt(this.velocities, i));
-        newTimes.push(wrapAt(this.timeIntervals, i));
-        newChans.push(wrapAt(this.chans, i));
-      }
-    });
-    this.notes = newNotes;
-    this.velocities = newVels;
-    this.timeIntervals = newTimes;
-    this.chans = newChans;
     return this;
   }
 
@@ -839,7 +803,7 @@ export class Bloom {
   unGap(): this {
     const nonZero = this.velocities.filter(v => v !== 0);
     if (nonZero.length === 0) return this;
-    const avg = Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length * 100) / 100;
+    const avg = Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length);
     this.velocities = this.velocities.map(v => (v === 0 ? avg : v));
     return this;
   }
@@ -854,13 +818,6 @@ export class Bloom {
       return true;
     });
     if (kept.length && kept.length < this.notes.length) this.setEvents(kept);
-    return this;
-  }
-
-  moveDoublesUpOctave(): this {
-    this.saveNest();
-    this.notes = moveDoublesUpOctaveArr(flatNotes(this.notes) as number[]);
-    this.restoreNest();
     return this;
   }
 
@@ -904,35 +861,6 @@ export class Bloom {
       const q = softRound(t, resolution, margin, strength);
       return t > 0 && q <= 0 ? resolution : q;
     });
-    return this;
-  }
-
-  addComma(dur = 1): this {
-    this.timeIntervals[this.timeIntervals.length - 1] += dur;
-    return this;
-  }
-
-  wrapTime(list?: number | number[]): this {
-    const l = list !== undefined
-      ? (Array.isArray(list) ? list : [list])
-      : this.timeIntervals;
-    this.timeIntervals = this.notes.map((_, i) => wrapAt(l, i));
-    return this;
-  }
-
-  wrapVel(list?: number | number[]): this {
-    const l = list !== undefined
-      ? (Array.isArray(list) ? list : [list])
-      : this.velocities;
-    this.velocities = this.notes.map((_, i) => wrapAt(l, i));
-    return this;
-  }
-
-  wrapChan(list?: number | number[]): this {
-    const l = list !== undefined
-      ? (Array.isArray(list) ? list : [list])
-      : this.chans;
-    this.chans = this.notes.map((_, i) => wrapAt(l, i));
     return this;
   }
 
@@ -1085,6 +1013,8 @@ export class Bloom {
   transpose(semitones = 0): this {
     this.mapPitches(n => n + semitones);
     if (this.appliedScale) this.appliedScale = scaleTranspose(this.appliedScale, semitones);
+    // a frozen scale moves with the notes, as a frozen rhythm follows a tempo change (scaleTimes)
+    if (this.frozen.pitch) this.frozen.pitch = scaleTranspose(this.frozen.pitch, semitones);
     this.keyRoot = (((this.keyRoot + semitones) % 12) + 12) % 12;
     this.enforceRange();
     return this;
@@ -1152,19 +1082,6 @@ export class Bloom {
       if (note < lo) return justAbove(note, lo);
       if (note > hi) return justBelow(note, hi);
       return note;
-    });
-    this.restoreNest();
-    return this;
-  }
-
-  compress(): this {
-    this.saveNest();
-    const flat = flatNotes(this.notes) as number[];
-    const lowest = Math.min(...flat);
-    this.notes = flat.map(note => {
-      let n = note;
-      while (n >= lowest + 12) n -= 12;
-      return n;
     });
     this.restoreNest();
     return this;
@@ -1249,10 +1166,6 @@ export class Bloom {
 
   pivot(i = 1): this {
     return this.pivotOn(i, (o, n) => Math.max(...n) - Math.max(...o));
-  }
-
-  pivotBass(i = 1): this {
-    return this.pivotOn(i, (o, n) => Math.min(...n) - Math.min(...o));
   }
 
   pivotLoudest(i = 1): this {
@@ -1429,20 +1342,6 @@ export class Bloom {
     return `${spell(mv.from)} → ${spell(mv.to)}`;
   }
 
-  setRoot(root: number | string): this {
-    if (typeof root === 'string') root = spellToPC(root);
-    this.applyScale(this.scale, ((root % 12) + 12) % 12);
-    return this;
-  }
-
-  addSharp(): this {
-    return this.setRoot(this.keyRoot + 7);
-  }
-
-  addFlat(): this {
-    return this.setRoot(this.keyRoot - 7);
-  }
-
   /** The scale loses one of its notes (never the last); notes on it move to the nearest left */
   reduceScale(): this {
     const degrees = [...this.scale.degrees];
@@ -1467,13 +1366,6 @@ export class Bloom {
     return this;
   }
 
-  removeChords(): this {
-    this.notes = this.notes.map(note =>
-      Array.isArray(note) ? (note as NoteVal[])[0] : note,
-    ) as NoteArray;
-    return this;
-  }
-
   // ─── Channels ──────────────────────────────────────────────────────────────
 
   addChan(): this {
@@ -1491,11 +1383,6 @@ export class Bloom {
     return this;
   }
 
-  randChans(): this {
-    this.chans = this.chans.map(() => Math.floor(Math.random() * (Bloom.maxChan + 1)));
-    return this;
-  }
-
   cycleChans(): this {
     this.chans = this.chans.map(ch => ((ch + 1 + Bloom.maxChan + 1) % (Bloom.maxChan + 1)));
     return this;
@@ -1510,14 +1397,6 @@ export class Bloom {
   oneRandChan(): this {
     const i = Math.floor(Math.random() * this.chans.length);
     this.chans[i] = Math.floor(Math.random() * (Bloom.maxChan + 1));
-    return this;
-  }
-
-  /** Probabilistically increment each channel by 1, wrapping at maxChan */
-  incrementSomeChans(prob = 0.2): this {
-    this.chans = this.chans.map(ch =>
-      coin(prob) ? (ch + 1 > Bloom.maxChan ? 0 : ch + 1) : ch,
-    );
     return this;
   }
 
@@ -1637,7 +1516,6 @@ export class Bloom {
     return this;
   }
 
-  /** Progressive drift across the array — an instrumentation glissando */
   /** Redraw chans as a smooth curve through the full channel range */
   curveChans(): this {
     const n = this.chans.length;
@@ -1669,12 +1547,6 @@ export class Bloom {
       this.chans = this.chans.map(c => (c === drop ? keep : c));
       pal = this.chanPalette();
     }
-    return this;
-  }
-
-  /** Clear: all chans → 0 */
-  clearChans(): this {
-    this.chans = this.chans.map(() => 0);
     return this;
   }
 
@@ -2317,7 +2189,7 @@ export class Bloom {
       case 'mutateWild': set(v => v + rrand(-30, 30)); break;
       case 'nudgeDown': set(v => v - FINE_VEL); break;
       case 'nudgeUp': set(v => v + FINE_VEL); break;
-      case 'octaveDown': set(v => Math.max(20, v / 1.5)); break;
+      case 'octaveDown': set(v => Math.min(v, Math.max(20, v / 1.5))); break;
       case 'octaveUp': set(v => v * 1.5); break;
       case 'stepDown': set(v => this.stepVel(v, -1, pal)); break;
       case 'stepUp': set(v => this.stepVel(v, 1, pal)); break;
@@ -2711,7 +2583,7 @@ export class Bloom {
   // A fifth list, applied as the bloom is rendered: each step adds notes at the
   // given distances from the note it lands on. `notes` is never modified.
 
-  /** True when the intervals array adds nothing */
+  /** True when the intervals array adds a note somewhere */
   hasIntervals(): boolean {
     return this.intervals.some(step => (Array.isArray(step) ? step : [step]).some(iv => iv !== 0));
   }
@@ -3052,7 +2924,7 @@ export class Bloom {
     if (!this.hasFigures() || this.notes.length === 0) return false;
     const n = this.notes.length;
     const m = this.figures.length;
-    const length = Math.min((n * m) / gcd(n, m), Math.max(n, MAX_BAKED_LENGTH));
+    const length = Math.min((n * m) / gcd(n, m), bakeCap(n));
     const view = this.sounding();
     // everything that sounds, on one timeline
     const events: { at: number; notes: number[]; vel: number; chan: number; main: boolean }[] = [];
@@ -3283,7 +3155,7 @@ export class Bloom {
     if (!this.hasIntervals() || this.notes.length === 0) return this;
     const n = this.notes.length;
     const m = this.intervals.length;
-    const length = Math.min((n * m) / gcd(n, m), Math.max(n, MAX_BAKED_LENGTH));
+    const length = Math.min((n * m) / gcd(n, m), bakeCap(n));
     this.notes = Array.from({ length }, (_, i) => {
       const noteVal = wrapAt(this.notes, i);
       const added = this.addedNotesAt(i);
@@ -3297,19 +3169,6 @@ export class Bloom {
 
   // ─── Storage ───────────────────────────────────────────────────────────────
 
-  save(): this {
-    this.saved = this.clone();
-    return this;
-  }
-
-  restore(): this {
-    if (this.saved) {
-      this.import(this.saved);
-      this.save();
-    }
-    return this;
-  }
-
   push(): this {
     const snapshot = this.clone();
     // Snapshots don't carry their own history — without this, every push clones
@@ -3322,15 +3181,6 @@ export class Bloom {
   pop(): this {
     const top = this.stack.pop();
     if (top) this.import(top);
-    return this;
-  }
-
-  popAny(): this {
-    if (this.stack.length > 0) {
-      const idx = Math.floor(Math.random() * this.stack.length);
-      const bloom = this.stack.splice(idx, 1)[0];
-      this.import(bloom);
-    }
     return this;
   }
 
@@ -3368,43 +3218,10 @@ export class Bloom {
 
   // ─── Queries ───────────────────────────────────────────────────────────────
 
-  get lowestNote(): number {
-    return this._lowestNoteIdx();
-  }
-
-  get highestNote(): number {
-    return this._highestNoteIdx();
-  }
-
-  get loudestNote(): number {
-    return this._loudestNoteIdx();
-  }
-
-  private _lowestNoteIdx(notes?: number[]): number {
-    const ns = notes ?? flatNotes(this.notes) as number[];
-    return ns.indexOf(Math.min(...ns));
-  }
-
-  private _highestNoteIdx(notes?: number[]): number {
-    const ns = notes ?? flatNotes(this.notes) as number[];
-    return ns.indexOf(Math.max(...ns));
-  }
-
-  private _loudestNoteIdx(): number {
-    return this.velocities.indexOf(Math.max(...this.velocities));
-  }
-
   dur(): number {
     if (this.timeIntervals.length === 0) return 0;
     if (this.insertsFigures()) return this.notes.reduce((sum: number, _: NoteVal, i: number) => sum + this.stepAt(i), 0);
     return this.notes.reduce((sum: number, _: NoteVal, i: number) => sum + wrapAt(this.timeIntervals, i), 0);
-  }
-
-  asDegrees(): number[] {
-    const scale = this.scale;
-    return (flatNotes(this.notes) as number[]).map(note =>
-      keyToDegreeArr([note], scale.degrees, scale.pitchesPerOctave)[0],
-    );
   }
 
   // ─── Fixed constraints ─────────────────────────────────────────────────────
@@ -3427,10 +3244,7 @@ export class Bloom {
    * channels for the others) and, before each play, snaps anything off-palette
    * to its nearest value. Durations are compared by ratio.
    */
-  frozen: {
-    pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false;
-    iv: IntervalVal[] | false;
-  } = { pitch: false, time: false, vel: false, chan: false, iv: false };
+  frozen: Freezes = { ...NO_FREEZES };
 
   freeze(k: 'pitch' | 'time' | 'vel' | 'chan' | 'iv', on: boolean): this {
     if (k === 'pitch') this.frozen.pitch = on ? this.scale : false;
@@ -3467,7 +3281,7 @@ export class Bloom {
   }
 
   private _resolveFixedDur(): void {
-    if (typeof this.fixedDur === 'number') {
+    if (typeof this.fixedDur === 'number' && Number.isFinite(this.fixedDur) && this.fixedDur > 0) {
       if (this.fixedDurMode === 'scale') this.scaleToDur(this.fixedDur);
       else this.trimToDur(this.fixedDur);
     }
@@ -3479,8 +3293,6 @@ export class Bloom {
 
   // ─── Playback interface (consumed by scheduler) ────────────────────────────
 
-  /** Returns flat list of { note, velocity, time, chan } events for playback */
-  /** One pass of the notes. `tick` is the running count the other lists are read at, so they keep phasing across passes. */
   /**
    * The bloom as it sounds: a raga sounds each note in the form of the step it
    * takes next (fitByDirection), so its notes can differ from those written.
@@ -3514,21 +3326,4 @@ export class Bloom {
 
   // ─── Report ────────────────────────────────────────────────────────────────
 
-  report(): string {
-    const scale = this.scale;
-    const scaleName = this.appliedScale ? ` [${this.appliedScale.name}]` : '';
-    const lines = [
-      `notes:      ${JSON.stringify(this.notes)}`,
-      `velocities: ${JSON.stringify(this.velocities)}`,
-      `times:      ${JSON.stringify(this.timeIntervals.map(t => Math.round(t * 100) / 100))}`,
-      `chans:      ${JSON.stringify(this.chans)}`,
-      this.hasIntervals()
-        ? `intervals:  ${JSON.stringify(this.intervals)} ${this.intervalsDiatonic ? 'scale steps' : 'semitones'}`
-        : '',
-      this.hasFigures() ? `figures:    ${JSON.stringify(this.figures)}` : '',
-      `scale:      [${scale.degrees.join(',')}]${scaleName}`,
-      this.name ? `name:       ${this.name}` : '',
-    ].filter(Boolean);
-    return lines.join('\n');
-  }
 }

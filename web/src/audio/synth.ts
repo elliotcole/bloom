@@ -95,8 +95,7 @@ export function setVelocityCeiling(ceiling: number): void {
 /** Set reverb decay time in seconds. Regenerates the impulse response. */
 export function setReverbDecay(seconds: number): void {
   if (!_reverb) return;
-  _reverb.decay = Math.max(0.1, seconds);
-  _reverb.generate();
+  _reverb.decay = Math.max(0.1, seconds);   // setting it regenerates the impulse response
 }
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
@@ -114,17 +113,25 @@ export function setPianoTuning(freqs: number[] | null): void {
 
 // ─── MidiOutput adapter ──────────────────────────────────────────────────────
 
-/** Ensure the AudioContext is running (browsers require a user gesture). */
-async function ensureContext(): Promise<void> {
-  if (Tone.getContext().state !== 'running') {
-    await Tone.start();
-  }
+// The AudioContext must be running before anything sounds (browsers want a
+// user gesture first). While it is, every message is acted on as it arrives.
+// While it's being woken they wait their turn behind it, in the order they
+// came: the sampler can only release a note whose attack it has been given,
+// so a note-off that overtook its note-on would be lost and the note would
+// ring the length of its sample.
+let _waking: Promise<void> | null = null;
+
+function whenAwake(fn: () => void): void {
+  if (!_waking && Tone.getContext().state === 'running') { fn(); return; }
+  const turn: Promise<void> = (_waking ?? Tone.start()).then(fn, () => { /* not allowed to start yet: this one is dropped */ });
+  _waking = turn;
+  void turn.then(() => { if (_waking === turn) _waking = null; });
 }
 
 /**
  * Convert a scheduler timestamp (performance.now()-based, possibly in the future)
- * to Tone.js transport time. Without it, scheduled notes would fire up to a full
- * lookahead window (~100ms) early.
+ * to the audio context's time (Tone's now). Without it, scheduled notes would
+ * fire up to a full lookahead window (~100ms) early.
  */
 function toneTime(atMs?: number): number {
   if (atMs === undefined) return Tone.now();
@@ -149,20 +156,18 @@ export const pianoOutput: MidiOutput = {
       // Note on — scale velocity to tame the Salamander samples
       const pitch = _freqs ? _freqs[note] : midiToNoteName(note);
       _sounding.set(note, pitch);
-      ensureContext().then(() => {
-        const amp = (vel / 127) * (_velCeiling / 127);
-        _sampler!.triggerAttack(pitch, toneTime(atMs), amp);
-      });
+      const amp = (vel / 127) * (_velCeiling / 127);
+      whenAwake(() => _sampler?.triggerAttack(pitch, toneTime(atMs), amp));
     } else if (status === 0x80 || (status === 0x90 && vel === 0)) {
       // Note off
       const pitch = _sounding.get(note) ?? midiToNoteName(note);
       _sounding.delete(note);
-      _sampler?.triggerRelease(pitch, toneTime(atMs));
+      whenAwake(() => _sampler?.triggerRelease(pitch, toneTime(atMs)));
     } else if (status === 0xb0) {
       const cc = data[1];
       if (cc === 123) {
         // All notes off — immediate, this is a panic signal
-        _sampler?.releaseAll(Tone.now());
+        whenAwake(() => _sampler?.releaseAll(Tone.now()));
       }
     }
   },

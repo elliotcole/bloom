@@ -59,11 +59,6 @@ export function softRound(value: number, resolution: number = 1, margin: number 
   return Math.abs(diff) > margin ? value + strength * diff : value;
 }
 
-export function linlin(value: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
-  if (inMax === inMin) return outMin;
-  return outMin + ((value - inMin) / (inMax - inMin)) * (outMax - outMin);
-}
-
 // ─── Scale degree conversions ─────────────────────────────────────────────────
 // One way of reading a pitch against a scale, used by every snap and step: the
 // scale's degrees wrap round the octave, so the note above the top degree is
@@ -119,29 +114,6 @@ export function stepInScale(note: number, scaleDegrees: number[], k: number, ste
 
 // ─── Harmony ──────────────────────────────────────────────────────────────────
 
-/**
- * Negative harmony transformation.
- * Maps notes through an axis of symmetry around the tonic.
- */
-export function negHarmony(note: number, tonic: number = 0): number {
-  const pc = asPC(note);
-  const ruler: number[][] = [
-    [10, 11, 0, 1, 2, 3].map(n => (n + tonic) % 12),
-    [4, 5, 6, 7, 8, 9].map(n => (n + tonic) % 12),
-  ];
-  let neg: number;
-  const idx0 = ruler[0].indexOf(pc);
-  if (idx0 !== -1) {
-    neg = ruler[1].reverse()[idx0];
-    ruler[1].reverse(); // restore
-  } else {
-    const idx1 = ruler[1].indexOf(pc);
-    neg = ruler[0].reverse()[idx1];
-    ruler[0].reverse();
-  }
-  return nearestOctaveTo(neg, note);
-}
-
 // ─── Chord operations ─────────────────────────────────────────────────────────
 
 /** Invert a chord: diatonically transpose each note by n steps using the chord's own scale */
@@ -149,36 +121,13 @@ export function invertChord(notes: number[], n: number = 1): number[] {
   const pcs = notes.map(note => asPC(note)).sort((a, b) => a - b);
   const uniquePCs = [...new Set(pcs)].sort((a, b) => a - b);
   const scale = uniquePCs.length < 2 ? [0, 2, 4, 5, 7, 9, 11] : uniquePCs;
-  return notes.map(note => degreeToKey(keyToDegree(note, scale) + n, scale));
+  // a note between two steps of the scale (only the C major fallback has any) moves to the next step that way
+  const whole = n < 0 ? Math.ceil : Math.floor;
+  return notes.map(note => degreeToKey(whole(keyToDegree(note, scale)) + n, scale));
 }
 
 /** Invert around the mean pitch */
 export function invertMean(notes: number[]): number[] {
   const avg = Math.round(notes.reduce((a, b) => a + b, 0) / notes.length);
   return notes.map(note => avg - (note - avg));
-}
-
-export function efficientMotionFrom(notes: number[], previousChord: number[]): number[] {
-  const original = [...notes];
-  const prev = [...previousChord];
-  const result: number[] = [];
-  while (original.length > 0) {
-    let bestMove: { note: number; transposed: number; distance: number } | null = null;
-    for (const prevNote of prev) {
-      for (const note of original) {
-        const transposed = nearestOctaveTo(note, prevNote);
-        const distance = Math.abs(prevNote - transposed);
-        if (!bestMove || distance < bestMove.distance) {
-          bestMove = { note, transposed, distance };
-        }
-      }
-    }
-    if (!bestMove) break;
-    result.push(bestMove.transposed);
-    original.splice(original.indexOf(bestMove.note), 1);
-    const prevIdx = prev.indexOf(bestMove.note);
-    if (prevIdx !== -1) prev.splice(prevIdx, 1);
-    else if (prev.length > 0) prev.shift();
-  }
-  return result;
 }

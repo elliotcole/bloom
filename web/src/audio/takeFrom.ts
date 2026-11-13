@@ -24,7 +24,8 @@ export interface TakeFrom {
   other: number | null;
 }
 
-const due = (e: TakeEvent) => e[0] + (e[1] === 'm' ? e[3] : 0);
+/** When an event takes effect, in ms from the start: a MIDI message sent ahead, that much later */
+export const due = (e: TakeEvent): number => e[0] + (e[1] === 'm' ? e[3] : 0);
 
 /** Where the take stands at `ms` (events in time order, as a take keeps them) */
 export function takeFrom(take: TakeFile, ms: number): TakeFrom {

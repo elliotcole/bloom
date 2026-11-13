@@ -260,21 +260,6 @@ export function cueMessage(t: Tuning | null, root: number): number[] {
   return [0xf0, 0x7d, 0x62, 0x6c, 0x63, ...cueNotes(t, root).flat(), 0xf7];
 }
 
-/** Read a cue back (velocity by pitch, 0 for none): the tuning and its root, or null if incomplete */
-export function readCue(vel: number[]): { tuning: Tuning; root: number } | null {
-  if (vel[CUE.format] !== 1 || !vel[CUE.root]) return null;
-  const value = (at: number) => {
-    if (!vel[at] || !vel[at + 1] || !vel[at + 2]) return null;
-    return ((vel[at] - 1) * 16129 + (vel[at + 1] - 1) * 127 + (vel[at + 2] - 1) - 1_000_000) / 1000;
-  };
-  const period = value(CUE.period);
-  const cents = Array.from({ length: 12 }, (_, d) => value(CUE.degrees + 3 * d));
-  if (period === null || cents.some(c => c === null)) return null;
-  let name = '';
-  for (let i = 0; i < CUE.nameLen && vel[CUE.name + i]; i++) name += String.fromCharCode(vel[CUE.name + i]);
-  return { tuning: { name, cents: cents.map((c, d) => c! + 100 * d), period: period + 1200 }, root: vel[CUE.root] - 1 };
-}
-
 // ─── Editing ──────────────────────────────────────────────────────────────────
 
 // ─── Alterations ──────────────────────────────────────────────────────────────

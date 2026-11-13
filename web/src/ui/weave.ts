@@ -16,6 +16,7 @@ import { rings, lcm } from './orrery';
 import { playedView } from '../audio/playhead';
 import type { Shift } from '../audio/playhead';
 import type { RingKey } from './orrery';
+import { ink as themeInk, pc as pcOf } from './draw';
 import type { Theme } from './theme';
 
 /** Where one list was when a row was woven */
@@ -112,8 +113,6 @@ export function fitWeave(rows: Row[], h: number): number {
 
 type Hit = (i: number, x: number, y: number, r: number) => void;
 
-const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
-const pcOf = (m: number) => ((Math.round(m) % 12) + 12) % 12;
 const SELVEDGE = 8;
 
 /**
@@ -132,6 +131,7 @@ export function drawWeaveAt(
   progress = 1,
   hit?: Hit,
 ): void {
+  const ink = (a: number) => themeInk(theme, a);
   const labels = h >= 80;
   const labelH = labels ? 14 : 0;
   const ch = h - labelH;

@@ -2,13 +2,17 @@
 
 import { Bloom } from '../core/Bloom';
 import { wrapAt, flatNotes } from '../lib/arrays';
+import { spell, spellOctave } from '../lib/numbers';
+import { ink, pc } from './draw';
 import { beatsToMs } from '../audio/scheduler';
 import { THEMES, getTheme } from './theme';
 import type { VizMode, ThemeId, Theme } from './theme';
 import { drawNotehead, drawSharp, drawFlat } from './glyphs';
 import { Lanes, LANES_HEIGHT } from './lanes';
 import type { LaneMode, LaneKey } from './lanes';
-import { chitHues, chitLabels } from './lanes';
+import { chitHuesOf, chitLabelsOf } from './lanes';
+import { needsFrame, viewMoving } from './redraw';
+import { backingSize, onDprChange } from './canvasSize';
 import { drawTuningPie, degreeAt } from './tuningPie';
 import type { PieMarks } from './tuningPie';
 import { drawOrreryAt } from './orrery';
@@ -43,7 +47,6 @@ export const DEFAULT_CAMERA: CameraParams = { azimuth: 0, elevation: 0 };
 
 /** Performance frames: aspect ratios a recording is cropped to */
 export type FrameAspect = 'off' | '16:9' | '1:1' | '4:5' | '9:16';
-const FRAMES: FrameAspect[] = ['off', '16:9', '1:1', '4:5', '9:16'];
 const FRAME_RATIO: Record<FrameAspect, number> = { off: 0, '16:9': 16 / 9, '1:1': 1, '4:5': 4 / 5, '9:16': 9 / 16 };
 
 /** The camera after t seconds of drift: two slow sweeps whose periods don't line
@@ -72,11 +75,11 @@ function hit(i: number, x: number, y: number, r: number): void { _hits?.push({ i
 
 // ─── Small helpers ─────────────────────────────────────────────────────────────
 
-function pc(note: number): number { return ((Math.round(note) % 12) + 12) % 12; }
 function clamp(v: number, lo: number, hi: number): number { return v < lo ? lo : v > hi ? hi : v; }
 
 // Extract RGB from a theme css colour string and reapply a specific alpha.
-// Handles rgba(r,g,b,a) and rgb(r,g,b) formats used throughout theme.ts.
+// Handles rgba(r,g,b,a) and rgb(r,g,b), as the themes' text is written; a hex
+// colour (most accents) comes back unchanged.
 function withAlpha(cssColor: string, alpha: number): string {
   const m = cssColor.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   return m ? `rgba(${m[1]},${m[2]},${m[3]},${alpha})` : cssColor;
@@ -182,11 +185,8 @@ function soundingPitches(bloom: Bloom): number[] {
 
 // ─── Note label helpers ───────────────────────────────────────────────────────
 
-const MIDI_NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-function pitchName(midi: number): string {
-  const n = Math.round(midi);
-  return MIDI_NOTE_NAMES[((n % 12) + 12) % 12] + String(Math.floor(n / 12) - 1);
-}
+/** A note's name and octave, spelled as everywhere else (lib/numbers) */
+const pitchName = spellOctave;
 
 type NoteLabel = { x: number; y: number; label: string };
 
@@ -207,9 +207,7 @@ function overlayNoteLabels(
   ctx.font = '9px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
-    : theme.id === 'uv'       ? 'rgba(200,100,255,0.55)'
-    :                            'rgba(255,255,255,0.40)';
+  ctx.fillStyle = theme.noteLabel;
   const dist = dotRadius + offset;
   for (const { x, y, label } of labels) {
     const dx = x - center.x;
@@ -313,7 +311,7 @@ export function drawRadialAt(
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillStyle = ink(theme, 0.3);
   ctx.fill();
 
   if (showNoteLabels) {
@@ -332,203 +330,9 @@ export function drawRadialAt(
   }
 }
 
-// ─── 2. Piano / Field (constellation) ────────────────────────────────────────
-
-export function drawPianoAt(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number,
-  bloom: Bloom,
-  flashValues: number[] = [],
-  playheadIndex = -1,
-  showLabels = true,
-  beadProgress = 0,
-  theme: Theme = THEMES.dark,
-  showNoteLabels = false,
-): void {
-  bloom = bloom.sounding();   // a raga's notes as they sound; writtenAt marks the rest
-  const notes = bloom.notes;
-  const n = notes.length;
-
-  const wingW = showLabels ? w * 0.2 : 0;
-  const PX = x + wingW;
-  const PW = w - wingW * 2;
-  const PY = y + h * 0.10;
-  const PH = h * 0.78;
-
-  const allPitches = soundingPitches(bloom);
-  const rawMin = Math.min(...allPitches);
-  const rawMax = Math.max(...allPitches);
-  const margin = Math.max(6, Math.round((rawMax - rawMin) * 0.18));
-  const minNote = Math.max(0, rawMin - margin);
-  const maxNote = Math.min(127, rawMax + margin);
-  const noteSpan = maxNote - minNote || 12;
-  // Anchor x-axis to note onsets: first note at left, last note at right
-  let _tLast = 0;
-  for (let i = 0; i < n - 1; i++) _tLast += wrapAt(bloom.timeIntervals, i);
-  const timeScale = n > 1 && _tLast > 0 ? _tLast : 1;
-
-  const noteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
-  const timeToX = (t: number) => n > 1 ? PX + (t / timeScale) * PW : PX + PW * 0.5;
-
-  // Octave guide lines
-  if (showLabels) {
-    ctx.textAlign = 'right';
-    ctx.font = '9px monospace';
-    for (let note = Math.ceil(minNote / 12) * 12; note <= maxNote; note += 12) {
-      const gy = noteToY(note);
-      ctx.strokeStyle = theme.grid;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(PX, gy);
-      ctx.lineTo(PX + PW, gy);
-      ctx.stroke();
-      ctx.fillStyle = theme.text;
-      ctx.fillText(`C${Math.floor(note / 12) - 1}`, PX - 6, gy + 3);
-    }
-  }
-
-  // Build centroids
-  const centroids: Array<{ x: number; y: number }> = [];
-  let t = 0;
-  for (let i = 0; i < n; i++) {
-    const noteVal = notes[i];
-    const pitches = Array.isArray(noteVal) ? (noteVal as number[]) : [noteVal as number];
-    const avgPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
-    centroids.push({ x: timeToX(t), y: noteToY(avgPitch) });
-    t += wrapAt(bloom.timeIntervals, i);
-  }
-
-  ctx.globalCompositeOperation = theme.blendMode;
-
-  // Polygon fill
-  if (n >= 3) {
-    const shCx = centroids.reduce((a, c) => a + c.x, 0) / n;
-    const shCy = centroids.reduce((a, c) => a + c.y, 0) / n;
-    const maxDist = Math.max(...centroids.map(c => Math.hypot(c.x - shCx, c.y - shCy)), 1);
-    const avgFlash = flashValues.length ? flashValues.reduce((a, b) => a + b, 0) / flashValues.length : 0;
-    const [inner, outer] = theme.polyFill(avgFlash);
-
-    ctx.beginPath();
-    ctx.moveTo(centroids[0].x, centroids[0].y);
-    for (let i = 1; i < n; i++) ctx.lineTo(centroids[i].x, centroids[i].y);
-    ctx.closePath();
-
-    const grad = ctx.createRadialGradient(shCx, shCy, 0, shCx, shCy, maxDist);
-    grad.addColorStop(0, inner);
-    grad.addColorStop(1, outer);
-    ctx.fillStyle = grad;
-    ctx.fill();
-  }
-
-  // Connector lines
-  ctx.lineWidth = 0.5;
-  for (let i = 0; i < n - 1; i++) {
-    const fa = flashValues[i] ?? 0;
-    const fb = flashValues[i + 1] ?? 0;
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha((fa + fb) * 0.5)})`;
-    ctx.beginPath();
-    ctx.moveTo(centroids[i].x, centroids[i].y);
-    ctx.lineTo(centroids[i + 1].x, centroids[i + 1].y);
-    ctx.stroke();
-  }
-
-  // Note circles
-  t = 0;
-  for (let i = 0; i < n; i++) {
-    const noteVal = notes[i];
-    const chordNotes = Array.isArray(noteVal) ? (noteVal as number[]) : [noteVal as number];
-    const vel = wrapAt(bloom.velocities, i);
-    const flash = flashValues[i] ?? 0;
-    const nx = timeToX(t);
-    const baseR = 4.5;
-    const r = baseR + flash * 7;
-
-    chordNotes.forEach(pitch => {
-      const ny = noteToY(pitch);
-      hit(i, nx, ny, baseR + 5);
-      const [h, s, l, a] = theme.noteHsla(pc(pitch), vel, flash);
-
-      if (flash > 0.04 && theme.glowScale > 0) {
-        const gr = ctx.createRadialGradient(nx, ny, 0, nx, ny, r * 2.8 * theme.glowScale);
-        gr.addColorStop(0, `hsla(${h},${s}%,${l}%,${flash * 0.45})`);
-        gr.addColorStop(1, `hsla(${h},${s}%,${l}%,0)`);
-        ctx.fillStyle = gr;
-        ctx.beginPath();
-        ctx.arc(nx, ny, r * 2.8 * theme.glowScale, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      if (theme.strokeOnly) {
-        ctx.strokeStyle = `hsla(${h},${s}%,${l}%,${a})`;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(nx, ny, r, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = `hsla(${h},${s}%,${l}%,${a})`;
-        ctx.beginPath();
-        ctx.arc(nx, ny, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      if (flash > 0.01) {
-        const ringR = (baseR + 7) + (1 - flash) * 22;
-        ctx.strokeStyle = `rgba(255,255,255,${flash * 0.38})`;
-        ctx.lineWidth = 1.5 * flash;
-        ctx.beginPath();
-        ctx.arc(nx, ny, ringR, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
-    bloom.extraMarksAt(i).forEach(({ pitch, at }) =>
-      drawAddedMark(ctx, at ? timeToX(t + at) : nx, noteToY(pitch), baseR, pitch, vel, flash, theme));
-    const written = bloom.writtenAt(i);
-    if (written !== null) drawWrittenMark(ctx, nx, noteToY(written), baseR, theme);
-    t += wrapAt(bloom.timeIntervals, i);
-  }
-
-  // Traveling bead
-  if (playheadIndex >= 0 && playheadIndex < n - 1 && beadProgress > 0.01 && beadProgress < 0.99) {
-    const from = centroids[playheadIndex];
-    const to = centroids[playheadIndex + 1];
-    const bx = from.x + (to.x - from.x) * beadProgress;
-    const by = from.y + (to.y - from.y) * beadProgress;
-    const gr = ctx.createRadialGradient(bx, by, 0, bx, by, 7);
-    gr.addColorStop(0, 'rgba(255,255,255,0.13)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.arc(bx, by, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = theme.accent;
-    ctx.beginPath();
-    ctx.arc(bx, by, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.globalCompositeOperation = 'source-over';
-
-  if (showNoteLabels) {
-    const labels: NoteLabel[] = [];
-    let tl = 0;
-    for (let i = 0; i < n; i++) {
-      const nv = notes[i];
-      const ps = Array.isArray(nv) ? (nv as number[]) : [nv as number];
-      const lx = timeToX(tl);
-      ps.forEach(p => labels.push({ x: lx, y: noteToY(p), label: pitchName(p) }));
-      tl += wrapAt(bloom.timeIntervals, i);
-    }
-    if (labels.length > 0) {
-      const shapeCx = labels.reduce((a, l) => a + l.x, 0) / labels.length;
-      const shapeCy = labels.reduce((a, l) => a + l.y, 0) / labels.length;
-      overlayNoteLabels(ctx, labels, { x: shapeCx, y: shapeCy }, theme, 8, 5);
-    }
-  }
-}
-
-// ─── 2b. Span (Field with absolute pitch axis) ────────────────────────────────
+// ─── 2. Field (constellation) ─────────────────────────────────────────────────
 //
-// Identical to Field except the Y axis is fixed to bloom.lowestPossibleNote /
+// Time across, pitch up. The Y axis is fixed to bloom.lowestPossibleNote /
 // bloom.highestPossibleNote — so transposing visibly moves dots up and down
 // within a stable, compass-defined frame of reference.
 
@@ -620,7 +424,7 @@ export function drawFieldAt(
   for (let i = 0; i < n - 1; i++) {
     const fa = flashValues[i] ?? 0;
     const fb = flashValues[i + 1] ?? 0;
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha((fa + fb) * 0.5)})`;
+    ctx.strokeStyle = ink(theme, theme.lineAlpha((fa + fb) * 0.5));
     ctx.beginPath();
     ctx.moveTo(centroids[i].x, centroids[i].y);
     ctx.lineTo(centroids[i + 1].x, centroids[i + 1].y);
@@ -668,7 +472,7 @@ export function drawFieldAt(
 
       if (flash > 0.01) {
         const ringR = (baseR + 7) + (1 - flash) * 22;
-        ctx.strokeStyle = `rgba(255,255,255,${flash * 0.38})`;
+        ctx.strokeStyle = ink(theme, flash * 0.38);
         ctx.lineWidth = 1.5 * flash;
         ctx.beginPath();
         ctx.arc(nx, ny, ringR, 0, Math.PI * 2);
@@ -689,8 +493,8 @@ export function drawFieldAt(
     const bx = from.x + (to.x - from.x) * beadProgress;
     const by = from.y + (to.y - from.y) * beadProgress;
     const gr = ctx.createRadialGradient(bx, by, 0, bx, by, 7);
-    gr.addColorStop(0, 'rgba(255,255,255,0.13)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    gr.addColorStop(0, ink(theme, 0.13));
+    gr.addColorStop(1, ink(theme, 0));
     ctx.fillStyle = gr;
     ctx.beginPath();
     ctx.arc(bx, by, 7, 0, Math.PI * 2);
@@ -902,7 +706,7 @@ export function drawDeepAt(
     const fb = flashValues[i + 1] ?? 0;
     const avgZ = (centroids[i].zNorm + centroids[i + 1].zNorm) * 0.5;
     const alpha = theme.lineAlpha((fa + fb) * 0.5) * (0.2 + 0.8 * avgZ);
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.strokeStyle = ink(theme, alpha);
     ctx.beginPath();
     ctx.moveTo(centroids[i].x, centroids[i].y);
     ctx.lineTo(centroids[i + 1].x, centroids[i + 1].y);
@@ -949,7 +753,7 @@ export function drawDeepAt(
 
     if (flash > 0.01 && zNorm > 0.2) {
       const ringR = (baseR * dotScale + 7) + (1 - flash) * 22;
-      ctx.strokeStyle = `rgba(255,255,255,${flash * 0.38 * zNorm})`;
+      ctx.strokeStyle = ink(theme, flash * 0.38 * zNorm);
       ctx.lineWidth = 1.5 * flash;
       ctx.beginPath();
       ctx.arc(projX, projY, ringR, 0, Math.PI * 2);
@@ -966,8 +770,8 @@ export function drawDeepAt(
     const bz = from.zNorm + (to.zNorm - from.zNorm) * beadProgress;
     const beadR = 7 * (0.5 + 0.5 * bz);
     const gr = ctx.createRadialGradient(bx, by, 0, bx, by, beadR);
-    gr.addColorStop(0, 'rgba(255,255,255,0.13)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    gr.addColorStop(0, ink(theme, 0.13));
+    gr.addColorStop(1, ink(theme, 0));
     ctx.fillStyle = gr;
     ctx.beginPath();
     ctx.arc(bx, by, beadR, 0, Math.PI * 2);
@@ -1263,14 +1067,14 @@ export function drawOrbitAt(
   const starR = 3 + (theme.glowScale > 0 ? 1 : 0);
   if (theme.glowScale > 0) {
     const sg = ctx.createRadialGradient(cx, cy, 0, cx, cy, starR * 5);
-    sg.addColorStop(0, theme.id === 'phosphor' ? 'rgba(255,176,0,0.4)' : 'rgba(255,255,255,0.3)');
-    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    sg.addColorStop(0, theme.starGlow[0]);
+    sg.addColorStop(1, theme.starGlow[1]);
     ctx.fillStyle = sg;
     ctx.beginPath();
     ctx.arc(cx, cy, starR * 5, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillStyle = ink(theme, 0.7);
   ctx.beginPath();
   ctx.arc(cx, cy, starR, 0, Math.PI * 2);
   ctx.fill();
@@ -1381,7 +1185,6 @@ export function drawOrbitAt(
 // ─── 5. Tonal Web (circle of fifths) ─────────────────────────────────────────
 
 const FIFTHS_ORDER = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]; // C G D A E B Gb Db Ab Eb Bb F
-const PC_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 // Map pitch class → index in the circle of fifths
 const _pcToFifths: number[] = new Array(12);
@@ -1443,7 +1246,7 @@ export function drawTonalAt(
     const bx = cx + Math.cos(fifthsAngle(pcB)) * outerR;
     const by = cy + Math.sin(fifthsAngle(pcB)) * outerR;
 
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha(fEdge)})`;
+    ctx.strokeStyle = ink(theme, theme.lineAlpha(fEdge));
     ctx.lineWidth = 0.5 + fEdge * 2;
     ctx.beginPath();
     ctx.moveTo(ax, ay);
@@ -1460,15 +1263,9 @@ export function drawTonalAt(
   const scalePCsT: Set<number> = bloom.appliedScale
     ? new Set(bloom.appliedScale.degrees)
     : new Set();
-  const scaleCircleColorT = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
-    : theme.id === 'uv' ? 'rgba(200,100,255,0.55)'
-    : 'rgba(255,255,255,0.55)';
-  const labelColorActive = theme.id === 'phosphor' ? 'rgba(57,255,20,0.90)'
-    : theme.id === 'uv' ? 'rgba(220,160,255,0.90)'
-    : 'rgba(255,255,255,0.85)';
-  const labelColorDim = theme.id === 'phosphor' ? 'rgba(57,255,20,0.40)'
-    : theme.id === 'uv' ? 'rgba(200,100,255,0.40)'
-    : 'rgba(255,255,255,0.38)';
+  const scaleCircleColorT = theme.scaleRing;
+  const labelColorActive = theme.labelActive;
+  const labelColorDim = theme.labelDim;
 
   for (let p = 0; p < 12; p++) {
     const ang = fifthsAngle(p);
@@ -1493,7 +1290,7 @@ export function drawTonalAt(
           ctx.stroke();
         }
         ctx.fillStyle = scalePCsT.has(p) ? labelColorDim : theme.text;
-        ctx.fillText(PC_NAMES[p], lx, ly);
+        ctx.fillText(spell(p), lx, ly);
       }
       continue;
     }
@@ -1535,7 +1332,7 @@ export function drawTonalAt(
         ctx.stroke();
       }
       ctx.fillStyle = labelColorActive;
-      ctx.fillText(PC_NAMES[p], lx, ly);
+      ctx.fillText(spell(p), lx, ly);
     }
   }
 
@@ -1545,7 +1342,7 @@ export function drawTonalAt(
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = ink(theme, 0.15);
   ctx.fill();
 
   ctx.globalCompositeOperation = 'source-over';
@@ -1609,7 +1406,7 @@ export function drawSetAt(
     const bx = cx + Math.cos(chromaticAngle(pcB)) * outerR;
     const by = cy + Math.sin(chromaticAngle(pcB)) * outerR;
 
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha(fEdge)})`;
+    ctx.strokeStyle = ink(theme, theme.lineAlpha(fEdge));
     ctx.lineWidth = 0.5 + fEdge * 2;
     ctx.beginPath();
     ctx.moveTo(ax, ay);
@@ -1626,15 +1423,9 @@ export function drawSetAt(
   const scalePCsS: Set<number> = bloom.appliedScale
     ? new Set(bloom.appliedScale.degrees)
     : new Set();
-  const scaleCircleColorS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.55)'
-    : theme.id === 'uv' ? 'rgba(200,100,255,0.55)'
-    : 'rgba(255,255,255,0.55)';
-  const labelColorActiveS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.90)'
-    : theme.id === 'uv' ? 'rgba(220,160,255,0.90)'
-    : 'rgba(255,255,255,0.85)';
-  const labelColorDimS = theme.id === 'phosphor' ? 'rgba(57,255,20,0.40)'
-    : theme.id === 'uv' ? 'rgba(200,100,255,0.40)'
-    : 'rgba(255,255,255,0.38)';
+  const scaleCircleColorS = theme.scaleRing;
+  const labelColorActiveS = theme.labelActive;
+  const labelColorDimS = theme.labelDim;
 
   for (let p = 0; p < 12; p++) {
     const ang = chromaticAngle(p);
@@ -1658,7 +1449,7 @@ export function drawSetAt(
           ctx.stroke();
         }
         ctx.fillStyle = scalePCsS.has(p) ? labelColorDimS : theme.text;
-        ctx.fillText(PC_NAMES[p], lx, ly);
+        ctx.fillText(spell(p), lx, ly);
       }
       continue;
     }
@@ -1700,7 +1491,7 @@ export function drawSetAt(
         ctx.stroke();
       }
       ctx.fillStyle = labelColorActiveS;
-      ctx.fillText(PC_NAMES[p], lx, ly);
+      ctx.fillText(spell(p), lx, ly);
     }
   }
 
@@ -1710,7 +1501,7 @@ export function drawSetAt(
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = ink(theme, 0.15);
   ctx.fill();
 
   ctx.globalCompositeOperation = 'source-over';
@@ -1845,7 +1636,7 @@ export function drawSpiralAt(
     // Adaptive step count: more steps for larger angular sweep
     const steps = Math.max(4, Math.ceil(Math.abs(Δθ) / Math.PI * 32));
 
-    ctx.strokeStyle = `rgba(255,255,255,${Math.max(0.30, theme.lineAlpha(fEdge))})`;
+    ctx.strokeStyle = ink(theme, Math.max(0.30, theme.lineAlpha(fEdge)));
     ctx.lineWidth = 1.7 + fEdge * 3.5;
     ctx.beginPath();
     for (let s = 0; s <= steps; s++) {
@@ -1974,7 +1765,7 @@ export function drawHelixAt(
   for (let i = 0; i < n - 1; i++) {
     const fa = flashValues[i] ?? 0;
     const fb = flashValues[i + 1] ?? 0;
-    ctx.strokeStyle = `rgba(255,255,255,${theme.lineAlpha((fa + fb) * 0.5)})`;
+    ctx.strokeStyle = ink(theme, theme.lineAlpha((fa + fb) * 0.5));
     ctx.lineWidth = 0.5 + (fa + fb) * 0.5 * 2;
     ctx.beginPath();
     ctx.moveTo(positions[i].x, positions[i].y);
@@ -2055,13 +1846,141 @@ export function drawHelixAt(
 
 
 
+// ─── One table: each view's draw function ────────────────────────────────────
+// The main view, a garden slot's thumbnail and the save / lift animation all
+// draw a bloom through this, so a new view is added in one place.
+
+/** Where a view is drawn: the main picture, a garden slot (a square), or the picture flying to or from a slot */
+export type ViewLayout = 'main' | 'slot' | 'fly';
+
+export interface ViewArea { x: number; y: number; w: number; h: number }
+
+/** What a view is drawn with besides the bloom and the theme. A thumbnail gives the layout alone. */
+export interface ViewInput {
+  layout: ViewLayout;
+  /** each event's flash, 0..1 */
+  flash?: number[];
+  /** the event sounding (-1: none), and how far through its time */
+  playhead?: number;
+  beadProgress?: number;
+  camera?: CameraParams;
+  orbitRotation?: number;
+  showAxis?: boolean;
+  showNoteLabels?: boolean;
+  /** orrery, road, weave: the bloom as written, its lists at their own lengths (default: the bloom given) */
+  raw?: Bloom;
+  /** orrery: the running count of notes (-1 stopped), how far through the note, where each list is from the tick */
+  tick?: number;
+  progress?: number;
+  shift?: Shift;
+  /** road: the tiles while it plays (default: the road ahead from the start) */
+  roadTiles?: Tile[];
+  playing?: boolean;
+  /** weave: the cloth so far, its scale, how far the shuttle has carried the newest row (default: the pattern the loop would weave) */
+  weave?: { rows: Row[]; px: number; progress: number };
+  /** orrery, road, weave: where a node went, for clicks */
+  hit?: (i: number, x: number, y: number, r: number) => void;
+}
+
+export type ViewDraw = (ctx: CanvasRenderingContext2D, a: ViewArea, bloom: Bloom, theme: Theme, v: ViewInput) => void;
+
+/** A round view's radius: a share of the smaller side, or of a slot's half-width */
+function viewRadius(a: ViewArea, v: ViewInput, share: number, slotShare = 1): number {
+  return v.layout === 'slot' ? (a.w / 2) * slotShare : Math.min(a.w, a.h) * share;
+}
+
+/** Field and deep: a box as wide as the bloom is long (a slot: the whole square) */
+function timeBox(a: ViewArea, bloom: Bloom, v: ViewInput): ViewArea {
+  if (v.layout === 'slot') return a;
+  const aspect = Math.max(0.3, Math.min(20.0, bloom.dur() / 2.0));
+  const h = Math.min(a.w, a.h) * 0.50;
+  const w = Math.min(h * aspect, a.w * 0.97);
+  return { x: a.x + (a.w - w) / 2, y: a.y + (a.h - h) / 2, w, h };
+}
+
+/** The weave's box within the area */
+export function weaveBox(a: ViewArea, layout: ViewLayout): ViewArea {
+  if (layout === 'slot') return a;
+  const top = layout === 'fly' ? 0.04 : 0.03;
+  return { x: a.x + a.w * 0.05, y: a.y + a.h * top, w: a.w * 0.9, h: a.h * (1 - 2 * top) };
+}
+
+export const VIEWS: Record<VizMode, ViewDraw> = {
+  flower: (ctx, a, b, th, v) =>
+    drawRadialAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.45), b, v.flash ?? [], th, v.showNoteLabels ?? false),
+  orbit: (ctx, a, b, th, v) =>
+    drawOrbitAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.45), b, v.flash ?? [], th, v.orbitRotation ?? 0, v.showNoteLabels ?? false),
+  tonal: (ctx, a, b, th, v) =>
+    drawTonalAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.44), b, v.flash ?? [], th, v.showNoteLabels ?? false),
+  spiral: (ctx, a, b, th, v) =>
+    drawSpiralAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.44), b, v.flash ?? [], th, v.showNoteLabels ?? false, v.camera ?? DEFAULT_CAMERA),
+  set: (ctx, a, b, th, v) =>
+    drawSetAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.44), b, v.flash ?? [], th, v.showNoteLabels ?? false),
+  helix: (ctx, a, b, th, v) =>
+    drawHelixAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.45), b, v.flash ?? [], th, v.showNoteLabels ?? false),
+  field: (ctx, a, b, th, v) => {
+    const box = timeBox(a, b, v);
+    drawFieldAt(ctx, box.x, box.y, box.w, box.h, b, v.flash ?? [], v.playhead ?? -1, v.beadProgress ?? 0, th, v.showAxis ?? false, v.showNoteLabels ?? false);
+  },
+  deep: (ctx, a, b, th, v) => {
+    const box = timeBox(a, b, v);
+    drawDeepAt(ctx, box.x, box.y, box.w, box.h, b, v.flash ?? [], v.playhead ?? -1, v.beadProgress ?? 0, th, v.showAxis ?? false, v.showNoteLabels ?? false, v.camera ?? DEFAULT_CAMERA);
+  },
+  score: (ctx, a, b, th, v) => {
+    if (v.layout === 'main') { drawScoreAt(ctx, a.x, a.y, a.w, a.h, b, v.flash ?? [], th, v.showNoteLabels ?? false); return; }
+    // compact: no clefs or brace, the staff fills the box
+    const box = v.layout === 'slot' ? a : (() => {
+      const h = Math.min(a.w, a.h) * 0.5, w = a.w * 0.9;
+      return { x: a.x + (a.w - w) / 2, y: a.y + (a.h - h) / 2, w, h };
+    })();
+    drawScoreAt(ctx, box.x, box.y, box.w, box.h, b, v.flash ?? [], th, false, true);
+  },
+  orrery: (ctx, a, b, th, v) =>
+    drawOrreryAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.45, 0.9), v.raw ?? b, v.flash ?? [], th,
+      v.tick ?? -1, v.progress ?? 0, v.showNoteLabels ?? false, v.hit, v.shift),
+  road: (ctx, a, b, th, v) => {
+    const raw = v.raw ?? b;
+    const tiles = v.roadTiles ?? roadAhead(raw, 0, 32).map(t => ({ ...t, at: t.at + 0.4 }));
+    drawRoadAt(ctx, a.x + a.w / 2, a.y + a.h / 2, viewRadius(a, v, 0.48), raw, tiles, v.flash ?? [], th, v.playing ?? false, v.hit);
+  },
+  weave: (ctx, a, b, th, v) => {
+    const raw = v.raw ?? b;
+    const box = weaveBox(a, v.layout);
+    let rows = v.weave?.rows ?? [], px = v.weave?.px ?? 1;
+    const progress = v.weave?.progress ?? 1;
+    if (!rows.length) {
+      // nothing played: the pattern the loop would weave, several cycles or as much of the period as fits
+      const [most, least] = v.layout === 'slot' ? [48, 16] : [96, 32];
+      rows = weaveRows(raw, 0, Math.min(most, Math.max(least, weavePeriod(raw))));
+      px = fitWeave(rows, v.layout === 'slot' ? box.h : box.h - 14);
+    }
+    drawWeaveAt(ctx, box.x, box.y, box.w, box.h, raw, rows, v.flash ?? [], th, px, progress, v.hit);
+  },
+};
+
+/** Draw `bloom` in `mode` within `area` */
+export function drawView(
+  ctx: CanvasRenderingContext2D, mode: VizMode, area: ViewArea, bloom: Bloom, theme: Theme, v: ViewInput,
+): void {
+  VIEWS[mode](ctx, area, bloom, theme, v);
+}
+
 // ─── Main BloomVisualization class ────────────────────────────────────────────
 
 export class BloomVisualization {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private animationId: number | null = null;
   private bloom: Bloom | null = null;
+  // Drawing only when needed (redraw.ts): something changed, something is moving, or it's been a while
+  private _dirty = true;
+  /** The canvas is on the page with some size (the other voice's isn't, with one voice) */
+  private _visible = true;
+  private _lastDrawAt = 0;
+  /** Counts the frames drawn, so a following view draws whenever its leader has */
+  private _drawn = 0;
+  private _leaderDrawn = -1;
+  /** The list strip's chit widths, measured once for a list as it stands */
+  private _stripFit: { key: string; widths: number[]; fits: boolean } | null = null;
   private _mode: VizMode = 'deep';
   private _theme: Theme = THEMES.dark;
   private _showAxis = false;
@@ -2122,7 +2041,7 @@ export class BloomVisualization {
   private _box: { x0: number; y0: number; x1: number; y1: number } | null = null;
   /** Called with the events inside a dragged box (empty when a click lands on no node) */
   onSelect: ((idx: number[]) => void) | null = null;
-  // The tuning view (opt-t): the tuning as a pie in place of the current view
+  // The tuning view (T): the tuning as a pie in place of the current view
   private _tuningView = false;
   private _pieMarks: PieMarks = { a: null, b: null };
   private _pie = { cx: 0, cy: 0, R: 0 };   // where the pie was last drawn, in canvas coordinates
@@ -2141,7 +2060,12 @@ export class BloomVisualization {
     this._setupResize();
     this._startLoop();
     if (!leader) this._setupDrag();
+    // lettering drawn before its font arrived is drawn again when it does
+    if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', () => this.invalidate());
   }
+
+  /** Something the view shows has changed: draw it again on the next frame */
+  invalidate(): void { this._dirty = true; }
 
   /** Show nothing (a following view whose voice is gone) */
   clear(): void {
@@ -2150,6 +2074,7 @@ export class BloomVisualization {
     this._roadPast = [];
     this.playheadIndex = -1;
     this._tick = -1;
+    this.invalidate();
   }
 
   /** A following view takes the leader's settings each frame */
@@ -2165,6 +2090,8 @@ export class BloomVisualization {
     this._framePreview = l._framePreview;
     this._showLanes = l._showLanes;
     this._showNoteLabels = l._showNoteLabels;
+    this._showAxis = l._showAxis;
+    this._orbitRotation = l._orbitRotation;
     this._listMode = l._listMode;
     this._voiceTags = l._voiceTags;
     this._tuningView = false;
@@ -2174,10 +2101,12 @@ export class BloomVisualization {
 
   setPinned(pinned: Set<number>): void {
     this._pinned = new Set(pinned);
+    this.invalidate();
   }
 
   setSelected(sel: Set<number>): void {
     this._selected = new Set(sel);
+    this.invalidate();
   }
 
   /** The event under a point in CSS pixels, or -1: the nearest node within its reach */
@@ -2197,6 +2126,7 @@ export class BloomVisualization {
     this.petalFlash = new Array(bloom.notes.length).fill(0);
     this.playheadIndex = -1;
     this._beadActivatedAt = 0;
+    this.invalidate();
     // _orbitRotation intentionally NOT reset here — it only resets on mode change
   }
 
@@ -2208,11 +2138,11 @@ export class BloomVisualization {
       this._camera = { azimuth: 0, elevation: 0 };
     }
     this.canvas.style.cursor = '';
+    this.invalidate();
   }
 
-  setTuningView(on: boolean): void { this._tuningView = on; this.canvas.style.cursor = ''; }
-  isTuningView(): boolean { return this._tuningView; }
-  setPieMarks(m: PieMarks): void { this._pieMarks = m; }
+  setTuningView(on: boolean): void { this._tuningView = on; this.canvas.style.cursor = ''; this.invalidate(); }
+  setPieMarks(m: PieMarks): void { this._pieMarks = m; this.invalidate(); }
   private _degreeAt(x: number, y: number): number {
     return this._tuningView && this.bloom ? degreeAt(this.bloom, this._pie.cx, this._pie.cy, this._pie.R, x, y) : -1;
   }
@@ -2220,43 +2150,37 @@ export class BloomVisualization {
   resetCamera(): void {
     this._camera = { azimuth: 0, elevation: 0 };
     this._driftT = 0;
+    this.invalidate();
   }
 
   setTheme(id: ThemeId): void {
     this._theme = getTheme(id);
+    this.invalidate();
   }
 
-  setShowAxis(show: boolean): void { this._showAxis = show; }
-  setShowNoteLabels(show: boolean): void { this._showNoteLabels = show; }
-  toggleNoteLabels(): boolean { this._showNoteLabels = !this._showNoteLabels; return this._showNoteLabels; }
-  /** Show the channel strip (channel-edit mode) */
-  setListStrip(k: LaneKey | null): void { this._strip = k; }
+  setShowAxis(show: boolean): void { this._showAxis = show; this.invalidate(); }
+  setShowNoteLabels(show: boolean): void { this._showNoteLabels = show; this.invalidate(); }
+  toggleNoteLabels(): boolean { this._showNoteLabels = !this._showNoteLabels; this.invalidate(); return this._showNoteLabels; }
+  /** A list mode: that list as a strip of chits along the bottom (null: none) */
+  setListStrip(k: LaneKey | null): void { this._strip = k; this.invalidate(); }
   /** Which list mode is active, so its lane is lit */
-  setListMode(m: LaneMode): void { this._listMode = m; }
-  setVoiceLanes(tags: [string, string] | null): void { this._voiceTags = tags; }
+  setListMode(m: LaneMode): void { this._listMode = m; this.invalidate(); }
+  setVoiceLanes(tags: [string, string] | null): void { this._voiceTags = tags; this.invalidate(); }
   /** Two voices: the loops have just come round together, so the rim flares */
-  meet(): void { this._metAt = performance.now(); }
+  meet(): void { this._metAt = performance.now(); this.invalidate(); }
   private _metAt = 0;
-  /** Bloom lanes: the four lists on one time axis under the view */
-  toggleLanes(): boolean { this._showLanes = !this._showLanes; return this._showLanes; }
-  setLanes(show: boolean): void { this._showLanes = show; }
-  get showLanes(): boolean { return this._showLanes; }
+  /** Bloom lanes: every list, each at its own length with its own cursor, under the view */
+  toggleLanes(): boolean { this._showLanes = !this._showLanes; this.invalidate(); return this._showLanes; }
+  setLanes(show: boolean): void { this._showLanes = show; this.invalidate(); }
   /** Clean: the picture alone, no strips or overlays (for recording) */
-  setClean(on: boolean): void { this._clean = on; }
+  setClean(on: boolean): void { this._clean = on; this.invalidate(); }
   /** Show the performance frame and size outside clean view too (while the perform menu is open) */
-  setFramePreview(on: boolean): void { this._framePreview = on; }
+  setFramePreview(on: boolean): void { this._framePreview = on; this.invalidate(); }
   private _framePreview = false;
   /** Frame and size apply in clean view, and as a preview while they're being set */
   private get _framed(): boolean { return this._clean || (this._framePreview && !this._showLanes); }
 
-  /** Step through the performance frames: off, 16:9, 1:1, 4:5, 9:16 */
-  cycleFrame(): FrameAspect {
-    const i = FRAMES.indexOf(this._frame);
-    this._frame = FRAMES[(i + 1) % FRAMES.length];
-    savePref('bloom.frame', this._frame);
-    return this._frame;
-  }
-  setFrame(f: FrameAspect): void { this._frame = f; savePref('bloom.frame', f); }
+  setFrame(f: FrameAspect): void { this._frame = f; savePref('bloom.frame', f); this.invalidate(); }
   getFrame(): FrameAspect { return this._frame; }
   /** The frame's size on screen in CSS pixels, for setting up a recording */
   frameSize(): string {
@@ -2268,10 +2192,11 @@ export class BloomVisualization {
   setSize(size: number): number {
     this._size = Math.max(0.3, Math.min(2.5, Math.round(size * 100) / 100));
     savePref('bloom.size', String(this._size));
+    this.invalidate();
     return this._size;
   }
   getSize(): number { return this._size; }
-  setDrift(on: boolean): void { this._drift = on; savePref('bloom.drift', on ? '1' : '0'); }
+  setDrift(on: boolean): void { this._drift = on; savePref('bloom.drift', on ? '1' : '0'); this.invalidate(); }
   getDrift(): boolean { return this._drift; }
 
   /** The rectangle the picture is drawn in: the frame in clean view, else the whole canvas */
@@ -2283,7 +2208,6 @@ export class BloomVisualization {
   }
 
   getMode(): VizMode { return this._mode; }
-  getTheme(): ThemeId { return this._theme.id; }
 
   activateNote(index: number, tick = index, shift: Shift = NO_SHIFT): void {
     if (!this.bloom || index < 0 || index >= this.bloom.notes.length) return;
@@ -2301,6 +2225,7 @@ export class BloomVisualization {
     }
     this._weave.push(weaveRow(this._lanesBloom ?? this.bloom, index, tick, shift));
     if (this._weave.length > 20000) this._weave.shift();
+    this.invalidate();
 
     // orbit: flash driven by petalFlash; rotation is autonomous (no playhead jump)
   }
@@ -2324,18 +2249,7 @@ export class BloomVisualization {
     this.playheadIndex = -1;
     this._beadActivatedAt = 0;
     this._tick = -1;
-  }
-
-  /** @deprecated — use setMode() instead; kept for callers that used toggleMode() */
-  toggleMode(): VizMode {
-    const ORDER: VizMode[] = ['deep', 'flower', 'field', 'orbit', 'tonal', 'spiral', 'set', 'helix', 'score'];
-    const next = ORDER[(ORDER.indexOf(this._mode) + 1) % ORDER.length];
-    this.setMode(next);
-    return this._mode;
-  }
-
-  destroy(): void {
-    if (this.animationId !== null) cancelAnimationFrame(this.animationId);
+    this.invalidate();
   }
 
   // ─── Resize ─────────────────────────────────────────────────────────────────
@@ -2344,10 +2258,16 @@ export class BloomVisualization {
     const apply = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = this.canvas.getBoundingClientRect();
-      this.canvas.width = (rect.width || 400) * dpr;
-      this.canvas.height = (rect.height || 400) * dpr;
+      this._visible = rect.width > 0 && rect.height > 0;
+      const [w, h] = backingSize(rect.width || 400, rect.height || 400, dpr);
+      if (this.canvas.width !== w) this.canvas.width = w;
+      if (this.canvas.height !== h) this.canvas.height = h;
+      // setting the size clears the canvas, after this frame's drawing was done: draw again before the browser paints
+      this.invalidate();
+      if (this._visible) this._paint(performance.now());
     };
     new ResizeObserver(apply).observe(this.canvas);
+    onDprChange(apply);   // the window moved to another display: the same size in CSS pixels, another in the device's
     apply();
   }
 
@@ -2371,6 +2291,7 @@ export class BloomVisualization {
       if (!(turns() && e.altKey) && !this._tuningView) {
         const [x, y] = local(e);
         this._box = { x0: x, y0: y, x1: x, y1: y };
+        this.invalidate();
       }
     });
     el.addEventListener('click', (e) => {
@@ -2388,6 +2309,7 @@ export class BloomVisualization {
     el.addEventListener('mousemove', (e) => {
       if (this._box) {
         [this._box.x1, this._box.y1] = local(e);
+        this.invalidate();
         return;
       }
       if (this._dragActive) return;
@@ -2398,6 +2320,7 @@ export class BloomVisualization {
       const box = this._box;
       if (!box) return;
       this._box = null;
+      this.invalidate();
       if (Math.hypot(e.clientX - downX, e.clientY - downY) <= 4) return;   // a click, not a box
       const [xa, xb] = [Math.min(box.x0, box.x1), Math.max(box.x0, box.x1)];
       const [ya, yb] = [Math.min(box.y0, box.y1), Math.max(box.y0, box.y1)];
@@ -2427,6 +2350,7 @@ export class BloomVisualization {
       );
       this._dragLastX = e.clientX;
       this._dragLastY = e.clientY;
+      this.invalidate();
     });
 
     const endDrag = () => {
@@ -2447,6 +2371,7 @@ export class BloomVisualization {
         -Math.PI / 2 + 0.05,
         Math.min(Math.PI / 2 - 0.05, this._camera.elevation - e.deltaY * unit * 0.003),
       );
+      this.invalidate();
     }, { passive: false });
   }
 
@@ -2454,16 +2379,79 @@ export class BloomVisualization {
 
   private _startLoop(): void {
     const tick = () => {
-      this._draw();
-      this.animationId = requestAnimationFrame(tick);
+      this._frameTick(performance.now());
+      requestAnimationFrame(tick);
     };
-    this.animationId = requestAnimationFrame(tick);
+    requestAnimationFrame(tick);
+  }
+
+  /** Each animation frame: the clocks run on; the picture is drawn only if it needs it (redraw.ts) */
+  private _frameTick(now: number): void {
+    if (!this._visible) return;   // not on the page (the other voice's view, with one voice)
+    if (this._leader) this._follow(this._leader);
+    this._runClocks(now);
+    const leaderDrew = this._leader !== null && this._leader._drawn !== this._leaderDrawn;   // it follows the leader's camera, frame and view
+    if (leaderDrew || needsFrame({ visible: true, dirty: this._dirty, animating: this._moving(now), now, lastDrawAt: this._lastDrawAt })) {
+      this._paint(now, false);
+    }
+  }
+
+  /** Draw now */
+  private _paint(now: number, clocks = true): void {
+    if (this._leader) { this._follow(this._leader); this._leaderDrawn = this._leader._drawn; }
+    if (clocks) this._runClocks(now);
+    this._dirty = false;
+    this._lastDrawAt = now;
+    this._drawn++;
+    this._draw(now);
+  }
+
+  /** Drift's clock (it runs while notes are sounding, easing to a stop after) and orbit's turning, every frame whether or not one is drawn */
+  private _runClocks(now: number): void {
+    const dt = this._lastFrameAt ? Math.min(0.1, (now - this._lastFrameAt) / 1000) : 0;
+    this._lastFrameAt = now;
+    const sounding = now - this._lastNoteAt < 1500;
+    this._driftSpeed += ((this._drift && sounding ? 1 : 0) - this._driftSpeed) * Math.min(1, dt * 0.7);
+    this._driftT += dt * this._driftSpeed;
+    // Orbit: constant autonomous spin (~1 rev / 78s at 60fps); a following view takes its leader's
+    if (this._mode === 'orbit' && !this._leader) this._orbitRotation += 0.0008;
+  }
+
+  /** Is anything in the picture moving? (redraw.ts viewMoving) */
+  private _moving(now: number): boolean {
+    const b = this.bloom;
+    const playing = this.playheadIndex >= 0 && this._beadActivatedAt > 0;
+    let stepMs = 0;
+    if (b && playing) {
+      // the longest of the times the views give the sounding note: as written, as the flow plays it, as the cloth wove it
+      const raw = this._lanesBloom ?? b;
+      const last = this._weave.length ? this._weave[this._weave.length - 1].dur : 0;
+      const beats = Math.max(
+        0.02,
+        b.timeIntervals.length ? wrapAt(b.timeIntervals, this.playheadIndex) : 0,
+        raw.timeIntervals.length && raw.notes.length ? raw.stepAt(this.playheadIndex % raw.notes.length, Math.max(0, this._tick)) : 0,
+        last,
+      );
+      stepMs = beatsToMs(beats);
+    }
+    return viewMoving({
+      hasBloom: !!b && b.notes.length > 0,
+      mode: this._mode,
+      tuningView: this._tuningView,
+      flashing: this.petalFlash.some(f => f > 0),
+      playing,
+      msSinceNote: now - (playing ? this._beadActivatedAt : this._lastNoteAt),
+      stepMs,
+      drift: this._drift,
+      driftSpeed: this._driftSpeed,
+      tracing: this._showLanes && !this._clean && this._lanes.tracing,
+      flare: this._metAt > 0,
+    });
   }
 
   // ─── Main draw dispatcher ────────────────────────────────────────────────────
 
-  private _draw(): void {
-    if (this._leader) this._follow(this._leader);
+  private _draw(now: number): void {
     const ghost = this._leader !== null;
     const canvas = this.canvas;
     const ctx = this.ctx;
@@ -2476,13 +2464,7 @@ export class BloomVisualization {
     ctx.save();
     ctx.scale(dpr, dpr);
 
-    // Drift's clock: runs while notes are sounding, easing to a stop after
-    const now = performance.now();
-    const dt = this._lastFrameAt ? Math.min(0.1, (now - this._lastFrameAt) / 1000) : 0;
-    this._lastFrameAt = now;
-    const sounding = now - this._lastNoteAt < 1500;
-    this._driftSpeed += ((this._drift && sounding ? 1 : 0) - this._driftSpeed) * Math.min(1, dt * 0.7);
-    this._driftT += dt * this._driftSpeed;
+    // the camera, drifted (its clock: _runClocks)
     const camera = this._drift || this._driftT ? driftCamera(this._camera, this._driftT) : this._camera;
 
     // In clean view (or previewing it): the frame, and the picture's overall size within it
@@ -2498,11 +2480,6 @@ export class BloomVisualization {
     const n = bloom ? bloom.notes.length : 0;
     if (this.petalFlash.length !== n) this.petalFlash = new Array(n).fill(0);
     for (let i = 0; i < n; i++) this.petalFlash[i] = Math.max(0, this.petalFlash[i] - 0.03);
-
-    // Orbit: constant autonomous spin (~1 rev / 78s at 60fps)
-    if (this._mode === 'orbit') {
-      this._orbitRotation += 0.0008;
-    }
 
     // Standard clear + background (a following view lets the leader's show through)
     ctx.clearRect(0, 0, canvasW, fullH);
@@ -2768,22 +2745,27 @@ export class BloomVisualization {
 
   /**
    * A list mode: the list itself as coloured chits along the bottom, equal
-   * values one colour (the lanes' colours, lanes.ts chitHues), each with its
+   * values one colour (the lanes' colours, lanes.ts chitHuesOf), each with its
    * value when there's room; a rest or an empty step is an outline
    */
   private _drawListStrip(ctx: CanvasRenderingContext2D, W: number, H: number, bloom: Bloom, theme: Theme, k: LaneKey): void {
-    const hues = chitHues(bloom)[k], labels = chitLabels(bloom)[k];
+    const hues = chitHuesOf(bloom, k), labels = chitLabelsOf(bloom, k);
     const n = hues.length;
     if (n === 0) return;
 
     const gap = 3;
     const s = Math.min(22, Math.max(8, (W * 0.9) / n - gap));
-    const font = `${Math.floor(Math.max(s, 12) * 0.55)}px ui-monospace, monospace`;
-    ctx.font = font;
+    ctx.font = `${Math.floor(Math.max(s, 12) * 0.55)}px ui-monospace, monospace`;
+    // each value's width is measured once for the list as it stands, at this size
+    const key = `${k}|${W}|${labels.join('\u0001')}`;
+    if (this._stripFit?.key !== key) {
+      const widths = labels.map(l => ctx.measureText(l).width);
+      const fits = widths.reduce((a, w) => a + Math.max(s, w + 8) + gap, -gap) <= W * 0.9;
+      this._stripFit = { key, widths, fits };
+    }
+    const { widths, fits } = this._stripFit;
     // a chit is as wide as its value needs, when they all still fit; else plain squares
-    const wide = labels.map(l => Math.max(s, ctx.measureText(l).width + 8));
-    const fits = wide.reduce((a, w) => a + w + gap, -gap) <= W * 0.9;
-    const ws = fits ? wide : labels.map(() => s);
+    const ws = widths.map(w => (fits ? Math.max(s, w + 8) : s));
     const totalW = ws.reduce((a, w) => a + w + gap, -gap);
     const y = H - s - 10;
 
@@ -2796,7 +2778,7 @@ export class BloomVisualization {
       ctx.roundRect(x, y, w, s, 3);
       if (hue >= 0) { ctx.fillStyle = `hsla(${hue},70%,55%,0.9)`; ctx.fill(); }
       else { ctx.strokeStyle = withAlpha(theme.text, 0.35); ctx.lineWidth = 1; ctx.stroke(); }
-      if (s >= 12 && (fits || ctx.measureText(labels[i]).width <= w - 2)) {
+      if (s >= 12 && (fits || widths[i] <= w - 2)) {
         ctx.fillStyle = hue >= 0 ? 'rgba(0,0,0,0.75)' : withAlpha(theme.text, 0.5);
         ctx.fillText(labels[i], x + w / 2, y + s / 2 + 0.5);
       }

@@ -5,6 +5,8 @@ import { stepName } from '../lib/intervals';
 import { formatFigure, isFigure } from '../lib/figures';
 import { Bloom } from '../core/Bloom';
 import { flatNotes } from '../lib/arrays';
+import { spellOctave } from '../lib/numbers';
+import { chanHue, ink, mark } from './draw';
 import type { Theme } from './theme';
 import type { Shift } from '../audio/playhead';
 
@@ -25,37 +27,39 @@ const LANES: { key: LaneKey; name: string; mode: LaneMode; freeze?: 'pitch' | 't
   { key: 'fig',   name: 'fig',   mode: 'fig' }
 ];
 
-const MODE = '#e8a33a';
-const ICE = '#7ab8e8';
-const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-const nameOf = (m: number) => NAMES[((Math.round(m) % 12) + 12) % 12] + (Math.floor(Math.round(m) / 12) - 1);
 const FRACS: Record<string, string> = {
   '0.0625': '1/16', '0.125': '⅛', '0.25': '¼', '0.375': '⅜', '0.5': '½', '0.75': '¾',
   '1': '1', '1.5': '1½', '2': '2', '3': '3', '4': '4',
 };
 const fmtT = (t: number) => FRACS[String(Math.round(t * 1e4) / 1e4)] ?? t.toFixed(2);
-const chanHue = (c: number) => (c * 360) / 16;
+
+const LANE_KEYS: LaneKey[] = ['notes', 'time', 'vel', 'chan', 'iv', 'fig'];
+
+/** What each cell of one lane says, as the lanes write it */
+export function chitLabelsOf(b: Bloom, k: LaneKey): string[] {
+  switch (k) {
+    case 'notes': return b.notes.map(nt => { const ps = flatNotes([nt]) as number[]; return spellOctave(ps[0]) + (ps.length > 1 ? '+' : ''); });
+    case 'time': return b.timeIntervals.map(fmtT);
+    case 'vel': return b.velocities.map(String);
+    case 'chan': return b.chans.map(String);
+    case 'iv': return b.intervals.map(s => stepName(s));
+    case 'fig': return b.figures.map(f => (isFigure(f) ? formatFigure(f) : '.'));
+  }
+}
+
+/** What each cell of each lane says */
+export function chitLabels(b: Bloom): Record<LaneKey, string[]> {
+  return Object.fromEntries(LANE_KEYS.map(k => [k, chitLabelsOf(b, k)])) as Record<LaneKey, string[]>;
+}
 
 /**
- * A chit's hue for every cell of every lane, so equal values wear one colour
+ * A chit's hue for every cell of one lane, so equal values wear one colour
  * and a list's pattern shows at a glance (-1: none, as a rest or an empty
  * step). Pitch by pitch class round the wheel; time and velocity from cool
  * (short, soft) to warm (long, loud) through the values in use; channels by
  * channel; intervals and figures a colour each, spread apart.
  */
-/** What each cell of each lane says, as the lanes write it */
-export function chitLabels(b: Bloom): Record<LaneKey, string[]> {
-  return {
-    notes: b.notes.map(nt => { const ps = flatNotes([nt]) as number[]; return nameOf(ps[0]) + (ps.length > 1 ? '+' : ''); }),
-    time: b.timeIntervals.map(fmtT),
-    vel: b.velocities.map(String),
-    chan: b.chans.map(String),
-    iv: b.intervals.map(s => stepName(s)),
-    fig: b.figures.map(f => (isFigure(f) ? formatFigure(f) : '.')),
-  };
-}
-
-export function chitHues(b: Bloom): Record<LaneKey, number[]> {
+export function chitHuesOf(b: Bloom, k: LaneKey): number[] {
   const ramp = (xs: number[], skip = (_: number) => false) => {
     const vals = [...new Set(xs.filter(x => !skip(x)))].sort((p, q) => p - q);
     return xs.map(x => skip(x) ? -1 : vals.length < 2 ? 210 : 210 - (200 * vals.indexOf(x)) / (vals.length - 1));
@@ -64,22 +68,25 @@ export function chitHues(b: Bloom): Record<LaneKey, number[]> {
     const keys: string[] = [];
     return xs.map(x => {
       if (none(x)) return -1;
-      const k = JSON.stringify(x);
-      if (!keys.includes(k)) keys.push(k);
-      return (keys.indexOf(k) * 137.5 + 20) % 360;   // the golden angle: neighbours far apart
+      const key = JSON.stringify(x);
+      if (!keys.includes(key)) keys.push(key);
+      return (keys.indexOf(key) * 137.5 + 20) % 360;   // the golden angle: neighbours far apart
     });
   };
-  return {
-    notes: b.notes.map(nt => (((Math.round((flatNotes([nt]) as number[])[0]) % 12) + 12) % 12) * 30),
-    time: ramp(b.timeIntervals.map(t => Math.round(t * 1e4) / 1e4)),
-    vel: ramp(b.velocities, v => v <= 0),
-    chan: b.chans.map(chanHue),
-    iv: each(b.intervals, x => (Array.isArray(x) ? x : [x]).every(v => v === 0)),
-    fig: each(b.figures, x => !isFigure(x as never)),
-  };
+  switch (k) {
+    case 'notes': return b.notes.map(nt => (((Math.round((flatNotes([nt]) as number[])[0]) % 12) + 12) % 12) * 30);
+    case 'time': return ramp(b.timeIntervals.map(t => Math.round(t * 1e4) / 1e4));
+    case 'vel': return ramp(b.velocities, v => v <= 0);
+    case 'chan': return b.chans.map(chanHue);
+    case 'iv': return each(b.intervals, x => (Array.isArray(x) ? x : [x]).every(v => v === 0));
+    case 'fig': return each(b.figures, x => !isFigure(x as never));
+  }
 }
-const ink = (a: number) => `rgba(255,255,255,${Math.max(0, Math.min(1, a))})`;
-const amber = (a: number) => `rgba(232,163,58,${Math.max(0, Math.min(1, a))})`;
+
+/** The hues of every lane */
+export function chitHues(b: Bloom): Record<LaneKey, number[]> {
+  return Object.fromEntries(LANE_KEYS.map(k => [k, chitHuesOf(b, k)])) as Record<LaneKey, number[]>;
+}
 
 interface Snapshot { notes: string[]; time: number[]; vel: number[]; chan: number[]; iv: string[]; fig: string[] }
 
@@ -117,9 +124,6 @@ export class Lanes {
       this.changedAt = performance.now();
     }
   }
-
-  /** Forget the previous state (e.g. a new bloom), so the next change isn't traced against it. */
-  reset(b: Bloom): void { this.last = snapshot(b); this.changed = null; }
 
   /**
    * Each lane is its own list at its own length. The time lane is drawn to
@@ -179,9 +183,9 @@ export class Lanes {
     ctx.globalAlpha = 1;
     // two voices: whose lanes these are, down the left edge
     if (voice) {
-      ctx.fillStyle = ink(0.12);
+      ctx.fillStyle = ink(theme, 0.12);
       ctx.fillRect(x0, y0 + 4, 12, LANES_HEIGHT - 8);
-      ctx.fillStyle = ink(0.8);
+      ctx.fillStyle = ink(theme, 0.8);
       ctx.textAlign = 'center';
       ctx.fillText(voice, x0 + 6, y0 + LANES_HEIGHT / 2);
     }
@@ -191,13 +195,11 @@ export class Lanes {
       const top = y0 + 4 + r * LANE_H, mid = top + (LANE_H - 3) / 2;
       const active = mode === L.mode;
       const frozen = !!L.freeze && !!b.frozen[L.freeze];
-      if (active) { ctx.fillStyle = amber(0.07); ctx.fillRect(x0, top, w, LANE_H - 3); }
+      if (active) { ctx.fillStyle = mark(theme, 0.07); ctx.fillRect(x0, top, w, LANE_H - 3); }
       ctx.textAlign = 'left';
-      ctx.fillStyle = active ? MODE : frozen ? ICE : ink(0.45);
-      // intervals in scale steps are marked °
-      const name = L.name;
-      ctx.fillText(`${frozen ? '❄ ' : ''}${name}`, nameX, mid);
-      ctx.fillStyle = ink(0.25);
+      ctx.fillStyle = active ? mark(theme, 1) : frozen ? theme.frozen : ink(theme, 0.45);
+      ctx.fillText(`${frozen ? '❄ ' : ''}${L.name}`, nameX, mid);
+      ctx.fillStyle = ink(theme, 0.25);
       ctx.textAlign = 'right';
       ctx.fillText(`×${len[L.key]}`, x0 + LABEL_W - 6, mid);
       ctx.textAlign = 'left';
@@ -207,20 +209,20 @@ export class Lanes {
       for (let li = 0; li < len[L.key]; li++) {
         const cx0 = X(E[li]) + 1, cx1 = X(E[li + 1]) - 1, cw = cx1 - cx0;
         if (cw <= 0) continue;
-        ctx.fillStyle = ink(li % 2 ? 0.05 : 0.075);
+        ctx.fillStyle = ink(theme, li % 2 ? 0.05 : 0.075);
         ctx.fillRect(cx0, top + 1, cw, LANE_H - 5);
 
         const h = heat[L.key]?.[li] ?? 0;
-        if (h > 0.05) { ctx.fillStyle = amber(0.18 * Math.min(1, h)); ctx.fillRect(cx0, top + 1, cw, LANE_H - 5); }
+        if (h > 0.05) { ctx.fillStyle = mark(theme, 0.18 * Math.min(1, h)); ctx.fillRect(cx0, top + 1, cw, LANE_H - 5); }
         if (fade > 0 && this.changed![L.key].has(li)) {
-          ctx.strokeStyle = amber(fade); ctx.lineWidth = 1.5;
+          ctx.strokeStyle = mark(theme, fade); ctx.lineWidth = 1.5;
           ctx.strokeRect(cx0 + 0.5, top + 1.5, cw - 1, LANE_H - 6); ctx.lineWidth = 1;
         }
         // this list's own cursor
         if (li === cur) {
-          ctx.fillStyle = ink(0.16);
+          ctx.fillStyle = ink(theme, 0.16);
           ctx.fillRect(cx0, top + 1, cw * Math.max(0.04, progress), LANE_H - 5);
-          ctx.strokeStyle = ink(0.7); ctx.lineWidth = 1;
+          ctx.strokeStyle = ink(theme, 0.7); ctx.lineWidth = 1;
           ctx.strokeRect(cx0 + 0.5, top + 1.5, cw - 1, LANE_H - 6);
         }
         if (cw < 14) continue;
@@ -233,7 +235,7 @@ export class Lanes {
         if (L.key === 'vel') {
           const v = b.velocities[li];
           const bh = (LANE_H - 9) * v / 127;
-          ctx.fillStyle = ink(0.25); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
+          ctx.fillStyle = ink(theme, 0.25); ctx.fillRect(cx0 + 2, top + LANE_H - 6 - bh, 3, bh);
           tx = cx0 + 8;
         }
         const hue = hues[L.key][li];
@@ -242,10 +244,10 @@ export class Lanes {
           ctx.beginPath(); ctx.arc(tx + 4, mid, 4, 0, Math.PI * 2); ctx.fill();
           tx += 12;
         }
-        ctx.fillStyle = ink(a);
+        ctx.fillStyle = ink(theme, a);
         if (L.key === 'notes') {
           const ps = flatNotes([b.notes[li]]) as number[];
-          ctx.fillText(ps.length > 1 ? nameOf(ps[0]) + '+' : nameOf(ps[0]), tx, mid);
+          ctx.fillText(ps.length > 1 ? spellOctave(ps[0]) + '+' : spellOctave(ps[0]), tx, mid);
         } else if (L.key === 'time') {
           ctx.fillText(fmtT(b.timeIntervals[li]), tx, mid);
         } else if (L.key === 'vel') {
@@ -253,11 +255,11 @@ export class Lanes {
         } else if (L.key === 'iv') {
           const step = b.intervals[li];
           const ivs = (Array.isArray(step) ? step : [step]).filter(x => x !== 0);
-          ctx.fillStyle = ink(ivs.length ? a : 0.3);
+          ctx.fillStyle = ink(theme, ivs.length ? a : 0.3);
           ctx.fillText(stepName(step), tx, mid);
         } else if (L.key === 'fig') {
           const f = b.figures[li];
-          ctx.fillStyle = ink(isFigure(f) ? a : 0.3);
+          ctx.fillStyle = ink(theme, isFigure(f) ? a : 0.3);
           ctx.fillText(isFigure(f) ? formatFigure(f) : '.', tx, mid);
         } else {
           ctx.fillText(String(b.chans[li]), tx, mid);
@@ -268,6 +270,6 @@ export class Lanes {
     ctx.restore();
   }
 
-  /** True while a trace is still fading. */
+  /** True while a trace is still fading (the view keeps drawing until it's gone). */
   get tracing(): boolean { return this.changed !== null; }
 }

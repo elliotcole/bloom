@@ -7,7 +7,7 @@
 import {
   PATTERN_CAP, PATTERN_PRESETS, PATTERN_WARN, expandPattern, formatPattern, parsePattern,
 } from '../lib/patterns';
-import { Overlay, onKeys } from './overlay';
+import { Picker } from './picker';
 
 /** A row of the palette: a preset, the pattern being typed, or the last one used */
 export interface PatternRow {
@@ -57,40 +57,25 @@ export function patternNote(r: PatternRow | undefined, query: string): { text: s
   return { text: `${r.length} notes`, kind: 'ok' };
 }
 
-export class PatternPicker extends Overlay {
-  private input: HTMLInputElement;
+export class PatternPicker extends Picker<PatternRow> {
   private titleEl: HTMLElement;
-  private listEl: HTMLElement;
   private noteEl: HTMLElement;
-  private rows: PatternRow[] = [];
-  private rowEls: HTMLElement[] = [];
-  private active = -1;
   private n = 0;
   private last: string | null = null;
   private bake: ((spec: string) => string | null) | null = null;
 
   constructor() {
-    super(document.createElement('div'), { backdrop: true });
-    this.el.id = 'pattern-picker';
-    this.el.innerHTML = `
-      <div id="pp-box">
-        <div class="cp-hint">type a pattern (123 +1) or a preset · ↑↓ move · ↵ or click bakes · esc closes</div>
-        <div class="pp-title"></div>
-        <input class="cp-input" type="text" spellcheck="false" autocomplete="off" placeholder="123 +1">
-        <div class="pp-list"></div>
-        <div class="pp-note"></div>
-      </div>`;
-    this.input = this.el.querySelector('input')!;
-    this.titleEl = this.el.querySelector('.pp-title')!;
-    this.listEl = this.el.querySelector('.pp-list')!;
-    this.noteEl = this.el.querySelector('.pp-note')!;
-    this.input.addEventListener('input', () => this.render());
-    onKeys(this.input, {
-      Escape: () => this.close(),
-      ArrowDown: () => this.setActive(Math.min(this.rows.length - 1, this.active + 1)),
-      ArrowUp: () => this.setActive(Math.max(0, this.active - 1)),
-      Enter: () => this.choose(this.active),
+    super({
+      id: 'pattern-picker',
+      hint: 'type a pattern (123 +1) or a preset · ↑↓ move · ↵ or click bakes · esc closes',
+      placeholder: '123 +1',
     });
+    this.titleEl = document.createElement('div');
+    this.titleEl.className = 'pp-title';
+    this.top.before(this.titleEl);
+    this.noteEl = document.createElement('div');
+    this.noteEl.className = 'pp-note';
+    this.box.appendChild(this.noteEl);
   }
 
   /** Open over a list of `n`; `bake` writes it out and returns what's wrong, or null */
@@ -99,48 +84,40 @@ export class PatternPicker extends Overlay {
     this.n = n;
     this.last = last;
     this.bake = bake;
-    this.input.value = '';
-    this.render();
-    this.show(this.input);
+    this.openList();
   }
 
-  private render(): void {
-    this.rows = patternRows(this.input.value, this.n, this.last);
-    this.listEl.innerHTML = '';
-    this.rowEls = this.rows.map((r, i) => {
-      const el = document.createElement('div');
-      el.className = 'cp-sug' + (r.problem ? ' pp-bad' : '');
-      el.innerHTML = '<span class="cp-sug-name"></span><span class="pp-spec"></span><span class="cp-sug-desc"></span>';
-      el.querySelector('.cp-sug-name')!.textContent = r.name;
-      el.querySelector('.pp-spec')!.textContent = r.spec;
-      el.querySelector('.cp-sug-desc')!.textContent = r.problem ? '—' : r.preview;
-      el.addEventListener('mousemove', () => this.setActive(i));
-      el.addEventListener('click', () => this.choose(i));
-      this.listEl.appendChild(el);
-      return el;
-    });
-    this.active = -1;
-    const lastAt = this.input.value.trim() ? -1 : this.rows.findIndex(r => r.spec === this.last);
-    this.setActive(this.rows.length ? Math.max(0, lastAt) : -1);
+  protected rows(query: string): PatternRow[] { return patternRows(query, this.n, this.last); }
+
+  protected row(r: PatternRow): HTMLElement {
+    const el = this.rowEl(r.name, r.problem ? '—' : r.preview);
+    el.classList.toggle('pp-bad', r.problem !== null);
+    const spec = document.createElement('span');
+    spec.className = 'pp-spec';
+    spec.textContent = r.spec;
+    el.querySelector('.cp-sug-name')!.after(spec);
+    return el;
   }
 
-  private setActive(i: number): void {
-    this.rowEls[this.active]?.classList.remove('active');
-    this.active = i;
-    this.rowEls[i]?.classList.add('active');
-    this.rowEls[i]?.scrollIntoView({ block: 'nearest' });
-    const note = patternNote(this.rows[i], this.input.value);
+  /** With nothing typed, on the last pattern used */
+  protected override start(rows: PatternRow[]): number {
+    return this.input.value.trim() ? -1 : rows.findIndex(r => r.spec === this.last);
+  }
+
+  protected override activeChanged(r: PatternRow | undefined): void {
+    this.note(patternNote(r, this.input.value));
+  }
+
+  private note(note: { text: string; kind: 'ok' | 'warn' | 'err' }): void {
     this.noteEl.textContent = note.text;
     this.noteEl.className = `pp-note pp-note--${note.kind}`;
   }
 
-  private choose(i: number): void {
-    const r = this.rows[i];
-    if (!r || !this.bake) return;
-    if (r.problem) return;
+  protected choose(r: PatternRow): boolean {
+    if (!this.bake || r.problem) return false;
     const wrong = this.bake(r.spec);
-    if (wrong) { this.noteEl.textContent = wrong; this.noteEl.className = 'pp-note pp-note--err'; return; }
-    this.close();
+    if (wrong) this.note({ text: wrong, kind: 'err' });
+    return !wrong;
   }
 
   protected override onClose(): void { this.bake = null; }
