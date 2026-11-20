@@ -3,6 +3,7 @@
 
 import * as Tone from 'tone';
 import type { MidiOutput } from './midi';
+import { setPianoLag } from './lag';
 
 // Salamander Grand Piano — reduced sample set (~3 MB), Tone.js interpolates the rest
 const SAMPLE_URLS: Record<string, string> = {
@@ -130,12 +131,20 @@ function whenAwake(fn: () => void): void {
 
 /**
  * Convert a scheduler timestamp (performance.now()-based, possibly in the future)
- * to the audio context's time (Tone's now). Without it, scheduled notes would
- * fire up to a full lookahead window (~100ms) early.
+ * to the audio context's time. Measured from the context's own clock, not
+ * Tone.now(), which adds Tone's lookahead (0.1 s): the scheduler already hands
+ * notes over ahead of time, and with both every note sounded 100 ms late.
  */
 function toneTime(atMs?: number): number {
-  if (atMs === undefined) return Tone.now();
-  return Tone.now() + Math.max(0, (atMs - performance.now()) / 1000);
+  const ctxNow = Tone.immediate();
+  if (atMs === undefined) return ctxNow;
+  return ctxNow + Math.max(0, (atMs - performance.now()) / 1000);
+}
+
+/** How late the piano's sound leaves the speakers, in ms: the audio device's buffer */
+function pianoLagMs(): number {
+  const raw = Tone.getContext().rawContext as AudioContext;
+  return ((raw.baseLatency ?? 0) + (raw.outputLatency ?? 0)) * 1000;
 }
 
 /**
@@ -167,8 +176,10 @@ export const pianoOutput: MidiOutput = {
       const cc = data[1];
       if (cc === 123) {
         // All notes off — immediate, this is a panic signal
-        whenAwake(() => _sampler?.releaseAll(Tone.now()));
+        whenAwake(() => _sampler?.releaseAll(Tone.immediate()));
       }
     }
   },
 };
+
+setPianoLag(out => out === pianoOutput, pianoLagMs);

@@ -330,11 +330,27 @@ export function drawRadialAt(
   }
 }
 
+/** What a box drag selects: the nodes inside it, or (shift) those added to what was selected, in order */
+export function boxSelection(inside: Iterable<number>, selected: Iterable<number>, adding: boolean): number[] {
+  const all = new Set(adding ? [...selected, ...inside] : inside);
+  return [...all].sort((a, b) => a - b);
+}
+
 // ─── 2. Field (constellation) ─────────────────────────────────────────────────
 //
-// Time across, pitch up. The Y axis is fixed to bloom.lowestPossibleNote /
-// bloom.highestPossibleNote — so transposing visibly moves dots up and down
-// within a stable, compass-defined frame of reference.
+// Time across, pitch up. The pitch axis is whole octaves, C to C, around the
+// bloom's notes (an octave and a half at least): a
+// semitone shows, and a transposition moves the dots against labelled lines
+// until they leave the octaves shown.
+
+/** The pitch range the field shows: whole octaves around the notes (an octave and a half at least); the compass when there are none */
+export function fieldRange(pitches: number[], low: number, high: number): [number, number] {
+  if (!pitches.length) return [low, high];
+  let lo = Math.floor(Math.min(...pitches) / 12) * 12;
+  let hi = Math.ceil((Math.max(...pitches) + 1) / 12) * 12;
+  if (hi - lo < 18) { lo -= 6; hi += 6; }
+  return [lo, hi];
+}
 
 export function drawFieldAt(
   ctx: CanvasRenderingContext2D,
@@ -357,9 +373,15 @@ export function drawFieldAt(
   const PY = y + h * 0.10;
   const PH = h * 0.78;
 
-  // Fixed axis: compass bounds instead of per-bloom auto-fit
-  const minNote = bloom.lowestPossibleNote;
-  const maxNote = bloom.highestPossibleNote;
+  const all: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const nv = notes[i];
+    (Array.isArray(nv) ? nv as number[] : [nv as number]).forEach(p => all.push(p));
+    bloom.extraMarksAt(i).forEach(m => all.push(m.pitch));
+    const wr = bloom.writtenAt(i);
+    if (wr !== null) all.push(wr);
+  }
+  const [minNote, maxNote] = fieldRange(all, bloom.lowestPossibleNote, bloom.highestPossibleNote);
   const noteSpan = maxNote - minNote || 12;
   // Anchor x-axis to note onsets: first note at left, last note at right
   let _tLast = 0;
@@ -369,20 +391,20 @@ export function drawFieldAt(
   const noteToY = (p: number) => PY + PH - ((p - minNote) / noteSpan) * PH;
   const timeToX = (t: number) => n > 1 ? PX + (t / timeScale) * PW : PX + PW * 0.5;
 
-  // Octave guide lines + labels
-  if (showLabels) {
-    ctx.textAlign = 'right';
-    ctx.font = '9px monospace';
-    for (let note = Math.ceil(minNote / 12) * 12; note <= maxNote; note += 12) {
-      const gy = noteToY(note);
-      ctx.strokeStyle = theme.grid;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(PX, gy);
-      ctx.lineTo(PX + PW, gy);
-      ctx.stroke();
+  // The pitch axis: a line at every C, labelled where there's room
+  ctx.font = '9px monospace';
+  for (let note = Math.ceil(minNote / 12) * 12; note <= maxNote; note += 12) {
+    const gy = noteToY(note);
+    ctx.strokeStyle = theme.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PX, gy);
+    ctx.lineTo(PX + PW, gy);
+    ctx.stroke();
+    if (h >= 120) {
       ctx.fillStyle = theme.text;
-      ctx.fillText(`C${Math.floor(note / 12) - 1}`, PX - 6, gy + 3);
+      ctx.textAlign = showLabels ? 'right' : 'left';
+      ctx.fillText(`C${Math.floor(note / 12) - 1}`, showLabels ? PX - 6 : PX + 2, showLabels ? gy + 3 : gy - 3);
     }
   }
 
@@ -399,20 +421,20 @@ export function drawFieldAt(
 
   ctx.globalCompositeOperation = theme.blendMode;
 
-  // Polygon fill
-  if (n >= 3) {
-    const shCx = centroids.reduce((a, c) => a + c.x, 0) / n;
-    const shCy = centroids.reduce((a, c) => a + c.y, 0) / n;
-    const maxDist = Math.max(...centroids.map(c => Math.hypot(c.x - shCx, c.y - shCy)), 1);
+  // The fill under the line, down to a level floor (closing it back to the first note drew a tilted one)
+  if (n >= 2) {
     const avgFlash = flashValues.length ? flashValues.reduce((a, b) => a + b, 0) / flashValues.length : 0;
     const [inner, outer] = theme.polyFill(avgFlash);
+    const floor = PY + PH;
+    const top = Math.min(...centroids.map(c => c.y));
 
     ctx.beginPath();
-    ctx.moveTo(centroids[0].x, centroids[0].y);
-    for (let i = 1; i < n; i++) ctx.lineTo(centroids[i].x, centroids[i].y);
+    ctx.moveTo(centroids[0].x, floor);
+    for (let i = 0; i < n; i++) ctx.lineTo(centroids[i].x, centroids[i].y);
+    ctx.lineTo(centroids[n - 1].x, floor);
     ctx.closePath();
 
-    const grad = ctx.createRadialGradient(shCx, shCy, 0, shCx, shCy, maxDist);
+    const grad = ctx.createLinearGradient(0, top, 0, floor);
     grad.addColorStop(0, inner);
     grad.addColorStop(1, outer);
     ctx.fillStyle = grad;
@@ -1990,7 +2012,7 @@ export class BloomVisualization {
   private _showLanes = false;
   private _clean = false;
   private _listMode: LaneMode = null;
-  /** Two voices: [focused, other]. The lanes stack, the other voice's (drawn by its following view) above the focused one's */
+  /** Two voices: [focused, other]. The lanes stack, A's always above B's (voiceLaneY); the other voice's are drawn, dimmed, by its following view */
   private _voiceTags: [string, string] | null = null;
   private _lanes = new Lanes();
   /** The bloom as written, for the lanes; the looper's display bloom is wrapped to one pass */
@@ -2278,16 +2300,16 @@ export class BloomVisualization {
 
     // A click that didn't drag pins or unpins the node under it; a click on
     // empty space clears the selection. A drag draws a box that selects the
-    // nodes inside it, in every view. Deep and spiral turn with a two-finger
+    // nodes inside it, in every view; shift-drag adds them to what's selected. Deep and spiral turn with a two-finger
     // scroll (or a mouse wheel), or an opt-drag.
-    let downX = 0, downY = 0;
+    let downX = 0, downY = 0, adding = false;
     const local = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
       return [e.clientX - rect.left, e.clientY - rect.top] as const;
     };
     const turns = () => !this._tuningView && (this._mode === 'deep' || this._mode === 'spiral');
     el.addEventListener('mousedown', (e) => {
-      downX = e.clientX; downY = e.clientY;
+      downX = e.clientX; downY = e.clientY; adding = e.shiftKey;
       if (!(turns() && e.altKey) && !this._tuningView) {
         const [x, y] = local(e);
         this._box = { x0: x, y0: y, x1: x, y1: y };
@@ -2304,7 +2326,7 @@ export class BloomVisualization {
       }
       const i = this._nodeAt(...local(e));
       if (i >= 0) this.onNodeClick?.(i);
-      else if (this._selected.size) this.onSelect?.([]);
+      else if (this._selected.size && !e.shiftKey) this.onSelect?.([]);
     });
     el.addEventListener('mousemove', (e) => {
       if (this._box) {
@@ -2326,7 +2348,7 @@ export class BloomVisualization {
       const [ya, yb] = [Math.min(box.y0, box.y1), Math.max(box.y0, box.y1)];
       const inside = new Set<number>();
       for (const h of this._lastHits) if (h.x >= xa && h.x <= xb && h.y >= ya && h.y <= yb) inside.add(h.i);
-      this.onSelect?.([...inside]);
+      this.onSelect?.(boxSelection(inside, this._selected, adding || e.shiftKey));
     };
     el.addEventListener('mouseup', endBox);
     el.addEventListener('mouseleave', endBox);
@@ -2633,7 +2655,7 @@ export class BloomVisualization {
     _hits = null;
     if (ghost) {
       ctx.restore();
-      if (lanesOn && this._voiceTags) this._drawLanes(ctx, H, W, bloom, theme, this._voiceTags[1]);
+      if (lanesOn && this._voiceTags) this._drawLanes(ctx, voiceLaneY(this._voiceTags[1], fullH), W, bloom, theme, this._voiceTags[1]);
       ctx.restore();
       return;
     }
@@ -2658,7 +2680,7 @@ export class BloomVisualization {
     } else this._metAt = 0;
 
     if (lanesOn) {
-      this._drawLanes(ctx, fullH - LANES_HEIGHT, W, bloom, theme, this._voiceTags?.[0]);
+      this._drawLanes(ctx, this._voiceTags ? voiceLaneY(this._voiceTags[0], fullH) : fullH - LANES_HEIGHT, W, bloom, theme, this._voiceTags?.[0]);
     } else if (this._strip && !this._clean) {
       this._drawListStrip(ctx, W, H, bloom, theme, this._strip);
     }
@@ -2805,4 +2827,9 @@ export class BloomVisualization {
     ctx.globalAlpha = 1;
   }
 
+}
+
+/** Two voices: where a voice's lanes sit. A's above B's whichever has the focus, so tab moves the focus and nothing else. */
+export function voiceLaneY(tag: string, fullH: number): number {
+  return fullH - (tag === 'A' ? 2 : 1) * LANES_HEIGHT;
 }

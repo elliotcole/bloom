@@ -71,3 +71,14 @@ export function slice(values: number[], sel: number[], most: boolean, fixed: num
   }
   return upTo(Math.min(levels.length, depth + 1));
 }
+
+/**
+ * Every event sounding a pitch class the selected ones do, in any octave
+ * (a chord counts if any of its notes does); the pinned stay out. `pcs` is
+ * each event's pitch classes.
+ */
+export function samePitchClasses(pcs: number[][], sel: number[], fixed: number[] = []): number[] {
+  const want = new Set(sel.flatMap(i => pcs[i] ?? []));
+  const pinned = new Set(fixed);
+  return pcs.flatMap((p, i) => !pinned.has(i) && p.some(c => want.has(c)) ? [i] : []);
+}

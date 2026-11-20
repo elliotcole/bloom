@@ -3,6 +3,7 @@
 // have had their say. One entry per key, so the docs can be checked against
 // it (ui/__tests__/homeKeys.test.ts) and a key's behaviour is in one place.
 
+import { ratioText } from '../lib/rhythms';
 import type { ShiftKey } from '../audio/playhead';
 import { Bloom } from '../core/Bloom';
 import type { Tuning } from '../lib/tuning';
@@ -55,6 +56,8 @@ export interface HomeCtx {
   previewSlot(src: Bloom): void;
   /** ask how many (min, 2 unless given, to max), then act; false when there's no line to ask on */
   askCount(label: string, last: number, act: (n: number) => string, max?: number, min?: number): boolean;
+  /** ask a length in beats (offering `now`), then act on it */
+  askBeats(label: string, now: number, act: (beats: number) => string): boolean;
   /** d: the pattern palette over whole notes; again: the last pattern, without it (the pitches alone: d in pitch mode) */
   pattern(again: boolean): void;
   /** what the asking keys offered last time */
@@ -63,6 +66,7 @@ export interface HomeCtx {
   onLoopCycle(vel: number[], time: number[], chan: number[], iv: IntervalVal[], fig: Figure[]): void;
   leaveListMode(): void;
   toggleHold(): void;
+  toggleMarks(): void;
   setClean(on: boolean): void;
   newBloomTuning(b: Bloom, own: Tuning | null): void;
   selection(): number[];
@@ -89,6 +93,8 @@ export interface HomeKey {
   shift?: boolean;
   /** sees the whole bloom even with a selection or pins: playing, viewing, the garden, modes */
   whole?: boolean;
+  /** works in every mode (list, select, tuning, the freeze menu), before the mode sees the key */
+  anywhere?: true;
   /** changes only what's shown, so it stays free while a take plays back */
   view?: true;
   /** what the docs call it, when the key and modifiers don't say it (see keyName) */
@@ -134,6 +140,7 @@ export const HOME_KEYS: HomeKey[] = [
     },
   },
   { code: 'KeyT', alt: true, shift: false, whole: true, label: 'hold the tuning over every bloom', act: c => c.toggleHold() },
+  { code: 'KeyR', alt: true, shift: false, whole: true, anywhere: true, name: 'opt-r', label: 'the selection and pins set aside / brought back', act: c => c.toggleMarks() },
   { code: 'Tab', alt: true, shift: false, whole: true, name: 'opt-tab', label: 'two voices: bring in a second bloom (a copy, to start) / back to one', act: c => c.voices.toggle() },
   { code: 'Tab', alt: false, shift: false, whole: true, name: 'tab', label: 'two voices: the focus to the other voice', act: c => c.voices.flip() },
   { code: 'KeyX', alt: true, shift: false, whole: true, name: 'opt-x', label: 'two voices: copy the focused voice into the other (in step, if both loop)', act: c => c.voices.duplicate() },
@@ -231,6 +238,22 @@ export const HOME_KEYS: HomeKey[] = [
     }),
   },
   {
+    code: 'KeyD', alt: true, shift: false, whole: true, name: 'opt-d',
+    label: 'cut the bloom to a length in beats (asks): the notes and their times end there',
+    act: c => c.askBeats('cut to how long (beats):', c.b.passDur(), d => {
+      c.b.trimToDur(d);
+      return `cut to ${ratioText(d)} beats: ${c.b.notes.length} notes`;
+    }),
+  },
+  {
+    code: 'KeyS', alt: true, shift: false, whole: true, name: 'opt-s',
+    label: 'squeeze the bloom to a length in beats (asks): every time scaled alike, the notes all kept',
+    act: c => c.askBeats('squeeze to how long (beats):', c.b.passDur(), d => {
+      c.b.squeezeTo(d);
+      return `squeezed to ${ratioText(c.b.passDur())} beats`;
+    }),
+  },
+  {
     code: 'KeyZ', alt: true, whole: true, name: 'opt-z',
     label: 'cut or loop the velocity, channel, interval and figure lists to a length (asks): they come round together against the notes (shift: every list to a length that divides N, so all come round on note N)',
     act: c => c.shift
@@ -275,7 +298,6 @@ export const HOME_KEYS: HomeKey[] = [
   // ─── Patterning ────────────────────────────────────────────────────────────
   v('u', 'stutter', b => b.stutter()),
   v('U', 'sputter', b => b.sputter()),
-  v('Y', 'spray', b => b.spray()),
   v('R', 'mirror', b => b.mirror()),
   { key: 'd', label: 'patterns: the palette (braid, pyramid, … or type one)', act: c => c.pattern(false) },
   { key: 'D', label: 'the last pattern again', act: c => c.pattern(true) },

@@ -18,7 +18,7 @@ you straight across with the selection kept.
 Start with a bloom of 8 or more notes, looping (`,`).
 
 1. **A breeze by hand.** `r`, then `=` twice: a few notes light up. `p` (pitch mode), then `3` a few times: only those go down a scale step, and the same ones keep going. `esc` home; `esc` again clears the selection.
-2. **The motif routine you described.** `r` `=` `=`, then `cmd-c` `cmd-v` (the copies land after the last selected note and become the selection), `p`, `3`. Repeat it three or four times. Does it start to sound motivic?
+2. **The motif routine you described.** `r` `=` `=`, then `cmd-c` `cmd-v` (each copy lands straight after the note it came from and becomes the selection; pasted into another bloom the copies keep their spacing, counted from the first selected note there), `p`, `3`. Repeat it three or four times. Does it start to sound motivic?
 3. **Variations.** `r` `=`, `p`, `n`: new pitches for just those.
 4. **Loudest.** `r` `l`: every note at the top level. `l` again: the next level too. `v`, `!`: only the accents drop. Try `L` (softest), `h` `H` (highest, lowest), `d` `D` (longest, shortest).
 5. **Every Nth.** `r` `e`, answer 3: every third note. `0` moves it along one. `v` `@`: an accent pattern in threes. With a bloom that isn't a multiple of 3 long, that's a phase.
@@ -27,7 +27,10 @@ Start with a bloom of 8 or more notes, looping (`,`).
 8. The rest: `9` `0` rotate, `s` or `n` the same number in new places, `i` invert, `R` mirror, `a` `z` all / none.
 
 What I'd like to know:
-- Is `x` / `X` right for pins? (`p` had to stay pitch mode, as you said.)
+- Is `x` / `X` right for pins? (`p` had to stay pitch mode, as you said.)  
+- 
+- YES THIS IS RIGHT FOR PINS
+
 - Is an eighth of the notes the right step for `=` and `-`?
 - Do you miss acting on the selection from inside select mode, or is `p` first fine?
 - **Breeze and spray are still there.** Say when they can go.
@@ -51,6 +54,9 @@ the other slot:
 
 What I'd like to know: are these the right palettes, and is "the pulse is the
 commonest duration" the right unit, or should it ask?
+
+YES I THINK SO, WILL KEEP EXPLORING
+
 
 ## 4. Note lengths as a list (an experiment, 3 min)
 
@@ -79,6 +85,18 @@ You weren't sure this is useful. Neither am I. Tell me after trying it.
 - **`?`** opens with Playback.
 - `o` / `O` do nothing at home; `cmd-k` `wheels` is wheels within wheels.
 
+## 7. Added 15 Nov, from your notes at the keyboard (10 min)
+
+- **Paste keeps its shape.** `r` `=` `=` `cmd-c` `cmd-v`: each copy lands straight after its own note. In another bloom, select one note and `cmd-v`: the copies keep their spacing from there. Adjacent selected notes stay together as a phrase.
+- **Paste as a figure, `cmd-shift-v`.** Copy three or four notes, select another note (or several), `cmd-shift-v`: that note becomes the figure's first and the rest follow, moved by scale steps (semitones with no scale attached). `opt-V` was taken (it saves the weave as an image).
+- **Selection and pins off / on, `opt-r`**, in any mode. Again brings them back.
+- **A sublist for the selected notes.** Select a note, `5`, `↵`: you see only its interval. Type `(+P5 -3rd)`: those sound with it (`.` takes it off). With several selected, what you type goes onto them in order, read round. The same in `p t v c b`.
+- **The rhythm palette is a lock.** `t` `k`, choose swing: the header shows `♩ swing · 0.25` (the palette and its basis). Now try `3 4`, `m`, `n`, `l`, `i`, and at home `-` `=`: the times stay in the palette. `1` `2` and `!` `@` move the basis. `K` is the next palette on the same basis. `F t` lets go, and so does typing times (`t` `↵`) that don't fit. Does it feel like a key?
+- **Scale names.** Marva on C reads `♮ Marva · key C`. A frozen scale shows `❄` in the badge. With notes pinned, slant now renames the scale (the pinned notes stay where they are, perhaps outside it).
+- **Channel mode:** `;` every channel one up, `'` one channel changed at random.
+- **Spray is gone.** `Y` is free.
+- **Light skins:** ⚙ skin → paper, daylight. Only the picture and garden go light; header and footer stay dark. I haven't seen these: say what looks wrong.
+
 ## Not built
 
 - **The comma lane.** A note returning a comma away against its ringing copy
@@ -94,6 +112,15 @@ You weren't sure this is useful. Neither am I. Tell me after trying it.
 
 1. `.` after a take ends also cuts the notes still ringing. Keep?
 2. `oneRandChan` and `cycleChans`: palette commands, keys, or neither?
+
+KEYS IN CHANNEL MODE -- semicolon and apostraphe
+
 3. Spray (`Y`) and curves (`w`) leave lists out of step. With select mode, does spray go?
+
+CUT SPRAY
+
 4. Skins: should ember, arctic and solar recolour the page too?
+
+YES WE SHOULD HAVE SOME SKINS WITH LIGHT BACKGROUNDS
+
 5. Nothing is pushed. Say "push" when you want it.

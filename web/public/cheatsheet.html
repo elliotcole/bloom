@@ -115,11 +115,11 @@
         <tr><td><kbd>9</kbd> <kbd>0</kbd></td><td>rotate ← →</td></tr>
         <tr><td><kbd>u</kbd> <kbd>U</kbd></td><td>stutter / sputter</td></tr>
         <tr><td><kbd>d</kbd> <kbd>D</kbd></td><td>patterns / the last again</td></tr>
-        <tr><td><kbd>Y</kbd></td><td>spray</td></tr>
         <tr><td><kbd>h</kbd> <kbd>H</kbd></td><td>thin / thicken</td></tr>
         <tr><td><kbd>g</kbd> <kbd>G</kbd></td><td>insert / remove a gap</td></tr>
-        <tr><td><kbd>z</kbd> <kbd>"</kbd> <kbd>Z</kbd></td><td>drop last · repeat · fit to notes</td></tr>
+        <tr><td><kbd>z</kbd> <kbd>"</kbd> <kbd>Z</kbd></td><td>drop · repeat · fit · <kbd>opt</kbd><kbd>d</kbd>/<kbd>opt</kbd><kbd>s</kbd> cut/squeeze</td></tr>
         <tr><td><kbd>a</kbd> <kbd>A</kbd></td><td>add a note: in the scale / any</td></tr>
+        <tr><td><kbd>opt</kbd><kbd>r</kbd></td><td>box &amp; pins off / back on · <kbd>cmd</kbd><kbd>⇧</kbd><kbd>v</kbd> paste as figure</td></tr>
         <tr><td><kbd>;</kbd> <kbd>:</kbd></td><td>clump into chords / flatten chords</td></tr>
         <tr><td><kbd>W</kbd></td><td>remove doubled notes</td></tr>
       </table>
@@ -184,14 +184,14 @@
         <tr><td><kbd>p</kbd></td><td>pitch: lock to the scale</td></tr>
         <tr><td><kbd>t</kbd> <kbd>r</kbd></td><td>rhythm: the durations in use</td></tr>
         <tr><td><kbd>v</kbd></td><td>dynamics: the levels in use</td></tr>
-        <tr><td><kbd>c</kbd></td><td>channels in use</td></tr>
-        <tr><td><kbd>5</kbd></td><td>intervals: the steps in use</td></tr>
+        <tr><td><kbd>c</kbd> <kbd>5</kbd></td><td>channels · interval steps in use</td></tr>
         <tr><td><kbd>d</kbd></td><td>total duration: trim → stretch → off</td></tr>
         <tr><td><kbd>g</kbd> <kbd>l</kbd></td><td>time grid · other voice&rsquo;s length</td></tr>
-        <tr><td><kbd>e</kbd></td><td>unpin all · <b>click</b> a node: pin · <b>drag</b> a box: keys change only those</td></tr>
+        <tr><td><kbd>k</kbd></td><td>two voices: link key, centre, basis, tuning</td></tr>
+        <tr><td><kbd>e</kbd></td><td>unpin all · <b>click</b> a node: pin · <b>drag</b> a box (shift adds): keys change only those</td></tr>
         <tr><td><kbd>esc</kbd> <kbd>⌫</kbd> <kbd>cmd</kbd><kbd>c</kbd><kbd>v</kbd></td><td>clear box (⇧ inverts) · delete · copy, paste</td></tr>
       </table>
-      <p class="note">The menu stays open so you can set several; <kbd>F</kbd> or <kbd>esc</kbd> closes. The header shows what's frozen, e.g. <b>❄ p t d:trim</b>.</p>
+      <p class="note">Stays open; <kbd>F</kbd> or <kbd>esc</kbd> closes. The header shows <b>❄ p t d:trim</b>, linked voices <b>A ⇄ B</b>.</p>
     </section>
     <section>
       <h2>View <small>· <kbd>opt</kbd><kbd>o</kbd> road · <kbd>opt</kbd><kbd>v</kbd> weave</small></h2>
@@ -245,7 +245,7 @@
     <tr><td><kbd>m M</kbd></td><td>mutate gently / wildly</td><td>scale steps / chromatic</td><td colspan="4">from the palette / anything</td></tr>
     <tr><td><kbd>h H</kbd></td><td>fewer / more distinct values</td><td>one pitch class fewer / more</td><td>durations</td><td>levels</td><td>channels</td><td>kinds of step</td></tr>
     <tr><td><kbd>q</kbd> / <kbd>Q</kbd></td><td>quantize / choose the setting</td><td>snap to the scale</td><td>to the grid / pick grid · <kbd>k</kbd> palettes, cells</td><td colspan="2">to at most N levels / pick N</td><td>snap to the scale</td></tr>
-    <tr><td><kbd>n</kbd></td><td>new list</td><td>in scale · <kbd>N</kbd> any of 12</td><td>new times (from the palette)</td><td>new dynamics</td><td>from the ones in use · <kbd>N</kbd> any</td><td>new intervals</td></tr>
+    <tr><td><kbd>n</kbd></td><td>new list</td><td>in scale · <kbd>N</kbd> any of 12</td><td>new times (from the palette)</td><td>new dynamics</td><td>in use · <kbd>N</kbd> any · <kbd>; '</kbd> +1, one new</td><td>new intervals</td></tr>
     <tr><td><kbd>x</kbd></td><td>with the garden slot</td><td colspan="5">lace with the slot's list · <kbd>opt</kbd><kbd>↑</kbd> lift it from the slot · <kbd>opt</kbd> <kbd>x</kbd> <kbd>f</kbd> the other voice's · <kbd>opt</kbd><kbd>z</kbd> to a length</td></tr>
     <tr><td colspan="2"><kbd>{</kbd> <b>merge</b></td><td colspan="5">two neighbours become one (durations add; elsewhere the first stays), the list one shorter · <b>time mode only</b> <kbd>}</kbd> <b>divide</b>: a few of the longest durations into equal parts, asks how many</td></tr>
     <tr><td colspan="2"><b>Only in pitch mode</b></td><td colspan="5">every pitch key from home: <kbd>( )</kbd> pivot · <kbd>[ ]</kbd> flatward / sharpward · <kbd>k K j J</kbd> scales · <kbd>e E</kbd> shear / gather · and <kbd>9 0</kbd> rotates the pitches alone</td></tr>
@@ -282,7 +282,7 @@
     </div>
     <div class="idea">
       <h3>Select mode <kbd>r</kbd></h3>
-      <p><kbd>= -</kbd> more / fewer · <kbd>9 0</kbd> rotate · <kbd>l h d</kbd> loud, high, long · <kbd>e</kbd> every Nth · <kbd>x</kbd> to pins. Then <kbd>p t v c</kbd> change <b>only those</b>.</p>
+      <p><kbd>= -</kbd> more / fewer · <kbd>9 0</kbd> rotate · <kbd>l h d</kbd> loud, high, long · <kbd>e</kbd> every Nth · <kbd>o</kbd> same pitch classes · <kbd>x</kbd> to pins. Then <kbd>p t v c</kbd> change <b>only those</b>.</p>
     </div>
   </div>
 </div>

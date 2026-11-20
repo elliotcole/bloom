@@ -8,6 +8,7 @@ import type { Figure } from '../lib/figures';
 import type { MidiOutput } from './midi';
 import { noteOn, noteOff, allNotesOff } from './midi';
 import { wrapAt } from '../lib/arrays';
+import { pictureLag } from './lag';
 import { timebase } from './clockSync';
 import { follow, playedView, seenOf, NO_SHIFT } from './playhead';
 import type { Place, Shift, ShiftKey } from './playhead';
@@ -153,7 +154,7 @@ export function playOnce(
   bloom.notes.forEach((_, i) => {
     const onAt = now + cursor;
     view.soundsAt(i, tick + i, legato, sustain).forEach(s => scheduleSound(out, s, onAt + beatsToMs(s.at), lead, pending, lead));
-    const v = setTimeout(() => { pending.visual.delete(v); onNoteOn?.(i, tick + i); }, cursor);
+    const v = setTimeout(() => { pending.visual.delete(v); onNoteOn?.(i, tick + i); }, cursor + 5 + pictureLag(out));   // lit as it's heard
     pending.visual.add(v);
     cursor += beatsToMs(view.stepAt(i, tick + i));   // an inserted figure takes its own length
   });
@@ -500,7 +501,7 @@ export function startLooper(
 
         // Fire visual callback at actual note-on time
         const idxSnap = noteIdx, tickSnap = state.globalTick, shiftSnap = state.shift;
-        const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap, shiftSnap); }, Math.max(0, atMs - now));
+        const v = setTimeout(() => { state.pending.visual.delete(v); state.onNoteOn?.(idxSnap, tickSnap, shiftSnap); }, Math.max(0, atMs - now + pictureLag(out)));   // lit as it's heard
         state.pending.visual.add(v);
       }
 

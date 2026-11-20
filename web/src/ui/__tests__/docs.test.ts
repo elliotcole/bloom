@@ -26,7 +26,7 @@ const SHIFTED = new Set(HOME_KEYS.filter(k => k.code !== undefined && k.shift ==
 }));
 const atHome = (n: string) => HOME_NAMES.has(n) || SHIFTED.has(n);
 /** Bound in keys.ts and main.ts ahead of the tables */
-const CMD_KEYS = ['cmd-z', 'cmd-c', 'cmd-v', 'cmd-k', 'cmd-s', 'cmd-o'];
+const CMD_KEYS = ['cmd-z', 'cmd-c', 'cmd-v', 'cmd-shift-v', 'cmd-k', 'cmd-s', 'cmd-o'];
 /** The keys that pass home from every mode, by name */
 const PASS_NAMES = [...PASS_KEYS.map(k => (k === ' ' ? 'space' : k)), '↑', '↓', '←', '→', '↵', 'del', 'tab', 'shift-space', 'shift-↑', 'shift-↓'];
 

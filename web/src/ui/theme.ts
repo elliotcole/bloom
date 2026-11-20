@@ -6,7 +6,7 @@ export const VIZ_MODES = [
 ] as const;
 export type VizMode = typeof VIZ_MODES[number];
 
-export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal';
+export type ThemeId = 'dark' | 'phosphor' | 'ember' | 'arctic' | 'solar' | 'uv' | 'minimal' | 'paper' | 'daylight';
 
 /** Red, green, blue (0–255): a colour whose opacity the drawing chooses (ui/draw.ts ink, mark) */
 export type Rgb = readonly [number, number, number];
@@ -227,9 +227,58 @@ const MINIMAL: Theme = {
   frozen: ICE,
 };
 
+// ─── Light skins: dark ink on a light ground ─────────────────────────────────
+// Louder is darker and fuller here, and a note sounding deepens rather than
+// glows. The page round the picture keeps its dark header and footer.
+const INK: Rgb = [38, 34, 30];
+
+// Paper: warm off-white, muted colours, overlaps darken like watercolour
+const PAPER: Theme = {
+  id: 'paper',
+  bg: '#f1ece1',
+  noteHsla(pc, vel, flash) {
+    const t = vel / 127;
+    return [pc * 30, 48 + t * 22 + flash * 20, 56 - t * 20 - flash * 14, 0.30 + t * 0.50 + flash * 0.20];
+  },
+  lineAlpha: f => 0.14 + f * 0.30,
+  polyFill: f => [`rgba(90,70,40,${0.07 + f * 0.07})`, `rgba(90,70,40,${0.02 + f * 0.03})`],
+  glowScale: 0.3,
+  strokeOnly: false,
+  blendMode: 'multiply',
+  accent: 'rgba(170,60,30,0.75)',
+  text: 'rgba(38,34,30,0.40)',
+  grid: 'rgba(38,34,30,0.08)',
+  ...inked(INK),
+  noteLabel: 'rgba(38,34,30,0.60)',
+  mark: [190, 80, 30],
+  frozen: '#2f6f9f',
+};
+
+// Daylight: cool white, full colour
+const DAYLIGHT: Theme = {
+  id: 'daylight',
+  bg: '#f7f8fa',
+  noteHsla(pc, vel, flash) {
+    const t = vel / 127;
+    return [pc * 30, 70 + t * 25, 50 - t * 10 - flash * 12, 0.35 + t * 0.50 + flash * 0.15];
+  },
+  lineAlpha: f => 0.12 + f * 0.30,
+  polyFill: f => [`rgba(60,90,160,${0.07 + f * 0.07})`, `rgba(60,90,160,${0.02 + f * 0.03})`],
+  glowScale: 0.3,
+  strokeOnly: false,
+  blendMode: 'source-over',
+  accent: 'rgba(20,90,200,0.75)',
+  text: 'rgba(20,24,32,0.40)',
+  grid: 'rgba(20,24,32,0.07)',
+  ...inked([20, 24, 32]),
+  noteLabel: 'rgba(20,24,32,0.60)',
+  mark: [210, 110, 0],
+  frozen: '#1f6fb0',
+};
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 export const THEMES: Record<ThemeId, Theme> = {
-  dark: DARK, phosphor: PHOSPHOR, ember: EMBER, arctic: ARCTIC, solar: SOLAR, uv: UV, minimal: MINIMAL,
+  dark: DARK, phosphor: PHOSPHOR, ember: EMBER, arctic: ARCTIC, solar: SOLAR, uv: UV, minimal: MINIMAL, paper: PAPER, daylight: DAYLIGHT,
 };
 
 export function getTheme(id: ThemeId): Theme {

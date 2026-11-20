@@ -76,3 +76,36 @@ describe('a selection put back', () => {
     expect(out.velocities).toEqual([90, 70, 50]);
   });
 });
+
+describe('a sublist typed onto selected events', () => {
+  it('puts chords on just those notes, the list spelled out to the notes first', () => {
+    const full = new Bloom([60, 62, 64, 65], [80], [1], [0]);
+    full.intervals = [0, 0, 0, 0];   // as typeTheSublist spells out an empty list
+    const sel = [1, 3];
+    const sub = extractSelection(full, sel);
+    const worked = sub.snapshot();
+    worked.intervals = [[7, -4], 12];
+    const out = mergeSelection(full, sel, sub, worked).bloom;
+    expect(out.intervals).toEqual([0, [7, -4], 0, 12]);
+    expect(out.notes).toEqual([60, 62, 64, 65]);
+  });
+});
+
+describe('↵ with pins: a list that phases is typed as written', () => {
+  it('a short time list stays short; one a value per note, or a selection, types the free events', async () => {
+    const { typedAsWritten } = await import('../selection');
+    expect(typedAsWritten(false, 3, 11, 4)).toBe(true);    // pins, a 3-long list against 11 notes
+    expect(typedAsWritten(false, 11, 11, 4)).toBe(false);  // in step: the pinned events keep theirs
+    expect(typedAsWritten(true, 3, 11, 4)).toBe(false);    // a selection: typed onto it
+    expect(typedAsWritten(false, 3, 11, 0)).toBe(false);   // no pins: the whole list anyway
+  });
+});
+
+describe('a box drag selects', () => {
+  it('what is inside it; with shift, added to what was selected', async () => {
+    const { boxSelection } = await import('../visualization');
+    expect(boxSelection([5, 3], [0, 1], false)).toEqual([3, 5]);
+    expect(boxSelection([5, 3, 1], [0, 1], true)).toEqual([0, 1, 3, 5]);
+    expect(boxSelection([], [2], true)).toEqual([2]);
+  });
+});

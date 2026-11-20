@@ -31,7 +31,7 @@ export function extractSelection(full: Bloom, sel: number[]): Bloom {
  * last slots are dropped. Returns the new bloom, where the selected events now
  * are, and where each of the others moved to.
  */
-export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, worked: Bloom)
+export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, worked: Bloom, wholeScale = true)
   : { bloom: Bloom; sel: number[]; moved: Map<number, number> } {
   const out = full.clone();
   out.stack = full.stack;
@@ -40,7 +40,8 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   const settings = worked.snapshot();
   settings.notes = out.notes; settings.timeIntervals = out.timeIntervals;
   settings.velocities = out.velocities; settings.chans = out.chans; settings.intervals = out.intervals; settings.figures = out.figures;
-  settings.appliedScale = full.appliedScale; settings.keyRoot = full.keyRoot;
+  // (with only pins in the way the key did act on the whole bloom: a new scale is the bloom's, the pinned notes stay where they are)
+  if (wholeScale) { settings.appliedScale = full.appliedScale; settings.keyRoot = full.keyRoot; }
   out.import(settings);
 
   const n = full.notes.length;
@@ -82,4 +83,14 @@ export function mergeSelection(full: Bloom, sel: number[], extracted: Bloom, wor
   const moved = new Map<number, number>();   // where each untouched event now sits
   plan.forEach(([src, j], i) => { if (src === 'sel') newSel.push(i); else moved.set(j, i); });
   return { bloom: out, sel: newSel, moved };
+}
+
+/**
+ * ↵ in a list mode with pins but nothing selected: a list that phases against
+ * the notes (shorter or longer) is typed as written, not spelled out a value
+ * per note for the free events. Spelled out it would no longer phase, and a
+ * pinned event shares its value with others round the cycle anyway.
+ */
+export function typedAsWritten(selecting: boolean, listLength: number, noteCount: number, pins: number): boolean {
+  return !selecting && pins > 0 && listLength !== noteCount;
 }

@@ -14,7 +14,7 @@ import { formatIntervals } from '../lib/intervals';
 import { formatFigures } from '../lib/figures';
 import { keyChar } from './homeKeys';
 import { DURATION_PALETTES, ratioText } from '../lib/rhythms';
-import { everyNth, fewer, invert, mirror, more, rotate, scramble, slice } from './selectVerbs';
+import { everyNth, fewer, invert, mirror, more, rotate, samePitchClasses, scramble, slice } from './selectVerbs';
 
 // ─── The list modes ──────────────────────────────────────────────────────────
 
@@ -158,6 +158,8 @@ export interface ListCtx {
   apply(msg: string, fn: () => void): void;
   /** ask how many, then act; false when there's no line to ask on */
   askCount(label: string, last: number, act: (n: number) => string, max?: number, min?: number): boolean;
+  /** ask a length in beats (offering `now`), then act on it */
+  askBeats(label: string, now: number, act: (beats: number) => string): boolean;
   memo: { splitSlices: number; repeatTimes: number; chunks: number; fitTo: number };
   /** two voices: the other one, or null */
   other(): { bloom: Bloom; name: string } | null;
@@ -234,6 +236,20 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
       }, FIT_MAX, 1);
     },
   },
+  {
+    code: 'KeyD', alt: true, shift: false, name: 'opt-d', modes: ['time'], label: 'cut the time list to a length in beats (asks): looped round and cut there, the notes untouched',
+    act: c => c.askBeats('time list, cut to how long (beats):', c.b.timeIntervals.reduce((a, t) => a + t, 0), d => {
+      c.b.cutTimesTo(d);
+      return `${c.tag} cut to ${ratioText(d)} beats, ${c.b.timeIntervals.length} long: ${c.text()}`;
+    }),
+  },
+  {
+    code: 'KeyS', alt: true, shift: false, name: 'opt-s', modes: ['time'], label: 'squeeze the time list to a length in beats (asks): every time scaled alike',
+    act: c => c.askBeats('time list, squeeze to how long (beats):', c.b.timeIntervals.reduce((a, t) => a + t, 0), d => {
+      c.b.squeezeTo(d, true);
+      return `${c.tag} squeezed to ${ratioText(d)} beats: ${c.text()}`;
+    }),
+  },
   { code: 'Escape', shift: false, name: 'esc', label: 'back home', act: c => { if (!c.leaving()) return false; c.leave(); c.status(`${c.name} mode off`); } },
   { code: 'Enter', name: '↵', label: 'type the list (shift: looped round to the notes)', act: c => c.type() },
   { key: 'T', label: 'tuning mode', home: true },
@@ -267,7 +283,6 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
     // as k chooses the scale in pitch mode: the scale is pitch's palette
     key: 'k', modes: ['time'], label: 'choose a duration palette or a rhythm cell',
     act: c => {
-      if (c.b.frozen.time) { c.status(`${c.tag} the rhythm is frozen: F t lets it go`); return; }
       c.e.preventDefault();   // the k mustn't land in the picker's filter
       if (!c.pickRhythm()) c.status(`${c.tag} no picker here`);
     },
@@ -276,14 +291,22 @@ export const LIST_MODE_KEYS: ListModeKey[] = [
     // as K slants to a neighbouring scale
     key: 'K', modes: ['time'], label: 'the next duration palette',
     act: c => {
-      if (c.b.frozen.time) { c.status(`${c.tag} the rhythm is frozen: F t lets it go`); return; }
-      _palette = (_palette + 1) % DURATION_PALETTES.length;
+      const at = DURATION_PALETTES.findIndex(p => p.name === c.b.frozen.rhythm?.name);
+      _palette = ((at >= 0 ? at : _palette) + 1) % DURATION_PALETTES.length;
       const p = DURATION_PALETTES[_palette];
-      c.apply(`${p.name}: ${p.ratios.map(ratioText).join(' ')}`, () => c.b.snapTimes(p.ratios));
+      c.apply(`${p.name}: ${p.ratios.map(ratioText).join(' ')} · the times stay in it (F t lets go)`, () => c.b.snapTimes(p.ratios, p.name, c.b.lockedBasis() ?? c.other()?.bloom.lockedBasis() ?? undefined));
     },
   },
   snapToScale('iv', 'q snaps the intervals to the scale (m3 → 3rd)'),
   snapToScale('fig', "q snaps the figures' steps to the scale (+M2 → 2)"),
+  {
+    key: ';', modes: ['chan'], label: 'every channel one up',
+    act: c => { c.b.cycleChans(); c.say(`every channel one up: ${c.b.chans.join(' ')}`); },
+  },
+  {
+    key: "'", modes: ['chan'], label: 'one channel changed at random',
+    act: c => { c.b.oneRandChan(); c.say(`one channel changed: ${c.b.chans.join(' ')}`); },
+  },
   {
     // as ; : clump and flatten chords at home
     key: [';', ':'], modes: ['iv'], label: 'thicker / thinner chords',
@@ -391,6 +414,8 @@ export interface SelectCtx {
   fixed(): number[];
   /** each event's loudness, its highest and lowest pitch, its duration */
   values(of: 'vel' | 'high' | 'low' | 'time'): number[];
+  /** each event's pitch classes */
+  pcs(): number[][];
   /** the new selection, and what to say */
   set(sel: number[], msg: string): void;
   /** the selection becomes pins (and empties) / the pins become the selection */
@@ -432,6 +457,13 @@ export const SELECT_KEYS: ModeKey<SelectCtx>[] = [
       return `[select] every ${n}: 9 0 move it along`;
     }, Math.max(2, c.n), 2),
   },
+  {
+    key: 'o', label: 'every note of the selected pitch classes, in any octave',
+    act: c => {
+      if (!c.sel().length) { c.status('[select] select a note or two first: o finds every other of their pitch classes'); return; }
+      c.set(samePitchClasses(c.pcs(), c.sel(), c.fixed()), 'the same pitch classes');
+    },
+  },
   deepen(['l', 'L'], ['vel', 'vel'], ['loudest', 'softest']),
   deepen(['h', 'H'], ['high', 'low'], ['highest', 'lowest']),
   deepen(['d', 'D'], ['time', 'time'], ['longest', 'shortest']),
@@ -441,7 +473,7 @@ export const SELECT_KEYS: ModeKey<SelectCtx>[] = [
   { key: Object.keys(MODE_KEYS), label: 'straight across to that list mode: its keys act on the selection', act: c => { c.leave(); return false; } },
 ];
 
-export const SELECT_HINT = 'select mode: = - more / fewer · 9 0 rotate · s new places · i invert · a z all / none · e every Nth · l L loud / soft · h H high / low · d D long / short · x X to / from pins · p t v c 5 b act on these · r or esc home';
+export const SELECT_HINT = 'select mode: = - more / fewer · 9 0 rotate · s new places · i invert · a z all / none · e every Nth · o same pitch classes · l L loud / soft · h H high / low · d D long / short · x X to / from pins · p t v c 5 b act on these · r or esc home';
 
 // ─── Tuning mode ─────────────────────────────────────────────────────────────
 
@@ -497,7 +529,7 @@ export const TUNING_HINT = 'tuning mode: ] [ base · l menu · 1 on/off · 2 cle
 
 // ─── The freeze menu ─────────────────────────────────────────────────────────
 
-export interface FreezeItem { key: string; alias?: string; name: string; selector: string }
+export interface FreezeItem { key: string; alias?: string; name: string; selector: string; /** two voices linked (key, centre, basis, tuning in common), not a freeze */ link?: true }
 
 /** F, then one of these. Keys match the list modes where there is one (t, v, c). */
 export const FREEZE_ITEMS: FreezeItem[] = [
@@ -509,6 +541,8 @@ export const FREEZE_ITEMS: FreezeItem[] = [
   { key: '5', name: 'intervals', selector: '.freeze-palette[data-list="iv"]' },
   { key: 'g', name: 'grid', selector: '#fixed-grid-enabled' },
   { key: 'l', name: "the other voice's length", selector: '#voice-lock' },
+  // two voices, linked: key, centre, time basis and tuning in common; change one in either and both change
+  { key: 'k', name: 'the two voices linked', selector: '#voice-link', link: true },
 ];
 
 /** What a freeze-menu key's action can reach */
@@ -535,7 +569,7 @@ export const FREEZE_KEYS: ModeKey<FreezeCtx>[] = [
   },
   ...FREEZE_ITEMS.map((f): ModeKey<FreezeCtx> => ({
     key: f.alias ? [f.key, f.alias] : f.key,
-    label: f.key === 'd' ? 'duration: off → trim → stretch' : `freeze ${f.name}`,
+    label: f.key === 'd' ? 'duration: off → trim → stretch' : f.link ? 'link the two voices: key, centre, time basis, tuning (either changes both)' : `freeze ${f.name}`,
     act: c => c.toggle(f),
   })),
 ];

@@ -10,6 +10,7 @@ import * as Tone from 'tone';
 import { Bloom } from './core/Bloom';
 import { noteOn, noteOff, allNotesOff } from './audio/midi';
 import { loadSynth, pianoOutput } from './audio/synth';
+import { pictureLag } from './audio/lag';
 import { HIDDEN_LOOKAHEAD_MS, pageHidden } from './audio/clock';
 import { offsAtPause } from './audio/pieceOffs';
 import type { PendingOff } from './audio/pieceOffs';
@@ -38,7 +39,7 @@ interface Piece {
 }
 
 const MODES: VizMode[] = ['deep', 'flower', 'field', 'orbit', 'tonal', 'spiral', 'set', 'helix', 'score'];
-const THEME_IDS: ThemeId[] = ['dark', 'phosphor', 'ember', 'arctic', 'solar', 'uv', 'minimal'];
+const THEME_IDS: ThemeId[] = ['dark', 'phosphor', 'ember', 'arctic', 'solar', 'uv', 'minimal', 'paper', 'daylight'];
 
 const TICK_MS = 25;
 const LOOKAHEAD_MS = 200;
@@ -175,7 +176,7 @@ async function main() {
       visualTimers.push(setTimeout(() => {
         showBloom(bloomIndex);
         viz.activateNote(pos);
-      }, Math.max(0, atMs - performance.now())));
+      }, Math.max(0, atMs - performance.now() + pictureLag(pianoOutput))));   // lit as it's heard
       nextEvent++;
     }
 

@@ -70,3 +70,14 @@ describe('select mode', () => {
     expect(slice([5, 5], [0, 1], true)).toEqual([0, 1]);
   });
 });
+
+describe('o: the same pitch classes', () => {
+  it('every event sounding a pitch class the selected do, in any octave; chords if any note does; pins stay out', async () => {
+    const { samePitchClasses } = await import('../selectVerbs');
+    const pcs = [[0], [2], [0], [7], [4, 0], [2]];   // C D C' G (E C) D'
+    expect(samePitchClasses(pcs, [0])).toEqual([0, 2, 4]);
+    expect(samePitchClasses(pcs, [1, 3])).toEqual([1, 3, 5]);
+    expect(samePitchClasses(pcs, [0], [2])).toEqual([0, 4]);
+    expect(samePitchClasses(pcs, [])).toEqual([]);
+  });
+});

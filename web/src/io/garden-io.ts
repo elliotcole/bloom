@@ -142,6 +142,8 @@ function holdsFromJSON(h: unknown): Holds {
     frozen: {
       pitch: f.pitch && Array.isArray(f.pitch.degrees) && f.pitch.degrees.every(isNum) ? f.pitch : false,
       time: nums(f.time), vel: nums(f.vel), chan: nums(f.chan), iv: some(f.iv),
+      ...(nums(f.time) && f.rhythm && typeof f.rhythm.name === 'string' && isNum(f.rhythm.pulse) && f.rhythm.pulse > 0
+        ? { rhythm: { name: f.rhythm.name, pulse: f.rhythm.pulse } } : {}),
     },
     fixedDur: isNum(j.fixedDur) && j.fixedDur > 0 ? j.fixedDur : false,
     fixedDurMode: j.fixedDurMode === 'scale' ? 'scale' : 'trim',

@@ -24,6 +24,7 @@ vi.mock('tone', () => {
   return {
     Gain: Node, Reverb, Sampler,
     now: () => 0,
+    immediate: () => 0,
     getContext: () => ({ state: h.state }),
     start: () => { h.starts++; return new Promise<void>(res => { h.wake = () => { h.state = 'running'; res(); }; }); },
   };

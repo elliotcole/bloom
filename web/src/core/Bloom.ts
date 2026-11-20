@@ -2,7 +2,6 @@
 
 import { cellTimes, pulseOf, snapToPalette } from '../lib/rhythms';
 import type { NoteVal, NoteArray } from '../lib/arrays';
-import { keyRootOf } from '../lib/tuning';
 import { chordOrder, countOf, isDiatonic, makeIv, mapCount, octaveOf, widthOf } from '../lib/intervals';
 import type { Tuning } from '../lib/tuning';
 import type { Figure, FigureStep, FigureTime } from '../lib/figures';
@@ -23,13 +22,15 @@ import type { Scale } from '../lib/scales';
 import { bakePattern } from '../lib/patterns';
 import {
   SCALES, mostSimilarTo, slantMatch, fitByDirection, scaleTranspose,
-  notesToScale, nearestInScaleUniqueArr, nameScaleDegrees, pcsKey, centreOn as centreScaleOn,
+  notesToScale, nearestInScaleUniqueArr, nameScaleDegrees, scaleKey, pcsKey, centreOn as centreScaleOn,
 } from '../lib/scales';
 
 /** The palette each list is frozen to, or false */
 export interface Freezes {
   pitch: Scale | false; time: number[] | false; vel: number[] | false; chan: number[] | false;
   iv: IntervalVal[] | false;
+  /** the time freeze is a duration palette chosen by name (time mode k): the name, and the pulse its ratios are of */
+  rhythm?: { name: string; pulse: number };
 }
 const NO_FREEZES: Freezes = { pitch: false, time: false, vel: false, chan: false, iv: false };
 
@@ -163,6 +164,8 @@ export const GESTURE = {
 };
 
 const MIN_TIME = 0.02;
+/** The longest step a locked rhythmic scale reaches up to, in beats */
+const RHYTHM_SCALE_TOP = 32;
 // 1 2 in time and velocity mode fine-tune: 5% faster / slower, 3 softer / louder
 const FINE_TIME = 1.05;
 const FINE_VEL = 3;
@@ -627,6 +630,7 @@ export class Bloom {
   scaleTimes(f: number): this {
     this.timeIntervals = this.timeIntervals.map(t => Math.max(MIN_TIME, roundTime(t * f)));
     if (this.frozen.time) this.frozen.time = this.frozen.time.map(t => roundTime(t * f));
+    if (this.frozen.rhythm) this.frozen.rhythm.pulse = roundTime(this.frozen.rhythm.pulse * f);
     return this;
   }
 
@@ -748,6 +752,37 @@ export class Bloom {
     return this;
   }
 
+  /**
+   * Time mode, cut: the time list alone to `dur` beats. Looped round as far as
+   * it takes and cut there, the last duration shortened to land on it; the
+   * list's length is what that takes, so it phases against the notes.
+   */
+  cutTimesTo(dur: number): this {
+    const ts = this.timeIntervals;
+    if (!Number.isFinite(dur) || dur <= 0 || !ts.length || ts.every(t => t <= 0)) return this;
+    const out: number[] = [];
+    let acc = 0;
+    for (let i = 0; acc < dur - 1e-9 && out.length < 4096; i++) {
+      const t = wrapAt(ts, i);
+      out.push(t);
+      acc += t;
+    }
+    out[out.length - 1] = Math.max(MIN_TIME, roundTime(out[out.length - 1] - (acc - dur)));
+    this.timeIntervals = out;
+    return this;
+  }
+
+  /**
+   * Squeeze: every time scaled by one factor so the time list (`list`) or one
+   * pass of the notes sums to `dur` beats. Proportions and lengths are kept;
+   * a locked rhythm palette moves with it, basis and all, as on a tempo change.
+   */
+  squeezeTo(dur: number, list = false): this {
+    if (!Number.isFinite(dur) || dur <= 0) return this;
+    const sum = list ? this.timeIntervals.reduce((a, b) => a + b, 0) : this.passDur();
+    return sum > 0 ? this.scaleTimes(dur / sum) : this;
+  }
+
   /** Stretch one pass of the notes to `dur` beats. A time list of another length is first written out to the notes, since it's the pass that must fit. */
   scaleToDur(dur = 4): this {
     if (!Number.isFinite(dur) || dur <= 0) return this;
@@ -857,13 +892,6 @@ export class Bloom {
 
   sputter(probability = 0.3): this {
     return this.setEvents(sputterArr(this.events(), probability));
-  }
-
-  spray(probability = 0.25): this {
-    this.notes = sputterArr(this.notes, probability) as NoteArray;
-    this.velocities = sputterArr(this.velocities, probability);
-    this.timeIntervals = sputterArr(this.timeIntervals, probability);
-    return this;
   }
 
   mirror(): this {
@@ -1222,7 +1250,7 @@ export class Bloom {
   keyTuningRoot(): number {
     const s = this.appliedScale;
     if (!s) return 0;
-    return s.root ?? s.tonic ?? keyRootOf(s.degrees) ?? 0;   // a raga's Sa, a centre chosen by hand, else the key signature's
+    return scaleKey(s) ?? 0;   // a raga's Sa, a centre chosen by hand, the key signature's or the named scale's root
   }
 
   /** Move the tuning's root to the bloom's key, unless it was chosen by hand */
@@ -2005,7 +2033,7 @@ export class Bloom {
     const arr = this.getList(k);
     if (arr.length < 2) return false;
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-    const pal = k === 'time' ? new Set(this.paletteOf('time')) : null;
+    const pal = k === 'time' ? new Set(this.timePalette()) : null;
     const weights: number[] = arr.slice(0, -1).map((a, i) => {
       const b = arr[i + 1];
       return (pal ? pal.has(roundTime((a as number) + (b as number))) : same(a, b)) ? 4 : 1;
@@ -2086,16 +2114,73 @@ export class Bloom {
   }
 
   /** Time mode k: every time to the nearest duration of a palette (ratios of the pulse, the commonest duration). Returns the pulse */
-  snapTimes(ratios: number[]): number {
-    const pulse = pulseOf(this.timeIntervals);
+  snapTimes(ratios: number[], name = '', pulse = this.rhythmPulse()): number {
     this.timeIntervals = snapToPalette(this.timeIntervals, ratios, pulse).map(t => Math.max(MIN_TIME, t));
+    // the palette is to the times what the key is to the notes: the bloom stays in it until it's let go (F t)
+    this.frozen.time = [...new Set(ratios.map(r => Math.max(MIN_TIME, roundTime(r * pulse))))].sort((a, b) => a - b);
+    if (name) this.frozen.rhythm = { name, pulse }; else delete this.frozen.rhythm;
     return pulse;
+  }
+
+  /**
+   * Times written by hand that no longer fit the palette holding them let it
+   * go (rather than being pulled back in at the next play). Returns what was
+   * let go ("swing", "the frozen durations"), or '' when they fit or nothing held.
+   */
+  releaseTimesIfOutside(): string {
+    const ft = this.frozen.time;
+    if (!ft) return '';
+    const scale = this.rhythmScale() ?? ft;
+    const fits = (t: number) => scale.some(p => Math.abs(p - t) <= Math.max(1e-4, p * 0.005));
+    if (this.timeIntervals.every(fits)) return '';
+    const was = this.frozen.rhythm?.name ?? 'the frozen durations';
+    this.frozen.time = false;
+    delete this.frozen.rhythm;
+    return was;
+  }
+
+  /** The pulse a palette or cell is measured on: the chosen palette's while one holds, else the commonest duration */
+  rhythmPulse(): number {
+    return this.frozen.time && this.frozen.rhythm ? this.frozen.rhythm.pulse : pulseOf(this.timeIntervals);
+  }
+
+  /** The basis a chosen palette is locked to, or null (no palette, or durations frozen by hand) */
+  lockedBasis(): number | null {
+    return this.frozen.time && this.frozen.rhythm ? this.frozen.rhythm.pulse : null;
+  }
+
+  /**
+   * A locked palette as a rhythmic scale: its durations repeated by halving and
+   * doubling, as a pitch scale repeats by octaves (aksak on 1/5: 1/5 3/10 2/5 3/5 4/5 1 1/5 …).
+   * The times may sit anywhere on it and 3 4 walk along it. Null when no palette is locked.
+   */
+  rhythmScale(): number[] | null {
+    const ft = this.frozen.time;
+    if (!ft || !this.frozen.rhythm || !ft.length) return null;
+    const out = new Set<number>();
+    for (let k = -6; k <= 8; k++) {
+      for (const d of ft) {
+        const t = roundTime(d * 2 ** k);
+        if (t >= MIN_TIME && t <= RHYTHM_SCALE_TOP) out.add(t);
+      }
+    }
+    return [...out].sort((a, b) => a - b);
+  }
+
+  /** The durations the time verbs move among: the frozen palette (all of it, in use or not), else the durations in use */
+  timePalette(): number[] {
+    return this.frozen.time ? [...this.frozen.time].sort((a, b) => a - b) : this.paletteOf('time');
   }
 
   /** Time mode k: the time list becomes a rhythm cell on the pulse, at the cell's own length. Returns the pulse */
   setRhythm(cell: number[]): number {
-    const pulse = pulseOf(this.timeIntervals);
-    if (cell.length) this.timeIntervals = cellTimes(cell, pulse).map(t => Math.max(MIN_TIME, t));
+    const pulse = this.rhythmPulse();
+    if (cell.length) {
+      this.timeIntervals = cellTimes(cell, pulse).map(t => Math.max(MIN_TIME, t));
+      // a cell is its own rhythm: a palette that was holding the times lets go
+      this.frozen.time = false;
+      delete this.frozen.rhythm;
+    }
     return pulse;
   }
 
@@ -2142,7 +2227,9 @@ export class Bloom {
     const ts = this.timeIntervals;
     const n = ts.length;
     if (n === 0) return true;
-    const pal = this.paletteOf('time');
+    const pal = this.timePalette();
+    // steps walk the rhythmic scale when a palette is locked, so 3 4 go on past its ends without leaving it
+    const steps = this.rhythmScale() ?? pal;
     // the commonest duration, or the middle of the palette when none repeats
     const target = pal.length === n ? pal[Math.floor((pal.length - 1) / 2)] : modeOf(ts.map(roundTime));
     const ti = nearestByRatio(pal, target);
@@ -2161,13 +2248,13 @@ export class Bloom {
       case 'nudgeUp': this.slower(FINE_TIME); break;
       case 'octaveDown': this.scaleTimes(0.5); break;
       case 'octaveUp': this.scaleTimes(2); break;
-      case 'stepDown': set(t => this.stepTime(t, -1, pal)); break;
-      case 'stepUp': set(t => this.stepTime(t, 1, pal)); break;
+      case 'stepDown': set(t => this.stepTime(t, -1, steps)); break;
+      case 'stepUp': set(t => this.stepTime(t, 1, steps)); break;
       case 'breezeDown': case 'breezeUp': {
         const heat = this.breezeHeatFor('time', ts);
         const moving = someIndices(n, GESTURE.breeze, heat);
         const k = verb === 'breezeUp' ? 1 : -1;
-        set((t, i) => (moving.has(i) ? this.stepTime(t, k, pal) : t));
+        set((t, i) => (moving.has(i) ? this.stepTime(t, k, steps) : t));
         this.rememberBreeze('time', heat, moving, this.timeIntervals);
         break;
       }
@@ -2192,11 +2279,11 @@ export class Bloom {
       }
       // accelerando or ritardando: up to two palette steps by the end
       // up: longer toward the end (ritardando); down: shorter (accelerando)
-      case 'tilt': set((t, i) => this.stepTime(t, Math.round((i / Math.max(1, n - 1)) * amount), pal)); break;
+      case 'tilt': set((t, i) => this.stepTime(t, Math.round((i / Math.max(1, n - 1)) * amount), steps)); break;
       case 'curve': {
         const ctrl = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => rrand(-2, 2));
         const offs = resamp1(ctrl, n);
-        set((t, i) => this.stepTime(t, Math.round(offs[i]), pal));
+        set((t, i) => this.stepTime(t, Math.round(offs[i]), steps));
         break;
       }
       case 'sortUp': this.timeIntervals = [...ts].sort((a, b) => a - b); break;
@@ -2530,7 +2617,7 @@ export class Bloom {
   private _splitAt(avoid = -1, slices = 2): number {
     const evs = this.events();
     if (evs.length === 0) return -1;
-    const pal = new Set(this.paletteOf('time'));
+    const pal = new Set(this.timePalette());
     const weights = evs.map((e, i) => {
       if (i === avoid || e.time / slices < MIN_TIME) return 0;
       return e.time * (pal.has(roundTime(e.time / slices)) ? 3 : 1);
@@ -2547,7 +2634,7 @@ export class Bloom {
   private _mergeAt(): number {
     const evs = this.events();
     if (evs.length < 3) return -1;
-    const pal = new Set(this.paletteOf('time'));
+    const pal = new Set(this.timePalette());
     const weights = evs.slice(0, -1).map((e, i) => (pal.has(roundTime(e.time + evs[i + 1].time)) ? 4 : 1));
     const i = weightedIndex(weights);
     evs.splice(i, 2, { ...evs[i], time: roundTime(evs[i].time + evs[i + 1].time) });
@@ -3312,12 +3399,13 @@ export class Bloom {
     if (k === 'pitch') this.frozen.pitch = on ? this.scale : false;
     else if (k === 'iv') this.frozen.iv = on && this.intervalPalette().length ? this.intervalPalette() : false;
     else this.frozen[k] = on && this.paletteOf(k).length ? this.paletteOf(k) : false;
+    if (k === 'time') delete this.frozen.rhythm;   // frozen by hand: the durations in use, no named palette
     return this;
   }
 
   resolveFixed(): this {
     // rhythm palette first, so a frozen duration or grid still has the last word on time
-    const ft = this.frozen.time;
+    const ft = this.rhythmScale() ?? this.frozen.time;   // a locked palette spans its octaves, as a scale does
     if (ft) this.timeIntervals = this.timeIntervals.map(t => ft[nearestByRatio(ft, t)]);
     if (this.fixedDurMode === 'trim') {
       this._resolveFixedGrid();

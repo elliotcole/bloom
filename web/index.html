@@ -107,6 +107,12 @@
       body[data-theme="minimal"] #garden-area { background: #0a0a0a; border-color: #1a1a1a; }
       body[data-theme="minimal"] #canvas-area { background: #0c0c0c; }
 
+      /* Light skins: the picture and the garden on a light ground; the header, settings and footer stay dark */
+      body[data-theme="paper"] #canvas-area { background: #f1ece1; }
+      body[data-theme="paper"] #garden-area { background: #e6e0d2; border-color: #cfc7b6; }
+      body[data-theme="daylight"] #canvas-area { background: #f7f8fa; }
+      body[data-theme="daylight"] #garden-area { background: #eceef2; border-color: #d3d7de; }
+
       .hdr-right { margin-left: auto; }
       .hdr-btn {
         background: transparent;
@@ -286,7 +292,8 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      #scale-badge.active { display: inline-block; }
+      #scale-badge.active, #rhythm-badge.active { display: inline-block; }
+      #rhythm-badge { display: none; font-size: 10px; letter-spacing: 0.04em; color: #ec9; border: 1px solid #753; border-radius: 3px; padding: 1px 5px; flex-shrink: 0; white-space: nowrap; }
 
       /* The bloom's tuning: ◊ name @ root */
       #tuning-badge {
@@ -840,6 +847,7 @@
       <span id="lengths-badge" title="the lists' lengths, shown when they differ: each cycles at its own length in the loop and the pulsar, and ↻ is how many notes until they all come round together (Z fits them to the notes; opt-\ shows the lanes)"></span>
       <span id="voice-badge"></span>
       <span id="scale-badge"></span>
+      <span id="rhythm-badge"></span>
       <span id="tuning-badge" title="this bloom's tuning and the root it sits on, which follows the key (◊ held: plays over every bloom, opt-t) — click for tuning mode (T)"></span>
       <span id="selection-badge" title="selected events — keys change only these; esc or a click on empty space clears, shift-esc inverts"></span>
       <span id="list-mode-badge" title="list mode — keys act on one list (p / t / v / c / 5 or esc goes home)"></span>
@@ -904,6 +912,9 @@
           <label title="two voices: the focused voice stretched to the other's length before each play, so the two come round together (F l)">voice
             <input type="checkbox" id="voice-lock">
           </label>
+          <label title="two voices, linked (F k): the key, the key centre, the time basis and the tuning in common; change one in either voice and the other changes with it">link
+            <input type="checkbox" id="voice-link">
+          </label>
         </span>
 <span class="s-section" title="lock a list to the palette it has when ticked; anything off-palette snaps back before each play">
           <span class="s-section-label">palette</span>
@@ -960,6 +971,7 @@
           <input type="range" id="take-pos" min="0" max="1" step="1000" value="0" style="width:160px" title="the take, start to end: where play take starts; while playing, where it is (drag to go there)">
           <button class="s-btn" id="take-save" title="save the last take to a .bloomtake file">save…</button>
           <button class="s-btn" id="take-load" title="load a .bloomtake file as the last take">load…</button>
+          <button class="s-btn" id="take-score" title="write the last take as a score for piano (MusicXML): every note on one staff, 8va/8vb past three ledger lines, a bar each pass of the notes, eighths and sixteenths, a tempo mark where the time list changes speed">score…</button>
           <span id="take-status" class="s-note"></span>
         </span>
 <span class="s-section">
@@ -998,6 +1010,8 @@
               <option value="solar">solar</option>
               <option value="uv">uv</option>
               <option value="minimal">minimal</option>
+              <option value="paper">paper (light)</option>
+              <option value="daylight">daylight (light)</option>
             </select>
           </label>
           <label title="show axis labels (field, deep)">axis
@@ -1017,6 +1031,9 @@
           </label>
           <span class="s-note" title="the inputs Bloom hears: a keyboard played along goes into a take. Untick one that isn't a keyboard (a bus carrying Bloom's own notes on to TouchDesigner, say); the dot lights as it sends. The bus Bloom plays on is never heard. An input found sending Bloom's own notes back is unticked by itself">in</span>
           <span id="midi-inputs"></span>
+          <label title="the picture waits this long before it lights a note, for the delay between a MIDI note leaving Bloom and being heard (your synth's or DAW's audio buffer, Bluetooth headphones). Raise it until the glow and the sound land together. The built-in piano measures its own">picture waits
+            <input type="number" id="midi-lag-input" min="0" max="500" step="5" value="0"> ms
+          </label>
           <label title="highest MIDI channel (0-based)">max ch
             <input type="number" id="max-chan-input" min="0" max="15" step="1" value="0">
           </label>
@@ -1089,11 +1106,12 @@
 <b>R</b>      mirror       <b>9 0</b>  rotate
 <b>u</b>      stutter      <b>U</b>    sputter
 <b>d</b>      patterns     <b>D</b>    the last again
-<b>Y</b>      spray
 <b>h</b>      thin         <b>H</b>    thicken
 <b>g</b>      gap          <b>G</b>    unGap
 <b>z</b>      drop last
 <b>"</b>      repeat (how many times?)  <b>Z</b> fit to the notes
+<b>opt-d</b>  cut the bloom to a length in beats (how long?)
+<b>opt-s</b>  squeeze it to a length in beats, every time alike
 <b>opt-z</b>  vel, chan, iv, fig lists to a length (how long?)
 <b>opt-Z</b>  every list comes round on note N (which?)
 <b>a A</b>    add one (in scale / any)
@@ -1144,7 +1162,7 @@ same keys, same verbs
             <div class="hf-h">Freeze, pin, select</div>
             <div class="hf-body"><b>F</b>    freeze menu (? there for more)
 <b>r</b>    select mode (? there for more)
-click a node: pin · drag: select
+click a node: pin · drag: select · shift-drag: add
 <b>esc</b>  clear  <b>shift-esc</b> invert</div>
           </div>
           <div class="hf-sec">
@@ -1180,6 +1198,7 @@ the palette above chooses the comma
 <b>R</b>      mirror         <b>i</b>  invert: the others
 <b>a z</b>    all / none
 <b>e</b>      every Nth event (how many?): 9 0 then move it along
+<b>o</b>      every note of the selected pitch classes, any octave
 <b>l L</b>    the loudest / softest; again: the next level too
 <b>h H</b>    the highest / lowest
 <b>d D</b>    the longest / shortest
@@ -1188,6 +1207,8 @@ the palette above chooses the comma
 <b>p t v c 5 b</b>  straight across to a list mode:
          its keys change only the selected events
 cmd-c cmd-v copy / paste them · del deletes them
+cmd-shift-v  paste as a figure starting on each selected note
+opt-r  selection and pins off / back on
 drag a box selects by hand, here or anywhere
 playback &amp; garden keys unchanged</div>
           </div>
@@ -1200,10 +1221,11 @@ playback &amp; garden keys unchanged</div>
 <b>d</b>    duration: trim → stretch → off
 <b>g</b>    grid
 <b>l</b>    the other voice's length (two voices)
+<b>k</b>    link the two voices: key, centre, basis, tuning
 <b>e</b>    unpin all events
 menu stays open; F or esc closes
 click a node: pin / unpin its event
-drag a box: select events — keys
+drag a box: select events (shift: add) — keys
   change only those; esc clears,
   shift-esc inverts (selection first)
   (deep turns: scroll or opt-drag)</div>
@@ -1212,6 +1234,7 @@ drag a box: select events — keys
             <div class="hf-h"><span id="hf-list-mode-name"></span> mode (its key or esc goes home)</div>
             <div class="hf-body"><b>↵</b>      type the list (← → an entry at a time;
        shift-↵ sets it looped to the notes)
+       with events selected: just theirs, a sublist
 <span class="hf-only hf-iv">         -P5/10: a fifth below every 10th note
          (+3rd +5th): a triad above, in the scale
          tab: vel % of the added notes
@@ -1227,7 +1250,9 @@ drag a box: select events — keys
 <b>R</b>      mirror
 <b>{</b>      merge two neighbours
 <span class="hf-only hf-time"><b>}</b>      divide a few long ones (how many?)
-<b>k</b>      a duration palette (the times snap to it)
+<b>k</b>      a duration palette: the times stay in it
+         (♩ in the header; 1 2 ! @ move its basis; F t lets go)
+         3 4 walk its scale, by octaves past its ends
          or a rhythm cell (5/8, 3 3 2: the list becomes it)
 <b>K</b>      the next duration palette
 </span><b>9 0</b>    rotate &lt;&lt; &gt;&gt;
@@ -1237,6 +1262,8 @@ drag a box: select events — keys
 <b>z a A</b>  drop / add (palette / any)
 <b>" Z</b>    repeat (how many?) / fit to the notes
 <b>opt-z</b> cut or loop to a length (how long?)
+<span class="hf-only hf-time"><b>opt-d</b> cut the time list to a length in beats
+<b>opt-s</b> squeeze it to a length in beats</span>
 
 <b>1 2</b>    down / up (time, velocity: a little)
 <b>! @</b>    octave · double / half time · much softer / louder
@@ -1253,6 +1280,8 @@ drag a box: select events — keys
 <b>q Q</b>    quantize / set grid or levels
 <b>n</b>      new list
 <span class="hf-only hf-chan"><b>N</b>      new list, any channel (n: the ones in use)
+<b>;</b>      every channel one up
+<b>'</b>      one channel changed at random
 </span><span class="hf-only hf-pitch">
 every pitch key from home works here too:
 <b>( ) [ ] k K j J e E</b>; <b>q</b> snaps to the scale
@@ -1298,9 +1327,11 @@ playback &amp; garden keys unchanged</div>
           from anywhere (while it plays: the keys above, ← → skip, . stops)
 <b>opt-e</b>    edit bloom
 <b>cmd-k</b>    command palette
-<b>drag</b>     a box selects events: keys act on them
+<b>drag</b>     a box selects events: keys act on them (shift: adds)
 <b>del</b>      delete the selected events
-<b>cmd-c v</b>  copy / paste them after the selection
+<b>cmd-c v</b>  copy / paste, each after its place
+<b>cmd-shift-v</b> paste as a figure on the selected notes
+<b>opt-r</b>    selection and pins off / back on
 <a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>
           </div>
         </div>

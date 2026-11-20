@@ -39,7 +39,7 @@ const MODE_CUES: Record<CueMode, string> = {
 
 const TUNING_CUE = 'l pick a tuning · 3 4 a comma · # $ breeze · click a slice · opt-k 1/1 there · esc home';
 const FREEZE_CUE = 'p t v c 5 g freeze · d duration · e unpin · F or esc closes';
-const SELECT_CUE = '= - more / fewer · 9 0 rotate · l L loud / soft · h H high / low · d D long / short · e every Nth · i invert · x to pins · p t v c act on these · esc home';
+const SELECT_CUE = '= - more / fewer · 9 0 rotate · l L loud / soft · h H high / low · d D long / short · e every Nth · o same pitch classes · i invert · x to pins · p t v c act on these · esc home';
 const IDLE_CUE = 'space play · n new · ? all keys';
 
 /** Lesser-known home keys, one at a time while nothing else needs saying */
@@ -65,12 +65,16 @@ const TIPS = [
   'cmd-k wheels: one accent in a velocity list one longer than the notes, drifting round each cycle',
   'opt-n name the bloom, give it a colour',
   'drag a box: del deletes, cmd-c cmd-v copy and paste the events',
+  'copy a figure, select a note, cmd-shift-v: the figure again, starting there',
+  'opt-r sets the selection and pins aside, and brings them back',
   'opt-1 … 9 change the view',
   'opt-0 the orrery: every list a ring, turning at its own length',
   'opt-o the road: the notes come at you as tiles, what plays next laid out ahead',
   'opt-v the weave: the performance as cloth, a row per note, a thread per list (shift saves it as an image)',
   'F freeze lists while you keep playing',
   't k: a duration palette (ternary, aksak, fibonacci) or a rhythm cell (type 5/8, or 3 3 2)',
+  'a duration palette holds the times like a key: 1 2 move its basis, F t lets go',
+  'select notes, 5, ↵: type chords, (+P5 -3rd), onto just those',
   'opt-Z: every list comes round on note N (asks which)',
   'r select mode: = a few at random, then p and 3: only those move',
   'r l: the loudest notes selected (again: the next loudest too) · x pins them',
@@ -100,7 +104,7 @@ function situations(c: CueContext): string[] {
   if (c.pulsing) out.push('< > rate · . stop');
   else if (c.looping) out.push('. stop');
   if (c.slot) out.push('↑ lift · shift-space play the slot');
-  if (c.voice) out.push(`voice ${c.voice} · tab the other · opt-x copy into it · F l its length · opt-tab one bloom`);
+  if (c.voice) out.push(`voice ${c.voice} · tab the other · opt-x copy into it · F l its length · F k link · opt-tab one bloom`);
   return out;
 }
 

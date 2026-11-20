@@ -1,5 +1,6 @@
 // Bloom Web — entry point
 
+import { setMidiLag, midiLag } from './audio/lag';
 import './style.css';
 import { Bloom, BloomDefaults } from './core/Bloom';
 import type { ListKey, ListVerb, PatternOp } from './core/Bloom';
@@ -12,7 +13,7 @@ import { setFigureSlots } from './lib/figures';
 import { loadSynth, pianoOutput, setVelocityCeiling, setReverbMix, setReverbDecay } from './audio/synth';
 import { saveGarden, loadGarden, autosaveGarden, peekAutosave, restoreAutosave, sessionNow, restoreSession, pauseAutosave } from './io/garden-io';
 import {
-  initTakes, armTake, stopTake, playTake, seekTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, loadTakeFile, clock as hms,
+  initTakes, armTake, stopTake, playTake, seekTake, stopPlaying, takePhase, lastTake, takeElapsed, saveTakeFile, saveTakeScore, loadTakeFile, clock as hms,
   takeShown, takeGarden, takeLit, takeDark, takeAnimate, takeOtherShown, takeOtherLit, takeOtherDark,
 } from './audio/take';
 import { parseClock } from './audio/takeFrom';
@@ -237,7 +238,6 @@ async function main() {
     // Patterning
     reg('stutter',   'stutter pattern',           b => b.stutter());
     reg('sputter',   'sputter pattern',           b => b.sputter());
-    reg('spray',     'spray pattern',             b => b.spray());
     reg('mirror',    'mirror whole notes',        b => b.mirror());
     reg('braid',     'braid pattern',             b => b.braid());
     reg('pyramid',   'pyramid pattern',           b => b.pyramid());
@@ -440,6 +440,7 @@ async function main() {
   const takePlayBtn = document.getElementById('take-play') as HTMLButtonElement | null;
   const takeSaveBtn = document.getElementById('take-save') as HTMLButtonElement | null;
   const takeLoadBtn = document.getElementById('take-load') as HTMLButtonElement | null;
+  const takeScoreBtn = document.getElementById('take-score') as HTMLButtonElement | null;
   const takeStatus = document.getElementById('take-status');
   const takeFromField = document.getElementById('take-from') as HTMLInputElement | null;
   const takePos = document.getElementById('take-pos') as HTMLInputElement | null;
@@ -491,6 +492,7 @@ async function main() {
       takePlayBtn.disabled = !t || (ph !== 'idle' && ph !== 'playing');
     }
     if (takeSaveBtn) takeSaveBtn.disabled = !t || ph === 'recording' || ph === 'ending';
+    if (takeScoreBtn) takeScoreBtn.disabled = !t || ph === 'recording' || ph === 'ending';
     if (takeLoadBtn) takeLoadBtn.disabled = ph !== 'idle';
     if (takePos) {
       takePos.max = String(t ? t.length : 1);
@@ -569,6 +571,7 @@ async function main() {
     takeUi();
   });
   takeSaveBtn?.addEventListener('click', () => { takeSaveBtn.blur(); if (saveTakeFile()) { display.setStatus('take saved'); takeUi(); } });
+  takeScoreBtn?.addEventListener('click', () => { takeScoreBtn.blur(); const n = saveTakeScore(); if (n) display.setStatus(`take written as a score: ${n} bars (MusicXML, piano)`); });
   takeLoadBtn?.addEventListener('click', () => {
     takeLoadBtn.blur();
     loadTakeFile(err => display.setStatus(err ?? (lastTake() ? `take loaded: ${hms(lastTake()!.length)}` : '')));
@@ -631,10 +634,14 @@ async function main() {
   // time mode k: duration palettes (the times snap to one) and rhythm cells (the time list becomes one)
   const rhythmPicker = new RhythmPicker({
     apply: r => {
-      const pulse = r.kind === 'palette' ? bloom.snapTimes(r.values) : bloom.setRhythm(r.values);
+      // a palette takes the basis already locked here, else the one the other voice is locked to
+      const own = bloom.lockedBasis(), theirs = otherVoice()?.lockedBasis() ?? null;
+      const basis = own ?? theirs ?? undefined;
+      const shared = own === null && theirs !== null ? ', on the other voice\'s basis' : '';
+      const pulse = r.kind === 'palette' ? bloom.snapTimes(r.values, r.name, basis) : bloom.setRhythm(r.values);
       const msg = r.kind === 'palette'
-        ? `[t] ${r.name}: the times snapped to ${r.values.map(ratioText).join(' ')} of ${pulse}`
-        : `[t] ${r.name}: ${r.values.map(ratioText).join(' ')} on a pulse of ${pulse}, ${r.values.length} long`;
+        ? `[t] ${r.name}: the times are in ${r.values.map(ratioText).join(' ')} of ${ratioText(pulse)} and stay there${shared} (F t lets go)`
+        : `[t] ${r.name}: ${r.values.map(ratioText).join(' ')} on a pulse of ${pulse}, ${r.values.length} long (no palette holds the times now)`;
       display.setStatus(msg);
       keysRefresh(msg);
     },
@@ -1038,6 +1045,19 @@ async function main() {
       Bloom.maxChan = v;
       try { localStorage.setItem('bloom.maxChan', String(v)); } catch { /* best effort */ }
     }
+  });
+
+  // Picture waits (⚙ → midi): the glow held back to land with the sound of a MIDI note, remembered
+  const lagInput = document.getElementById('midi-lag-input') as HTMLInputElement | null;
+  try {
+    const saved = parseInt(localStorage.getItem('bloom.midiLag') ?? '');
+    if (!isNaN(saved)) { setMidiLag(saved); if (lagInput) lagInput.value = String(midiLag()); }
+  } catch { /* private window */ }
+  lagInput?.addEventListener('change', () => {
+    setMidiLag(parseInt(lagInput.value));
+    lagInput.value = String(midiLag());
+    try { localStorage.setItem('bloom.midiLag', String(midiLag())); } catch { /* best effort */ }
+    display.setStatus(`the picture waits ${midiLag()} ms for a MIDI note to be heard`);
   });
 
   // Launch quantize (play ▾): a bloom lifted while the loop runs waits for it to come round

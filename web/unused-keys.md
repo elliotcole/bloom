@@ -15,14 +15,14 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Shift keys
 
-- `P`  `Q`  `V`  `O`  *(`T` is tuning mode; `L` is tilt up; `Z` trims, `"` repeats)*
+- `P`  `Q`  `V`  `O`  `Y`  *(`T` is tuning mode; `L` is tilt up; `Z` trims, `"` repeats)*
 - `_`  `%`  *(`#` `$` are breeze; `%` was semitones ↔ scale steps, now each interval names its own kind)*
 
 ## Option (alt) keys
 
 **Letters**
-- `opt-a`  `opt-b`  `opt-d`  `opt-g`  `opt-h`  `opt-i`  `opt-j`
-- `opt-l`  `opt-m`  `opt-q`  `opt-r`  `opt-s`  `opt-u`  `opt-w`  `opt-y`
+- `opt-a`  `opt-b`  `opt-g`  `opt-h`  `opt-i`  `opt-j`
+- `opt-l`  `opt-m`  `opt-q`  `opt-u`  `opt-w`  `opt-y`
 - `opt-f` at home *(in a list mode, with two voices, opt-f / opt-x take the list from the other voice)*
 
 **Numbers**
@@ -37,8 +37,8 @@ Ctrl and Cmd keys are excluded (reserved for browser/OS shortcuts).
 
 ## Taken option keys
 
-- `opt-e` editor · `opt-c` clean view · `opt-t` tuning hold · `opt-p` / `opt-P` push / pop
-- `opt-n` name and colour · `opt-k` key centre · `opt-z` fit the lists to a length · `opt-x` copy into the other voice · `opt-tab` two voices
+- `opt-r` selection and pins off / on (in every mode) · `opt-e` editor · `opt-c` clean view · `opt-t` tuning hold · `opt-p` / `opt-P` push / pop
+- `opt-d` / `opt-s` cut / squeeze to a length in beats (at home and in time mode) · `opt-n` name and colour · `opt-k` key centre · `opt-z` fit the lists to a length · `opt-x` copy into the other voice · `opt-tab` two voices
 - `opt-0` orrery · `opt-o` road · `opt-v` weave (with opt-1 … opt-9, the views)
 - `opt-↑` `opt-↓` `opt-del` garden slots
 - `opt-,` loop garden · `opt-/` pulse garden

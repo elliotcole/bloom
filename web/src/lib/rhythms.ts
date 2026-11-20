@@ -36,7 +36,7 @@ export function euclid(k: number, n: number): number[] {
 
 /** A ratio of the pulse as it's written: 1, 2/3, 1 1/2 */
 export function ratioText(r: number): string {
-  for (const d of [1, 2, 3, 4, 5, 8]) {
+  for (const d of [1, 2, 3, 4, 5, 6, 8, 12, 16, 32]) {
     const n = r * d;
     if (Math.abs(n - Math.round(n)) < 1e-6) {
       const whole = Math.floor(Math.round(n) / d), rest = Math.round(n) % d;
@@ -94,4 +94,12 @@ export function parseCell(text: string): RhythmCell | null {
   const nums = t.split(/[\s,]+/).filter(Boolean).map(Number);
   if (nums.length < 2 || nums.length > 64 || nums.some(n => !Number.isFinite(n) || n <= 0 || n > 64)) return null;
   return { name: nums.join(' '), cell: nums, says: 'as typed, in pulses' };
+}
+
+/** A length in beats as it's typed: 4, 2.5, 3/2, 1 1/2. Null when it isn't one, or isn't above 0 */
+export function parseBeats(text: string): number | null {
+  const m = text.trim().match(/^(?:(\d+(?:\.\d+)?)|(?:(\d+)\s+)?(\d+)\/(\d+))$/);
+  if (!m) return null;
+  const v = m[1] !== undefined ? Number(m[1]) : Number(m[2] ?? 0) + Number(m[3]) / Number(m[4]);
+  return Number.isFinite(v) && v > 0 ? v : null;
 }

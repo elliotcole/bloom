@@ -65,12 +65,12 @@ These move each note together with its time, velocity, channel and interval.
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
 | `d` | patterns: the palette (braid, pyramid, … or type your own; see **Patterns**) | `D` | the last pattern again |
-| `Y` | spray | | |
 | `h` | thin: drops some notes, each giving its time to the note before | `H` | thicken: a few of the longest notes (3 at most) each give half their time to a new, softer note a scale step or three away, so new notes land in the gaps and the phrase stays |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |
 | | | opt-`z` | fit to a length: asks how long, then the velocity, channel, interval and figure lists are cut or looped round to it, so they come round together against a long bloom (the notes and times keep their own lengths). A list written folded, `P5/6`, counts its steps one by one |
+| opt-`d` | cut to a length in beats: asks how long (offering the length it is now; `4`, `2.5`, `3/2` all do), then the bloom ends there, the notes and their times cut, the last time shortened to land on it | opt-`s` | squeeze to a length in beats: every time scaled by the same amount so one pass of the notes lasts that long; no note is lost and the shape stays. A locked rhythm palette moves with it, basis and all |
 
 **Lengths (an experiment, 12 Nov 2026).** In time mode `↵`, then `tab`: a list of note lengths against the usual (1 as it is, 0.3 short, 2 ringing on). It cycles at its own length like any other list, so `0.3 1 1` against five notes moves the staccato round. With a fixed sustain it scales that. `1` alone is the old behaviour. It's saved with the bloom; it isn't yet in the lanes, the views or undo.
 
@@ -466,8 +466,9 @@ These only move values around, so they mean exactly the same in every list.
 | `o` / `O` | sort up / down (for velocity: crescendo / decrescendo) |
 | `z` / `a` / `A` | drop last / add one from the palette / add one at random |
 | `"` / `Z` | repeat this list (asks how many times) / fit it to the notes' length (cut or looped round) |
-| `k` / `K` (time mode) | **duration palettes and rhythm cells.** `k` opens a picker. A *palette* is to time what a scale is to pitch: a few durations as ratios of the pulse (your commonest duration), and the times snap to the nearest: binary, dotted, ternary, swing, aksak (1 and 1½), quintuple, fibonacci, primes, harmonic. A *cell* replaces the time list with a short pattern at its own length, which then phases against the notes: tresillo 3 3 2, cinquillo, the bells, bars of 5, 7 and 9; or type one, `5/8` (five spread over eight) or `3 3 2` (the gaps, in pulses). `K` steps to the next palette without the picker. A frozen rhythm (`F t`) is left alone |
+| `k` / `K` (time mode) | **duration palettes and rhythm cells.** `k` opens a picker. A *palette* is to time what a scale is to pitch: a few durations as ratios of the pulse (your commonest duration), and the times snap to the nearest: binary, dotted, ternary, swing, aksak (1 and 1½), quintuple, fibonacci, primes, harmonic. A *cell* replaces the time list with a short pattern at its own length, which then phases against the notes: tresillo 3 3 2, cinquillo, the bells, bars of 5, 7 and 9; or type one, `5/8` (five spread over eight) or `3 3 2` (the gaps, in pulses). `K` steps to the next palette without the picker. **A chosen palette holds the times** the way a frozen scale holds the notes: it is the rhythm freeze (`F t`) with a name, shown in the header as `♩ swing · basis 1/4 · 2/3, 1 1/3` (the palette, its basis, and its durations as multiples of the basis). Like a scale it repeats by octaves: aksak on a basis of 1/5 is 1/5, 3/10, 2/5, 3/5, 4/5, 1 1/5 … beats, its durations halved and doubled. `3` `4` walk up and down that scale as far as you like, and whatever a key does, the times come back onto it before they sound. The other time verbs (`# $ m n l L i - =`, split and merge) move among all its durations, not only the ones in use. With two voices, a palette chosen in a voice with none locked takes the basis the other voice is locked to, so the two count the same pulse. `1` `2` and `!` `@` move the basis, palette and all, as they move a key. `k` or `K` changes the palette on the same basis; a cell, or `F t`, lets it go, and so does typing times (`↵`) that no longer fit it (`F t` again freezes the durations then in use, with no name) |
 | opt-`z` | cut or loop this list to a length (asks how long, 1 or more): `P5/6` is six steps, so 4 gives `P5 . . .` |
+| opt-`d` / opt-`s` (time mode) | **cut / squeeze the time list to a length in beats** (asks how long). Cut loops the list round as far as it takes and cuts it there, the last duration shortened to land on it, so the list's length is whatever that takes and it phases against the notes, which are untouched. Squeeze scales every duration alike so the list sums to that length, its own length kept |
 
 Changing one list's length makes it phase against the notes. That's often the
 point: stutter only the velocities and the accent pattern drifts.
@@ -486,6 +487,7 @@ point: stutter only the velocities and the accent pattern drifts.
 | `l` / `L` | tilt down / up, a step steeper each press | accelerando / ritardando | decrescendo / crescendo | drift down / up |
 | `w` | curve | rubato contour | hairpins | smooth path through channels |
 | `n` / `N` | new list | new times from the palette | new dynamics | from the channels in use / any channel |
+| `;` / `'` | | | | every channel one up (round to the first) / one channel changed at random |
 
 **Merge: `{`** (as `{` merges two notes at home): a few pairs of neighbours
 (about a fifth of the list, as `}` divides; at least one) each become one, the
@@ -542,6 +544,14 @@ turns to put it at the top. A transposition carries the centre along; `k`,
 `K` or another new scale lets it go back to the key signature's.
 
 **Intervals mode (`5`) treats the intervals as a list like the others.**
+With notes selected (or some pinned), `↵` in any list mode shows that list's
+values on just those notes, as a sublist: what you type goes onto them in
+order, read round if it's shorter. So select one note, `5`, `↵`, `(+P5 -3rd)`:
+a fifth above and a third below sound with it (`.` takes a chord off). The
+list is spelled out as long as the notes first, so the others keep what they
+had. With only pins (nothing selected), a list shorter or longer than the
+notes is typed as written instead, so a short time list stays short and keeps
+phasing. A pinned note shares its value with others round the cycle anyway.
 
 *What they are.* Each step of the list adds a chord to the note it falls on,
 at playback, or nothing (`.`). Intervals are written by name, the sign saying
@@ -636,6 +646,7 @@ its own, one on/off per event, and the keys are the list verbs:
 | `R` / `i` | mirror / invert (the others) |
 | `a` / `z` | all / none |
 | `e` | every Nth event (asks N); `9` `0` then move it along |
+| `o` | every note of the selected notes' pitch classes, in any octave (a chord counts if any of its notes does) |
 | `l` / `L` | the loudest / softest: every event at that level; pressed again, the next level too |
 | `h` / `H` | the highest / lowest, the same way |
 | `d` / `D` | the longest / shortest |
@@ -661,6 +672,7 @@ set of values. Press **`F`**, then:
 | `d` | duration | the total length (amount set in **play ▾**). Each press cycles: **trim** to the duration (notes past it are cut) → **stretch** to the duration (all times scaled to fit) → off |
 | `g` | grid | a time grid (size set in **play ▾**) |
 | `l` | the other voice's length | two voices: one pass of the voice with the focus stretched to the other's, so the two come round together |
+| `k` | link | two voices: the key, the key centre, the time basis and the tuning held in common; change one in either voice and both change (see **Two voices**) |
 
 The menu is sticky, like the list modes: each key toggles one freeze (`d` cycles through three states) and the menu stays open, so you can set several or step `d` round. `F` or `esc` closes it. Playback, garden and view keys work while it's open. The header shows
 what's frozen, e.g. `❄ p t d:trim`; while the menu is open it reads `F ❄ …`. The same switches are in **play ▾** under
@@ -709,7 +721,9 @@ set, which draw pitch classes rather than events.
 
 Drag a box round some nodes to **select** their events, in any view. (Deep
 and spiral turn with a two-finger scroll or a mouse wheel, or an opt-drag, so
-a plain drag is always a box.) Until you clear it, every key that
+a plain drag is always a box.) **Shift-drag** adds the nodes in a new box to
+what's already selected, and a shift-click on empty space doesn't clear it.
+Until you clear it, every key that
 changes the bloom works on the selection alone, as if it were the whole bloom:
 sort sorts just those events, tilt ramps across them, `a` adds a note among
 them, `n` regenerates only that stretch. The rest stay as they were. Selected
@@ -724,9 +738,20 @@ nodes sit on a soft disc and the header shows `▣ 4`.
 - **`del` deletes the selected events** (pinned ones stay). With nothing
   selected, `del` only says so: opt-`del` deletes the garden slot.
 - **cmd-`c` copies the selected events** (all of them with no selection) with
-  their time, velocity, channel and intervals; **cmd-`v` pastes them** after
-  the last selected event (at the end with none) and selects them, so they can
-  be moved or changed at once. Lists phasing against the notes aren't touched.
+  their time, velocity, channel and intervals, and remembers how they were
+  spaced. **cmd-`v` pastes them** spaced as they were: with the same notes
+  still selected, each gets its copy straight after it (`a . . b` becomes
+  `a a . . b b`); in another bloom the first goes after the first selected
+  note and the rest as far along as they were (at the end with nothing
+  selected, or if they'd fall off it). Adjacent notes stay together as a
+  phrase. The pasted events become the selection, so they can be moved or
+  changed at once. Lists phasing against the notes aren't touched.
+- **cmd-shift-`v` pastes the copied notes as a figure** on each selected note: the
+  note becomes the figure's first and the rest go in after it, moved to start
+  there, by steps of the scale when one is attached (C E G pasted on D in C
+  major is D F A), by semitones when none is. The figures become the selection.
+- **opt-`r` sets the selection and the pins aside**, in any mode, so the keys
+  reach every note; opt-`r` again brings them back as they were.
 - **Pins still hold** inside a selection.
 - The command palette and the editor work on the whole bloom.
 - Lifting a garden slot or loading a file clears the selection.
@@ -767,6 +792,10 @@ nodes sit on a soft disc and the header shows `▣ 4`.
     is never heard. An input caught sending Bloom's own notes back (most of
     16 notes in a row at the pitch and velocity Bloom just sent) is unticked
     by itself, and the status line says so.
+  - **⚙ → midi → picture waits** holds the glow back so it lands with the
+    sound. A MIDI note is heard a little after it leaves Bloom (the synth's
+    or DAW's audio buffer, more over Bluetooth); raise it until the two land
+    together, and Bloom remembers it. The built-in piano measures its own.
 - **The cue line,** under the header, names the few keys that belong to where
   you are: a mode's own keys (tuning mode, the freeze menu, a list mode), or
   at home the situations that open keys up, two at most — a selection, pins, a
@@ -876,11 +905,22 @@ play one pass of it is stretched to the other's, so B can gain or lose notes
 and still come round with A. It follows the focus: after `tab`, the other one
 is held. Off by default.
 
+**Linked** (`F k`, or **play ▾** → freeze → link), the two voices share their
+key, key centre, time basis and tuning: change one in either voice and both
+change. Linking makes the other voice take the focused one's at once. After
+that, transposing one voice transposes the other (its own notes, moved the same
+distance); a new scale in one is applied to the other, its notes moved into it;
+a new centre or tuning is copied; moving the basis of a locked rhythm palette
+(`1 2 ! @` in time mode, a squeeze) moves the other's by the same amount, each
+keeping its own palette. The badge reads `A ⇄ B` while they're linked. Undo in
+the voice that changed carries back across, but the other voice's own undo
+doesn't know about it.
+
 With both looping, the badge says where they are: `in step` when they come
 round together every pass, or `meet 12`, the beats until two loops of
 different lengths next start together, counting down. On the meeting the
 rim of the picture flares. With the lanes open (opt-`\`), both voices' lists
-show, the other voice's dimmed above the focused one's, each with its own
+show, A's above B's wherever the focus is, the other voice's dimmed, each with its own
 cursors and lettered down the left.
 
 The garden is shared: `↓` saves the voice with the focus, and `↑` lifts a
@@ -927,6 +967,24 @@ tunings, play a keyboard along), and the take keeps it all.
   also kept in the browser and survives a reload. While you record, the take
   is saved once a minute, so if the page closes mid-take, it comes back up
   to that point. Arming a new take over one not saved to a file asks twice.
+- **score…** writes the last take as a score for piano (MusicXML), for
+  MuseScore, Dorico or Sibelius. Every note from every channel goes on one
+  staff, ready to split across two by hand (in Dorico, with cross-staff
+  beaming). Four ledger lines or more get an *8va* or *8vb* line, or *15ma*
+  or *15mb* where one octave isn't enough.
+  - **Bars:** each bar is one pass of the notes, and its time signature is
+    whatever that pass adds up to.
+  - **Tempo:** each stretch is written in eighths (sixteenths when the
+    quarter would pass 170), with simple multiples of them. A tempo mark
+    appears wherever the time list changes speed. A glide shows as *accel.*
+    or *rit.* from its first tempo to the one it reaches, and the steps in
+    between are played but not shown. Triplets stay triplets only when they
+    make whole groups inside one bar. Any other triplet note moves to the
+    nearest 32nd, so every bar is exactly as long as its time signature.
+  - **Rests and silences:** a note lasts until the next one. A long silence
+    is a fermata marked with its seconds.
+  - **Key and tuning:** the key signature follows the scale on screen. Tuning
+    is left out.
 
 Nothing is worked out again when a take plays, so randomness, tempo and
 timing are exactly as they were. The other side of that: a take keeps its

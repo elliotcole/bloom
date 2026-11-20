@@ -4,6 +4,7 @@ import { allTuples, flatNotes } from './arrays';
 import type { NoteVal } from './arrays';
 import { keyToDegree, degreeToKey, nearestInScale } from './numbers';
 import { RAGAS } from './ragas';
+import { keyRootOf } from './tuning';
 
 export interface Scale {
   /** every pitch class it uses (a raga's: both its forms together) */
@@ -174,17 +175,53 @@ export function slantMatch(targetDegrees: number[], avoid: Set<string> = new Set
  * Name a set of pitch classes after a catalogue scale it matches on some root,
  * e.g. [2, 4, 5, 7, 9, 11, 0] → "D Dorian". Empty string when nothing matches.
  */
-export function nameScaleDegrees(pcs: number[]): string {
+/** The catalogue scale a pitch set makes, and the root it makes it on (scales before ragas, the lowest root first) */
+export function identifyScale(pcs: number[]): { root: number; scale: Scale } | null {
   const set = [...new Set(pcs.map(d => ((d % 12) + 12) % 12))].sort((a, b) => a - b);
   const key = set.join(',');
   for (const sc of ALL_SCALES) {
     if (sc.pitchesPerOctave !== 12 || sc.degrees.length !== set.length) continue;
     for (let root = 0; root < 12; root++) {
       const t = sc.degrees.map(d => (d + root) % 12).sort((a, b) => a - b).join(',');
-      if (t === key) return `${PC_NAMES[root]} ${sc.name}`;
+      if (t === key) return { root, scale: sc };
     }
   }
-  return '';
+  return null;
+}
+
+export function nameScaleDegrees(pcs: number[]): string {
+  const id = identifyScale(pcs);
+  return id ? `${PC_NAMES[id.root]} ${id.scale.name}` : '';
+}
+
+/**
+ * A scale's key: a raga's Sa, or a centre chosen by hand; else, for notes that
+ * sit inside a key signature (the modes, pentatonics), the signature's key;
+ * else the root of the catalogue scale they make (C C# E F# G A B is Marva on
+ * C, not "key G"; A harmonic minor is on A); else the nearest key signature,
+ * or null when none comes close.
+ */
+export function scaleKey(s: Scale): number | null {
+  if (s.root !== undefined) return s.root;
+  if (s.tonic !== undefined) return s.tonic;
+  const sig = keyRootOf(s.degrees);
+  const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+  const inside = sig !== null && s.degrees.every(d => MAJOR.includes((((d - sig) % 12) + 12) % 12));
+  if (!inside && s.pitchesPerOctave === 12) {
+    const id = identifyScale(s.degrees);
+    if (id) return id.root;
+  }
+  return sig;
+}
+
+/** A scale's name to show beside its key: "C Marva" in key C is "Marva"; a set with no name of its own takes the catalogue's when that sits on the key */
+export function scaleTitle(s: Scale): string {
+  const key = scaleKey(s);
+  const words = s.name.split(' ');
+  if (s.name && words.length > 1 && !words.every(w => PC_NAMES.includes(w)) && PC_NAMES.indexOf(words[0]) === key) return words.slice(1).join(' ');
+  if (s.name) return s.name;
+  const id = s.pitchesPerOctave === 12 ? identifyScale(s.degrees) : null;
+  return id && id.root === key ? id.scale.name : '';
 }
 
 /**

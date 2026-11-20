@@ -1,8 +1,10 @@
 // Full keyboard handler — mirrors bloom keystroke controller.scd
 
+import { carryLinks, linkNow, linkState, LINK_KEYS } from '../core/voiceLinks';
+import type { LinkKey, LinkState } from '../core/voiceLinks';
 import { Bloom } from '../core/Bloom';
 import {
-  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, keyRootOf, rebase, recentre, rotateAlterations, stepAlterations,
+  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, rebase, recentre, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, NoteEvent, IntervalVal, Holds } from '../core/Bloom';
@@ -35,7 +37,7 @@ import { BloomVisualization } from './visualization';
 import { GardenVisualization } from './gardenVisualization';
 import { Display } from './display';
 import { Notice, snap, sameSnap, describeChange } from './notice';
-import { extractSelection, mergeSelection } from './selection';
+import { extractSelection, mergeSelection, typedAsWritten } from './selection';
 import {
   applyTuning, tuningKey, tuningLibrary, stepTuning, originalTuning,
   hold, heldForBloom, holdRoot, isHeld, release, setHeldTuning, soundingRoot, soundingTuning,
@@ -43,6 +45,10 @@ import {
 import { spell } from '../lib/numbers';
 import { worldColor, worldHues, worldOf } from './worlds';
 import { lengthsText } from './orrery';
+import { type Clip, clipOf, anchorOf, placesOf, shifted, pastedAt } from './pastePlan';
+import { figureOn, firstPitch } from './pasteFigure';
+import { scaleKey, scaleTitle } from '../lib/scales';
+import { parseBeats, ratioText } from '../lib/rhythms';
 
 /** A step back in the undo history: the bloom, what was pinned, the freezes in force, and the garden's slots when the step changed them */
 interface HistoryEntry { bloom: Bloom; pins: number[]; holds: Holds; garden?: GardenStep }
@@ -199,6 +205,9 @@ export function createKeyHandler(state: KeyHandlerState) {
   // added before a pin), and undo must put them back on the same events
   const _undo: HistoryEntry[] = [];
   // what the asking keys offered last time: } (split at home, divide in time mode), " and S
+  // two voices, linked (F k; see carryToOther): all of LINK_KEYS or none
+  const _links = new Set<LinkKey>();
+  let _linkSeen: { voice: string; state: LinkState } | null = null;
   const _memo = { splitSlices: 2, repeatTimes: 2, chunks: 3, fitTo: 8, every: 2, roundIn: 12 };
 
   /**
@@ -223,6 +232,23 @@ export function createKeyHandler(state: KeyHandlerState) {
     return true;
   }
 
+
+  /** Ask a length in beats (4, 2.5, 3/2), offering `now`, then do it; `act` returns what to say */
+  function askBeats(e: KeyboardEvent, label: string, now: number, act: (beats: number) => string): boolean {
+    if (!state.typeList) return false;
+    e.preventDefault();
+    const w = _working;
+    state.typeList(label, ratioText(now), text => {
+      const v = parseBeats(text);
+      if (v === null || v < 0.02 || v > 4096) return 'a length in beats: 4, 2.5, 3/2';
+      relift(w);
+      const msg = act(v);
+      status(msg);
+      refresh(msg);
+      return null;
+    });
+    return true;
+  }
 
   /** The selection a key was working on, lifted out again when its answer comes (the key's own lift has been put back by then) */
   function relift(w: typeof _working): void {
@@ -458,28 +484,89 @@ export function createKeyHandler(state: KeyHandlerState) {
 
   // ─── Copy and paste ──────────────────────────────────────────────────────────
   // cmd-c keeps the selected events (all of them with no selection) with their
-  // time, velocity, channel and intervals; cmd-v puts them in after the last
-  // selected event (at the end with no selection) and selects them, so they can
-  // be moved or changed at once. Lists phasing against the notes aren't touched.
-  let _clip: NoteEvent[] = [];
+  // time, velocity, channel and intervals, and the shape of the selection: its
+  // runs of adjacent notes and how far apart they sat. cmd-v puts the first run
+  // in after the first selected run (at the end with no selection) and the rest
+  // as far along as they were, so pasted over the selection it came from every
+  // run gets its copy straight after it. The pasted events become the selection,
+  // so they can be moved or changed at once. Lists phasing against the notes
+  // aren't touched.
+  let _clip: Clip<NoteEvent> = { runs: [], offsets: [] };
 
   function copyEvents() {
-    const evs = state.bloom.events();
-    _clip = (_selection.length ? _selection : evs.map((_, i) => i)).map(i => JSON.parse(JSON.stringify(evs[i])) as NoteEvent);
-    status(`copied ${_clip.length} event${_clip.length === 1 ? '' : 's'} · cmd-v pastes after the selection`);
+    _clip = clipOf(state.bloom.events(), _selection);
+    _clip.runs = JSON.parse(JSON.stringify(_clip.runs)) as NoteEvent[][];
+    const n = _clip.runs.reduce((t, r) => t + r.length, 0);
+    status(`copied ${n} event${n === 1 ? '' : 's'} · cmd-v pastes them after the selection, spaced as they were`);
   }
 
   function pasteEvents() {
-    if (!_clip.length) { status('nothing copied: select events and cmd-c'); return; }
+    if (!_clip.runs.length) { status('nothing copied: select events and cmd-c'); return; }
     _notice?.begin();
-    const after = _selection.length ? _selection[_selection.length - 1] : state.bloom.notes.length - 1;
-    const n = _clip.length;
-    state.bloom.insertEvents(after, _clip);
-    // pins and the selection move past the pasted events; the pasted ones become the selection
-    movePins(i => (i > after ? i + n : i));
-    _selection = Array.from({ length: n }, (_, j) => after + 1 + j);
+    const len = state.bloom.notes.length;
+    const places = placesOf(_clip.offsets, anchorOf(_selection, len), len);
+    const sizes = _clip.runs.map(r => r.length);
+    // last run first, so the places still hold
+    for (let k = _clip.runs.length - 1; k >= 0; k--) state.bloom.insertEvents(places[k], _clip.runs[k]);
+    // pins move past the pasted events; the pasted ones become the selection
+    movePins(i => shifted(i, places, sizes));
+    _selection = pastedAt(places, sizes);
     selectionChanged();
-    refresh(`pasted ${n} event${n === 1 ? '' : 's'} after [${after}]`);
+    const n = _selection.length;
+    refresh(`pasted ${n} event${n === 1 ? '' : 's'}${places.length > 1 ? `, ${places.length} places` : ` after [${places[0]}]`}`);
+  }
+
+  /**
+   * cmd-shift-v: the copied notes as a figure on each selected note. The note
+   * becomes the figure's first and the rest go in after it, moved to start
+   * there (figureOn: by scale steps with a scale attached, else semitones).
+   */
+  function pasteFigure() {
+    const figure = _clip.runs.flat();
+    if (figure.length < 2) { status(figure.length ? 'one note copied: a figure needs two or more' : 'nothing copied: select a figure and cmd-c'); return; }
+    if (!_selection.length) { status('paste figure: select the note (or notes) it should start on'); return; }
+    _notice?.begin();
+    const b = state.bloom;
+    const scale = b.appliedScale;
+    const dests = _selection.filter(i => !_pinned.has(i) && firstPitch(b.notes[i]) !== undefined);
+    if (!dests.length) { status('paste figure: nothing free to start on'); return; }
+    const sizes: number[] = [];
+    for (let k = dests.length - 1; k >= 0; k--) {   // last first, so the places still hold
+      const evs = figureOn(figure, firstPitch(b.notes[dests[k]])!, scale ? scale.degrees : null, scale?.pitchesPerOctave ?? 12);
+      b.insertEvents(dests[k], evs);
+      sizes[k] = evs.length;
+    }
+    movePins(i => shifted(i, dests, sizes));
+    // each figure, its first note included, is the selection
+    _selection = [...dests.map(i => shifted(i, dests, sizes)), ...pastedAt(dests, sizes)].sort((x, y) => x - y);
+    selectionChanged();
+    refresh(`figure of ${figure.length} pasted on ${dests.length} note${dests.length === 1 ? '' : 's'}${scale ? ', in the scale' : ''}`);
+  }
+
+  // opt-r: the selection and the pins set aside, so keys reach the whole bloom, and brought back
+  let _aside: { selection: number[]; pins: number[] } | null = null;
+
+  function toggleMarks() {
+    if (_previewResetId !== null) return;
+    const n = state.bloom.notes.length;
+    if (_selection.length || _pinned.size) {
+      _aside = { selection: [..._selection], pins: [..._pinned] };
+      const what = [_selection.length ? `${_selection.length} selected` : '', _pinned.size ? `${_pinned.size} pinned` : ''].filter(Boolean).join(', ');
+      _selection = [];
+      clearPins();
+      selectionChanged();
+      status(`${what} set aside: keys reach every note · opt-r brings them back`);
+    } else if (_aside) {
+      _selection = _aside.selection.filter(i => i < n);
+      _aside.pins.filter(i => i < n).forEach(i => _pinned.add(i));
+      _prevPins = [..._pinned];
+      _aside = null;
+      selectionChanged();
+      pinsChanged();
+      status(`back: ${[_selection.length ? `${_selection.length} selected` : '', _pinned.size ? `${_pinned.size} pinned` : ''].filter(Boolean).join(', ') || 'nothing (the notes they were on are gone)'}`);
+    } else {
+      status('nothing selected or pinned to set aside');
+    }
   }
 
   /** Each pin to where its event went (null: the event is gone) */
@@ -494,7 +581,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   function settleSelection() {
     const w = _working!;
     _working = null;
-    const { bloom, sel, moved } = mergeSelection(w.full, w.sel, w.extracted, state.bloom);
+    const { bloom, sel, moved } = mergeSelection(w.full, w.sel, w.extracted, state.bloom, w.selection.length > 0);
     state.bloom.import(bloom);
     _pinned.clear();
     for (const i of w.pinned) { const to = moved.get(i); if (to !== undefined) _pinned.add(to); }
@@ -645,10 +732,10 @@ export function createKeyHandler(state: KeyHandlerState) {
     const names = (pcs: number[]) => [...pcs].sort((a, b) => a - b).map(spell).join(' ');
     const notes = s ? names(s.degrees) : '';
     const raga = s?.root !== undefined;
-    const key = s ? (s.root ?? s.tonic ?? keyRootOf(s.degrees)) : null;
+    const key = s ? scaleKey(s) : null;
     const keyStr = key === null ? 'no key' : `${raga ? 'Sa' : 'key'} ${spell(key)}`;
     const forms = s?.up && s.down ? ` · rising ${names(s.up)}, falling ${names(s.down)} (each note sounds in the form of the step it takes next)` : '';
-    badge.textContent = s ? `♮ ${s.name || notes} · ${keyStr}` : '';
+    badge.textContent = s ? `♮ ${scaleTitle(s) || notes} · ${keyStr}${state.bloom.frozen.pitch ? ' ❄' : ''}` : '';
     badge.title = s ? `${raga ? 'raga' : 'scale'} attached: ${notes}${forms} — ${keyStr}: a tuning's root sits ${key === null ? 'on C' : 'there'} (click to choose one by name; k / K / j / J change it by ear; with none attached the bloom is chromatic and the root is C)` : '';
     badge.classList.toggle('active', s !== null);
 
@@ -695,11 +782,14 @@ export function createKeyHandler(state: KeyHandlerState) {
     if (isLooping() || isPulsing()) state.bloom.resolveFixed();
     if (_pinned.size && hold && !settled) holdPins();   // the palette's changes
     syncTuning();
+    const carried = carryToOther();
+    if (carried.length) msg = `${msg}${msg ? ' · ' : ''}${otherName()} too: ${carried.join(', ')}`;
     const what = record();
     if (_pinned.size) pinsChanged();
     if (what) _notice?.setDetail(msg, what);
     if (state.viz) state.viz.setBloom(state.bloom);
     updateLengthsBadge();
+    updateRhythmBadge();
     markOnScreen();
     if (state.display) state.display.update(state.bloom, state.garden, msg);
     updateLooper(state.bloom);
@@ -783,6 +873,7 @@ export function createKeyHandler(state: KeyHandlerState) {
           case 'low': return evs.map(ev => Math.min(...flat(ev.note)));
         }
       },
+      pcs: () => b.events().map(ev => [...new Set(flat(ev.note).map(p => ((p % 12) + 12) % 12))]),
       set: (sel, msg) => {
         select(sel);
         status(`[select] ${msg}: ${_selection.length} of ${b.notes.length}`);
@@ -855,11 +946,24 @@ export function createKeyHandler(state: KeyHandlerState) {
     updateFreezeBadge();
   }
 
+  /** The duration palette the times are held in (time mode k), beside the key: ♩ swing */
+  function updateRhythmBadge() {
+    const badge = document.getElementById('rhythm-badge');
+    if (!badge) return;
+    const b = state.bloom;
+    const r = b.frozen.time ? b.frozen.rhythm : undefined;
+    badge.textContent = r && b.frozen.time ? `♩ ${r.name} · basis ${ratioText(r.pulse)} · ${b.frozen.time.map(t => ratioText(t / r.pulse)).join(', ')}` : '';
+    badge.title = r && b.frozen.time
+      ? `duration palette: ${b.frozen.time.map(t => ratioText(t / r.pulse)).join(' ')} of its basis, ${ratioText(r.pulse)} of a beat. It repeats by octaves, as a scale does (its durations halved and doubled), and the times stay on it whatever the keys do. In time mode: 3 4 walk up and down that scale; # $ m n l L i - = move among these; 1 2 ! @ move the basis; k chooses another, K the next; F t lets go`
+      : '';
+    badge.classList.toggle('active', !!r);
+  }
+
   /** Show what's frozen in the header, e.g. ❄ p t g */
   function updateFreezeBadge() {
     const badge = document.getElementById('freeze-badge');
     if (!badge) return;
-    const on = FREEZE_ITEMS.filter(isFrozen).map(f => f.key === 'd' ? `d:${durMode() === 'scale' ? 'stretch' : 'trim'}` : f.key);
+    const on = FREEZE_ITEMS.filter(f => !f.link && isFrozen(f)).map(f => f.key === 'd' ? `d:${durMode() === 'scale' ? 'stretch' : 'trim'}` : f.key);
     // in the menu: F, then what's frozen so far (or a ? when nothing is)
     if (_pinned.size) on.push(`e${_pinned.size}`);
     badge.textContent = _freezeMenu ? `F ❄ ${on.length ? on.join(' ') : '?'}` : on.length ? `❄ ${on.join(' ')}` : '';
@@ -901,7 +1005,13 @@ export function createKeyHandler(state: KeyHandlerState) {
       box.checked = !box.checked;
       box.dispatchEvent(new Event('change'));   // main.ts applies it, as for a click (the lock, below)
       updateFreezeBadge();
-      refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
+      if (!f.link) refresh(`${f.name} ${box.checked ? 'frozen' : 'unfrozen'}`);
+      if (f.link) {
+        status(box.checked
+          ? `linked: key, centre, time basis and tuning in common; change one in either voice and both change${_voices ? '' : ' (once there are two voices: opt-tab)'}`
+          : 'unlinked: each voice its own key, centre, basis and tuning');
+        return;
+      }
       status(f.key === 'l'
         ? box.checked ? `held to the other voice's length ❄${_voices ? ` (${otherName()}: ${_voices.other.bloom.passDur()} beats)` : ', once there are two voices (opt-tab)'}` : 'length free of the other voice'
         : `${f.name} ${box.checked ? 'frozen ❄' : 'unfrozen'}`);
@@ -939,10 +1049,64 @@ export function createKeyHandler(state: KeyHandlerState) {
   document.querySelectorAll('.freeze-palette, #fixed-dur-enabled, #fixed-dur-mode, #fixed-grid-enabled, #voice-lock')
     .forEach(el => el.addEventListener('change', updateFreezeBadge));
 
+  /** The free events a key works on when some are selected or pinned (null: all of them) */
+  function scopeNow(): number[] | null {
+    const sel = _working ? _working.selection : _selection;
+    const pinned = _working ? new Set(_working.pinned) : _pinned;
+    if (!sel.length && !pinned.size) return null;
+    const n = (_working?.full ?? state.bloom).notes.length;
+    return (sel.length ? sel : Array.from({ length: n }, (_, i) => i)).filter(i => !pinned.has(i));
+  }
+
+  /**
+   * ↵ in a list mode with events selected (or some pinned): the list's values
+   * on just those events, as a sublist to type over. What's typed goes onto
+   * them in order, read round if it's shorter; the list is first spelled out
+   * as long as the notes, so the other events keep what they had.
+   */
+  function typeTheSublist(m: ListMode, tag: string, sel: number[]): boolean {
+    const k = LIST_OF_MODE[m];
+    /** the bloom with the list one value per note, and the selected events lifted out of it */
+    const lift = () => {
+      const full = snapshotOf(_working?.full ?? state.bloom);
+      const n = full.notes.length;
+      const list = full.getList(k);
+      if (list.length !== n) {
+        full.setList(k, Array.from({ length: n }, (_, i) => (list.length ? JSON.parse(JSON.stringify(list[i % list.length])) : 0)) as never);
+      }
+      return { full, sub: extractSelection(full, sel) };
+    };
+    const count = sel.length;
+    state.typeList!(`${MODE_NAME[m]}, ${count} selected:`, listAsText(lift().sub, m).text, text => {
+      const { full, sub } = lift();
+      const worked = sub.snapshot();
+      const problem = listAsText(worked, m).set(text);
+      if (problem) return problem;
+      const got = worked.getList(k);
+      if (!got.length) return 'type at least one value';
+      worked.setList(k, Array.from({ length: count }, (_, i) => JSON.parse(JSON.stringify(got[i % got.length]))) as never);
+      state.bloom.import(mergeSelection(full, sel, sub, worked).bloom);
+      const msg = `${tag} typed onto ${count} selected: ${listAsText(worked, m).text}`;
+      status(msg);
+      refresh(msg, false);
+      return null;
+    });
+    return true;
+  }
+
   /** ↵ in a list mode: the list as text to type over (shift-↵: what was typed, round and round, as long as the notes) */
   function typeTheList(m: ListMode, tag: string): boolean {
     if (!state.typeList) return false;
+    // with events selected or pinned, what's typed is a sublist for the free ones; but with only
+    // pins, a list that phases against the notes is typed as it's written (selection.ts)
     const b = state.bloom;
+    const selecting = (_working ? _working.selection : _selection).length > 0;
+    const pinsHold = typedAsWritten(selecting, b.getList(LIST_OF_MODE[m]).length, b.notes.length, _pinned.size);
+    const scope = pinsHold ? null : scopeNow();
+    if (scope) {
+      if (!scope.length) { status(`${tag} every selected event is pinned`); return true; }
+      return typeTheSublist(m, tag, scope);
+    }
     const typed = listAsText(b, m);
     const extra = listFields(b, m);
     state.typeList(`${MODE_NAME[m]}:`, typed.text, (text, complete, values) => {
@@ -951,6 +1115,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       const problem = typed.set(text);
       if (problem) return problem;
       extra?.set(values);
+      const letGo = m === 'time' ? b.releaseTimesIfOutside() : '';
       if (complete) {
         const want = b.notes.length;
         const list = b.getList(LIST_OF_MODE[m]);
@@ -959,7 +1124,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       const how = m === 'fig' ? ` · ${b.figureTime}${b.figureTime !== 'divide' ? ` ${b.figureDurs.join(' ')}` : ''} · vel ${b.figureVel}%`
         : m === 'iv' ? ` · vel ${b.intervalVel}%`
         : m === 'time' && b.gates.some(g => g !== 1) ? ` · lengths ${b.gates.join(' ')}` : '';
-      const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}`;
+      const msg = `${tag} typed${complete ? ', looped to the notes' : ''}: ${listAsText(state.bloom, m).text}${how}${letGo ? ` · ${letGo} let go: the times no longer fit it` : ''}${pinsHold ? ' · as written: pins hold the lists in step with the notes' : ''}`;
       status(msg);
       refresh(msg, false);
       return null;
@@ -987,6 +1152,7 @@ export function createKeyHandler(state: KeyHandlerState) {
       status, say,
       apply: (msg, fn) => { status(`${tag} ${msg}`); fn(); refresh(`${tag} ${msg}`); },
       askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
+      askBeats: (label, now, act) => askBeats(e, label, now, act),
       memo: _memo,
       other: () => (_voices ? { bloom: _voices.other.bloom, name: otherName() } : null),
       pattern: again => patternKey(e, LIST_OF_MODE[m], again, `the ${MODE_NAME[m]} list`, `${tag} `),
@@ -1084,13 +1250,17 @@ export function createKeyHandler(state: KeyHandlerState) {
       return;
     }
     // cmd-c / cmd-v: copy the selected events (or all), paste them after the selection (or at the end)
-    if ((e.metaKey || e.ctrlKey) && (e.code === 'KeyC' || e.code === 'KeyV') && !e.altKey && !e.shiftKey) {
+    // cmd-shift-v: paste them as a figure starting on each selected note
+    if ((e.metaKey || e.ctrlKey) && (e.code === 'KeyC' || e.code === 'KeyV') && !e.altKey && (!e.shiftKey || e.code === 'KeyV')) {
       e.preventDefault();
-      if (e.code === 'KeyC') copyEvents(); else pasteEvents();
+      if (e.code === 'KeyC') copyEvents(); else if (e.shiftKey) pasteFigure(); else pasteEvents();
       return;
     }
     // Ignore if modifier keys other than shift/option are active (e.g. Ctrl+R)
     if (e.ctrlKey || e.metaKey) return;
+    // keys that work in every mode (opt-r: the selection and pins off and on)
+    const any = findHome(e);
+    if (any?.anywhere) { e.preventDefault(); any.act(homeCtx(e, keyChar(e))); return; }
     _notice?.begin();
     // A modifier pressed on its own is only the start of a chord (shift for F)
     if (isModifierKey(e)) return;
@@ -1164,12 +1334,13 @@ export function createKeyHandler(state: KeyHandlerState) {
         }, beatsToMs(src.dur()) + 200);
       },
       askCount: (label, last, act, max, min) => askCount(e, label, last, act, max, min),
+      askBeats: (label, now, act) => askBeats(e, label, now, act),
       pattern: again => patternKey(e, 'events', again, 'the notes'),
       memo: _memo,
       onLoopCycle: loopCycle,
       voices: { on: () => !!_voices, toggle: toggleVoices, flip: flipVoice, duplicate: duplicateVoice, stopOther: stopOtherVoice },
       leaveListMode: () => { if (_mode) setListMode(null); },
-      toggleHold, setClean, newBloomTuning,
+      toggleHold, toggleMarks, setClean, newBloomTuning,
       selection: () => _selection,
       pins: () => _pinned,
       select, clearSelection, clearPins, invertPins, movePins,
@@ -1271,7 +1442,7 @@ export function createKeyHandler(state: KeyHandlerState) {
   let _meetFlashAt = 0;
   /** "A · B", ↻ when the other loops, and where the two loops meet */
   function badgeText(): string {
-    return _voices ? `${focusName()} · ${otherName()}${isParkedLooping(otherName()) ? ' ↻' : ''}${meetingText()}` : '';
+    return _voices ? `${focusName()} ${_links.size ? '⇄' : '·'} ${otherName()}${isParkedLooping(otherName()) ? ' ↻' : ''}${meetingText()}` : '';
   }
   function meetingText(): string {
     const m = _voices ? nextMeeting() : null;
@@ -1304,6 +1475,38 @@ export function createKeyHandler(state: KeyHandlerState) {
     state.bloom.heldDur = _voices && on ? _voices.other.bloom.passDur() : false;
   }
   document.getElementById('voice-lock')?.addEventListener('change', syncLock);
+
+  // ─── Links (F k h b u): the key, its centre, the time basis, the tuning held in common ──
+  // Only the focused voice is changed by a key: after each change, what moved
+  // in it is carried to the other (refresh → carryLinks). Linking makes the
+  // other voice take the focused one's at once.
+
+  /** After a change: carry what moved in the focused voice to the other. Returns what was carried */
+  function carryToOther(): string[] {
+    if (!_voices || !_links.size) { _linkSeen = null; return []; }
+    const was = _linkSeen?.voice === focusName() ? _linkSeen.state : null;
+    let moved: string[] = [];
+    if (was) {
+      const o = _voices.other;
+      moved = carryLinks(state.bloom, was, o.bloom, _links);
+      if (moved.length) { o.holds = o.bloom.holds(); state.ghost?.setBloom(o.bloom); }
+    }
+    _linkSeen = { voice: focusName(), state: linkState(state.bloom) };
+    return moved;
+  }
+
+  document.getElementById('voice-link')?.addEventListener('change', e => {
+    const on = (e.target as HTMLInputElement).checked;
+    _links.clear();
+    if (on) LINK_KEYS.forEach(k => _links.add(k));
+    if (on && _voices) {
+      const o = _voices.other;
+      // the other voice takes this one's key, centre, basis and tuning at once
+      if (LINK_KEYS.map(k => linkNow(state.bloom, o.bloom, k)).some(Boolean)) { o.holds = o.bloom.holds(); state.ghost?.setBloom(o.bloom); }
+      _linkSeen = { voice: focusName(), state: linkState(state.bloom) };
+    }
+    voicesShown();
+  });
 
   function toggleVoices(): void {
     if (_voices) {

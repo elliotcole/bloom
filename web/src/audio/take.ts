@@ -18,7 +18,9 @@ import { setMidiTap, onMidiMessage, isNoteOn } from './midi';
 import type { MidiOutput } from './midi';
 import { setTuningTap, tuningNow, setReplaying, replayHelper, replayPiano } from './tuningOut';
 import { every, HIDDEN_LOOKAHEAD_MS, pageHidden } from './clock';
+import { pictureLag } from './lag';
 import { takeFrom, dueAfter, due } from './takeFrom';
+import { takeToMusicXML } from '../io/musicxml';
 
 const HOLD_MS = 10_000;        // what's sounding at the stop rings this long
 const DELAY_MS = 40;           // a replay sends each message this far ahead of its time
@@ -413,11 +415,11 @@ function run(take: TakeFile, host: TakeHost, fromMs: number): void {
         case 'p': replayPiano(e[2] < 0 ? null : take.tables[e[2]]); break;   // before the notes after it, as it went
         case 'b': { const [, , ix, trace, main] = e; later(at, () => host.show(bloomAt(ix), trace === 1, main === 1)); break; }
         case 'g': { const g = take.gardens[e[2]]; later(at, () => host.garden(g.slots.map(s => (s < 0 ? null : bloomAt(s))), g.cursor)); break; }
-        case 'n': { const [, , ix, t] = e; later(at, () => host.light(ix, t)); break; }
+        case 'n': { const [, , ix, t] = e; later(at + pictureLag(out), () => host.light(ix, t)); break; }
         case 'x': later(at, () => host.dark()); break;
         case 'a': { const [, , kind, ix] = e; later(at, () => host.animate(kind, ix < 0 ? null : bloomAt(ix))); break; }
         case 'v': { const ix = e[2]; later(at, () => host.other?.show(ix < 0 ? null : bloomAt(ix))); break; }
-        case 'w': { const [, , ix, t] = e; later(at, () => host.other?.light(ix, t)); break; }
+        case 'w': { const [, , ix, t] = e; later(at + pictureLag(out), () => host.other?.light(ix, t)); break; }
         case 'y': later(at, () => host.other?.dark()); break;
       }
     }
@@ -451,15 +453,27 @@ export function saveTakeFile(): boolean {
   if (!_take) return false;
   _take.saved = true;
   keep(_take);
-  const blob = new Blob([JSON.stringify(_take)], { type: 'application/json' });
+  download(new Blob([JSON.stringify(_take)], { type: 'application/json' }), `${takeName(_take)}.bloomtake`);
+  return true;
+}
+
+/** The last take written out as a score for piano (io/musicxml); the number of bars, or 0 with no take */
+export function saveTakeScore(): number {
+  if (!_take) return 0;
+  const xml = takeToMusicXML(_take);
+  download(new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }), `${takeName(_take)}.musicxml`);
+  return xml.split('<measure ').length - 1;
+}
+
+const takeName = (t: TakeFile) => `take-${new Date(t.recordedAt).toISOString().slice(0, 16).replace(/T/, '-').replace(/:/g, '')}`;
+
+function download(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const ts = new Date(_take.recordedAt).toISOString().slice(0, 16).replace(/T/, '-').replace(/:/g, '');
-  a.download = `take-${ts}.bloomtake`;
+  a.download = name;
   a.click();
   URL.revokeObjectURL(url);
-  return true;
 }
 
 /** Make a take read from a file the last take (one cut short is ended where it stops) */
