@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bloom Editor</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        background: #0a0a0f;
+        color: #ccc;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 11px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        user-select: none;
+      }
+      [hidden] { display: none !important; }
+
+      header {
+        flex: none;
+        display: flex; align-items: baseline; gap: 16px;
+        padding: 8px 12px 6px;
+        white-space: nowrap;
+      }
+      #title { color: #667; letter-spacing: 2px; }
+      #name { color: #dde; }
+      #totals { color: #889; font-variant-numeric: tabular-nums; }
+      #out {
+        background: #0a0a0f; color: #99a; border: 1px solid #334; border-radius: 3px;
+        font: inherit; padding: 1px 4px; max-width: 220px;
+      }
+      #status { color: #ecc878; margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+
+      #stage { flex: 1; min-height: 0; position: relative; }
+      #editor-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+      footer { flex: none; padding: 6px 12px 8px; white-space: nowrap; overflow: hidden; }
+      #readout { color: #dde; min-height: 15px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+      #cue { color: #667; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+
+      #ask {
+        position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 12px;
+        background: #14141c; border: 1px solid #445; border-radius: 4px;
+      }
+      #ask-label { color: #99a; }
+      #ask-input {
+        width: 260px;
+        background: none; border: none; outline: none;
+        color: #fff; font: inherit;
+      }
+
+      #empty {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+        color: #889; cursor: pointer;
+      }
+      #empty b { color: #dde; font-weight: normal; }
+      #empty-last { color: #ecc878; min-height: 15px; }
+
+      #help {
+        position: absolute; inset: 0;
+        overflow: auto;
+        padding: 20px 28px;
+        background: rgba(10, 10, 15, 0.94);
+        user-select: text;
+      }
+      #help-body { columns: 2 380px; column-gap: 40px; max-width: 1100px; }
+      #help h3 { color: #889; font-weight: normal; letter-spacing: 2px; margin: 0 0 6px; }
+      #help table { border-collapse: collapse; margin-bottom: 18px; break-inside: avoid; }
+      #help td { padding: 2px 14px 2px 0; vertical-align: top; color: #aab; line-height: 1.5; }
+      #help td:first-child { white-space: nowrap; }
+      #help b { color: #fff; font-weight: normal; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span id="title">bloom editor</span>
+      <span id="name"></span>
+      <span id="totals"></span>
+      <select id="out" title="where it plays: the built-in piano, or a MIDI port (an IAC bus, to a DAW)"></select>
+      <span id="status"></span>
+    </header>
+    <div id="stage">
+      <canvas id="editor-canvas"></canvas>
+      <div id="empty">
+        <div>drop a take here (<b>.bloomtake</b>), or click, or <b>⌘O</b></div>
+        <div id="empty-last"></div>
+        <div><b>?</b> the keys</div>
+      </div>
+      <div id="help" hidden><div id="help-body"></div></div>
+      <div id="ask" hidden><span id="ask-label"></span><input id="ask-input" type="text" spellcheck="false" autocomplete="off"></div>
+    </div>
+    <footer>
+      <div id="readout"></div>
+      <div id="cue"></div>
+    </footer>
+    <input id="file" type="file" accept=".bloomtake,.bloomedit,.json,application/json" multiple hidden>
+    <script type="module" src="/src/editor.ts"></script>
+  </body>
+</html>

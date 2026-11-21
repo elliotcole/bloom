@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         player: resolve(import.meta.dirname, 'player.html'),
+        editor: resolve(import.meta.dirname, 'editor.html'),
       },
     },
   },

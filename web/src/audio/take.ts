@@ -274,7 +274,7 @@ function sorted(f: TakeFile): TakeFile {
   return { ...f, events: f.events.map((e, i) => [e, i] as const).sort((a, b) => a[0][0] - b[0][0] || a[1] - b[1]).map(x => x[0]) };
 }
 
-function lastTime(f: TakeFile): number {
+export function lastTime(f: TakeFile): number {
   return f.events.reduce((m, e) => Math.max(m, due(e)), 0);
 }
 
@@ -549,7 +549,7 @@ function get<T>(d: IDBDatabase, key: string): Promise<T | null> {
 }
 
 /** The last take; or one the page went in the middle of, if that's newer */
-async function loadKept(): Promise<TakeFile | null> {
+export async function loadKept(): Promise<TakeFile | null> {
   try {
     const d = await db();
     const last = await get<TakeFile>(d, KEY);

@@ -1,0 +1,52 @@
+/* The command palette (ui/commandPalette.ts): Bloom's page and the editor's */
+
+#cmd-palette {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 400;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 16vh;
+}
+#cmd-palette.open { display: flex; }
+
+#cp-box {
+  background: #0c0c18;
+  border: 1px solid #2a2a44;
+  width: min(500px, 92vw);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-hint { font-size: 9px; color: #445; }
+.cp-input {
+  background: #07070f;
+  border: 1px solid #252540;
+  color: #9ab;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+}
+.cp-input:focus { border-color: #44588a; }
+.cp-suggest { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+.cp-sug {
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  color: #556;
+}
+.cp-sug:hover, .cp-sug.active { background: #14142a; }
+.cp-sug-name  { flex: 0 0 130px; color: #7ab; }
+.cp-sug.active .cp-sug-name { color: #acd; }
+.cp-sug-desc  { font-size: 10px; color: #445; }
+.cp-status { font-size: 10px; min-height: 13px; color: transparent; }
+.cp-status--err { color: #a55; }
+.cp-status--ok  { color: #5a9; }

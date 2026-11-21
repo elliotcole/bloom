@@ -985,12 +985,103 @@ tunings, play a keyboard along), and the take keeps it all.
     is a fermata marked with its seconds.
   - **Key and tuning:** the key signature follows the scale on screen. Tuning
     is left out.
+- **edit…** opens the editor in another tab (below).
 
 Nothing is worked out again when a take plays, so randomness, tempo and
 timing are exactly as they were. The other side of that: a take keeps its
 tempo, tunings and notes, and the MIDI output is the one chosen when it
 plays. Keyboard notes come out of Bloom's output on the channel they were
 played on.
+
+## The editor: `/editor`
+
+A separate page (`editor.html`; perform ▾ → take → **edit…** opens it) for
+working on a whole take: going through it, marking it, cutting it, down to
+single notes, and working it with Bloom's own verbs. Drop a
+`.bloomtake` on it, or press ↵ to open Bloom's last take. `?` lists its keys.
+It has its own keyboard; none of Bloom's keys apply there.
+
+- **Two strips.** The top one is always the whole performance on the clock:
+  where the notes lie, the pace (onsets a second), the loudness, the flags,
+  and a bracket round the stretch shown below. The lower one is that stretch
+  as notes. A line marks where each pass begins: dotted when the bloom is the
+  same as the pass before, faint when only its other lists changed, heavier
+  when some notes changed, and heaviest when most did.
+- **Moving.** ← → go by pass, opt-← → to where the bloom changes, `[` `]` to a
+  flag, `g` to a time or a pass number. ↑ ↓ show less or more of the clock;
+  `0` shows all of it. Clicking either strip puts the cursor there.
+- **Playing.** space plays from the cursor on the built-in piano, and the
+  cursor goes with it; moving while it plays goes on from there. With a
+  selection it plays the selection and stops. shift-space starts two passes
+  back, to hear a join.
+- **Selecting.** shift with any move. `s` selects the section the cursor is
+  in, from its flag to the next. `r` selects the run of passes round the
+  cursor that play the same bloom.
+- **Note mode.** ↵ goes from passes to their notes, at the first onset of
+  the cursor pass (a chord is one onset); a pass too narrow to see into is
+  shown closer. ← → go by onset, straight on through the passes, and opt-← →
+  to the first onset of the pass before or after; shift with any of them
+  selects. esc lets a note selection go, and with none goes back to passes.
+  space plays from the note cursor (a selection: plays it and stops),
+  shift-space from a little before. The foot says which onset of which pass
+  it is, when, its pitches, its velocity and the gap to the next. Every edit
+  below works on the notes selected (or the onset under the cursor) as it
+  does on passes; a pass is only where the bloom changed, not a wall.
+- **Deleting and silencing.** `x` takes the selection (or the pass, or the
+  onset, under the cursor) out and closes the gap: what follows moves up.
+  `d` silences it instead: its notes go and the time stays, a rest where
+  they were. cmd-Z brings either back, selected.
+- **Pitch.** `1` and `2` move the selection a semitone down and up, `!` and
+  `@` an octave, the keys Bloom uses. Pressed again on the same selection
+  they go further as one edit, so one cmd-Z takes the whole move back. `p`
+  types the pitches for its onsets in turn, over and over, as MIDI numbers or
+  names as the foot writes them (`60 64 67`, `C4 E4 G4`, `Eb4`); a chord
+  moves whole, its lowest note to the pitch.
+- **Shapes.** `c` changes the loudness of the selection (or the pass under
+  the cursor) and `a` its pace, both typed as percentages spread evenly
+  across it and joined by straight lines: `100` leaves it as played, `60 100`
+  gets louder (or faster) all the way, `60 100 80` rises then falls. A change
+  of pace moves everything after it up or back.
+- **Patterns.** `v` sets the velocities of the selection's onsets in turn
+  from a list typed in (`100 60 80 60`), over and over, counting straight on
+  through the passes, so the joins between them go. In a chord the loudest
+  note takes the value and the others keep their proportion to it. `t` does
+  the same for the timing, in seconds as Bloom's time lists are
+  (`0.25 0.25 0.5`): the gap from each onset to the next; what follows moves
+  up or back. With 16 onsets or fewer, `v`, `t` and `p` start with what the
+  selection has now, to change rather than type out.
+- **Bloom's verbs.** cmd-K opens Bloom's own palette over the selected
+  passes (in note mode, the pass under the note cursor): `scramble`,
+  `up12`, `mirror.softer`, any of them. Each pass is made a bloom from what
+  sounds in it, keeping its bloom's scale, key and ranges, the verbs run on
+  it, and it comes back as notes in its place, as long as its new time list
+  says. Passes that sound the same come out the same, so `r` then cmd-K
+  works a whole run of repeats as one, even with a verb that throws dice;
+  with no repeats, each pass is its own. It is one edit, which one cmd-Z
+  takes back. A reworked pass names the bloom it now plays, which goes with
+  it into a take written out (its picture in Bloom) and a score (its key).
+- **Copy and paste.** cmd-C copies the selection of the lane you're in,
+  cmd-X copies and deletes it. cmd-V puts it in before the cursor and moves
+  what follows on; with a selection, in its place. `V` lays only its
+  velocities over the selection, `T` only its timing (the gaps between its
+  onsets), each over and over if the selection is longer. A prompt that
+  doesn't start with what the selection has now starts with what you last
+  typed there.
+- **Flags.** `m` names the pass under the cursor; `M` takes the flag away.
+- **Two voices.** Each has its own lane and its own passes; tab changes
+  lane. `x` cuts from the lane you're in, so what follows moves against the
+  other voice. `X` cuts the same stretch of the clock from both. Shapes,
+  patterns, pitches, silences, pastes and Bloom's verbs work on the lane
+  you're in too; tab from note mode goes back to passes.
+- **Files.** The take is never changed. cmd-S saves what you've done as a
+  small `.bloomedit` file to keep beside it; open the take, then the edit, to
+  go on. cmd-E writes the edited performance as a new `.bloomtake`, to play
+  in Bloom; shift-cmd-E writes it as a score. The open take and its edits
+  are also kept in the browser, so a reload loses nothing.
+
+The numbers at the foot are the pass as it stands now. After a cut, "as
+recorded" gives the number it had in the take, which is its bar in a score
+made before the cut.
 
 ## Command palette: cmd-K
 
