@@ -169,13 +169,17 @@ export function shown(chord: string): string {
 
 const GROUPS: [Key['group'], string][] = [['move', 'moving'], ['select', 'selecting'], ['notes', 'notes'], ['edit', 'editing'], ['view', 'the view'], ['file', 'files']];
 
-/** The help: every key by group, a pair of keys that go opposite ways on one line */
+/** The guide's section on the editor (the same guide the bloom's ? links to) */
+export const GUIDE_URL = 'https://github.com/elliotcole/bloom/blob/main/web/GUIDE.md#the-editor-editor';
+
+/** The help: every key by group, a pair of keys that go opposite ways on one line, and the guide */
 export function helpHtml(): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  return GROUPS.map(([g, title]) => {
+  const groups = GROUPS.map(([g, title]) => {
     const rows = KEYS.filter(k => k.group === g).map(k => `<tr><td>${k.chord.map(c => `<b>${esc(shown(c))}</b>`).join(' ')}</td><td>${esc(k.does)}</td></tr>`);
     return `<h3>${title}</h3><table>${rows.join('')}</table>`;
   }).join('');
+  return `${groups}<p class="help-links"><a href="${GUIDE_URL}" target="_blank" rel="noopener">the guide</a></p>`;
 }
 
 /** The cue line for a level: the keys worth having in view there */

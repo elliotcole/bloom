@@ -534,7 +534,7 @@
         /* Font scales to fill the window:
            Width: 4 cols × 38-char lines + 3 gaps + 112px overhead (56px overlay + 56px padding) ≈ 100·em + 112px
            Height: tallest col = ~38 content line-heights + 56px fixed overhead */
-        font-size: min(calc((100vw - 112px) / 100), calc((100vh - 56px) / 38));
+        font-size: min(calc((100vw - 112px) / 100), calc((100vh - 80px) / 38));   /* 80: the overhead and the links line */
         gap: 0 2.9em;
         align-content: start;
       }
@@ -556,6 +556,9 @@
         white-space: pre;
       }
       .hf-body b { color: #9bc; font-weight: normal; }
+      /* outside the sections, so every mode's help has it */
+      #help-links { margin-top: 10px; font-size: 11px; color: #555; }
+      #help-links a { color: #9bc; }
       /* a mode or menu shows one section: it gets the whole width (a list mode's, in two columns) */
       body.list-mode #help-full-grid, body.help-tuning #help-full-grid, body.help-freeze #help-full-grid, body.help-select #help-full-grid { grid-template-columns: 1fr; }
       body.list-mode #hf-list-sec .hf-body { column-count: 2; column-gap: 4em; }
@@ -1283,12 +1286,12 @@ playback &amp; garden keys unchanged</div>
 <b>del</b>      delete the selected events
 <b>cmd-c v</b>  copy / paste, each after its place
 <b>cmd-shift-v</b> paste as a figure on the selected notes
-<b>opt-r</b>    selection and pins off / back on
-<a href="/cheatsheet.pdf" target="_blank" rel="noopener" style="color:inherit">printable cheat sheet (PDF)</a></div>
+<b>opt-r</b>    selection and pins off / back on</div>
           </div>
         </div>
 
       </div>
+      <div id="help-links"><a href="https://github.com/elliotcole/bloom/blob/main/web/GUIDE.md" target="_blank" rel="noopener">the guide</a> · <a href="/cheatsheet.pdf" target="_blank" rel="noopener">printable cheat sheet (PDF)</a></div>
     </div>
 
     <footer id="footer">focus window and press any key · space to play</footer>

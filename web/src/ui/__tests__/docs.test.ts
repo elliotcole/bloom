@@ -222,3 +222,26 @@ describe('esc on the cue line', () => {
     expect(cueFor(ctx({ freezeMenu: true })).text).toContain('F or esc closes');
   });
 });
+
+// ─── The guide from every help ───────────────────────────────────────────────
+
+describe('the guide is a click away from every help', () => {
+  const GUIDE = 'https://github.com/elliotcole/bloom/blob/main/web/GUIDE.md';
+  it('the ? overlay links it outside the sections, so a mode that shows one section still has it', () => {
+    const page = here('../../../index.html');
+    const help = page.slice(page.indexOf('<div id="help-full">'), page.indexOf('<footer id="footer">'));
+    const links = help.slice(help.indexOf('<div id="help-links">'));
+    expect(links).toContain(`href="${GUIDE}"`);
+    expect(links).not.toContain('hf-sec');
+    expect(help.lastIndexOf('class="hf-sec"')).toBeLessThan(help.indexOf('<div id="help-links">'));
+  });
+  it("the editor's help links its section, and the guide has that heading", async () => {
+    const { GUIDE_URL, helpHtml } = await import('../../editor/keys');
+    expect(GUIDE_URL.startsWith(`${GUIDE}#`)).toBe(true);
+    expect(helpHtml()).toContain(`href="${GUIDE_URL}"`);
+    // GitHub's anchor for a heading: lower case, punctuation gone, spaces to hyphens
+    const anchors = here('../../../GUIDE.md').split('\n').filter(l => /^#+ /.test(l))
+      .map(l => l.replace(/^#+ /, '').toLowerCase().replace(/[^\w\- ]/g, '').replace(/ /g, '-'));
+    expect(anchors).toContain(GUIDE_URL.split('#')[1]);
+  });
+});
