@@ -4,7 +4,7 @@ import { carryLinks, linkNow, linkState, LINK_KEYS } from '../core/voiceLinks';
 import type { LinkKey, LinkState } from '../core/voiceLinks';
 import { Bloom } from '../core/Bloom';
 import {
-  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, rebase, recentre, rotateAlterations, stepAlterations,
+  alterText, alterationsOf, breezeAlterations, clearAlterations, commaOf, isAltered, toggleAlterations, editable, oneOneOnto, rebase, rotateAlterations, stepAlterations,
 } from '../lib/tuning';
 import type { CommaId, Tuning } from '../lib/tuning';
 import type { ListKey, NoteEvent, IntervalVal, Holds } from '../core/Bloom';
@@ -686,25 +686,22 @@ export function createKeyHandler(state: KeyHandlerState) {
   }
 
   /**
-   * opt-k in tuning mode: the selected slice becomes 1/1 and turns to the top,
-   * every interval kept (none selected: the next slice up; shift: the one
-   * below). Its note becomes the key centre when the root follows the key and
-   * the scale has it; otherwise the tuning's root is set to it by hand.
+   * opt-k in tuning mode: the 1/1 onto the selected slice's note (none
+   * selected: the next slice up; shift: the one below). The pie and its
+   * ratios stay as they are; the letters turn round it. The key centre moves
+   * there when the root follows the key and the scale has the note; otherwise
+   * the tuning's root is set to it by hand.
    */
   function recentreKey(shift: boolean) {
     const view = state.tuningView!;
     const own = soundingTuning(state.bloom);
     if (!own) { status('12-TET: every slice is alike, nothing to turn'); return; }
-    const t = editable(own);
-    const root = soundingRoot(state.bloom);
     const d = view.picked()[0] ?? (shift ? 11 : 1);
-    const pc = (root + d) % 12;
-    const next = recentre(t, d);
-    const follows = (t.root === undefined || t.root === null) && !(isHeld() && holdRoot() === 'fixed');
-    if (follows && state.bloom.appliedScale?.degrees.includes(pc)) state.bloom.centreOn(pc);
-    else next.root = pc;
+    const follows = (own.root === undefined || own.root === null) && !(isHeld() && holdRoot() === 'fixed');
+    const { tuning, pc, centre } = oneOneOnto(own, soundingRoot(state.bloom), d, state.bloom.appliedScale?.degrees ?? null, follows);
+    if (centre) state.bloom.centreOn(pc);
     view.clearPick();
-    commitTuning(next, `1/1 on ${spell(pc)}: ${t.name} turned, every interval kept`);
+    commitTuning(tuning, `1/1 on ${spell(pc)}${centre ? ' (the key centre)' : ''}: ${own.name}, every ratio as it was`);
   }
 
   /** opt-t: hold the sounding tuning over every bloom, or give each bloom its own back */

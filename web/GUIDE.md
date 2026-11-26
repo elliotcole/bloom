@@ -269,7 +269,7 @@ library stays in this browser.
     | `#` `$` | breeze: a few notes a comma down / up |
     | `2` | clear: back to the tuning as it came (alterations gone, and any note moved by **=** or **set** back where the library's copy has it) |
     | `1` | switch all the alterations off (the base sounds; they're kept) and on again; any change to them switches them on |
-    | opt-`k` | key centre: the selected slice becomes 1/1 and turns to the top, every interval kept (none selected: the next slice up; shift: the one below). The tuning is written again from there (its ratios over the new 1/1, the alterations relative to it), and its note becomes the key centre when the root follows the key and the scale has it, else the tuning's root is set to it. The whole tuning moves by that note's distance from 12-TET, since a root sits on its 12-TET place |
+    | opt-`k` | key centre: the 1/1 onto the selected slice's note (none selected: the next slice up; shift: the one below). The tuning doesn't change, not a ratio or a cent: the pie stays as it is and the letters turn round it. The note becomes the key centre when the root follows the key and the scale has it, else the tuning's root is set to it. The notes then sound the tuning from their new places, the 1/1 on its 12-TET place; another opt-`k`, a new scale or the root menu moves it again, and since the ratios never change, nothing drifts |
 
     `esc` first lets go of the selected slices, then leaves tuning mode; `T` leaves
     too, and a list-mode key (`p` `t` `v` `c` `5` `b`) leaves straight into that mode.
@@ -539,8 +539,8 @@ catalogue when one fits (C major's notes on D are D Dorian), or else as the
 set itself, spelled from the tonic (`F# C C#`). With nothing selected, opt-`k`
 moves the centre to the next note up the scale, and opt-shift-`k` to the
 note below, so you can walk the modes by ear. The tuning's root follows the
-centre, so in a just tuning the 1/1 moves to the new tonic and the tuning pie
-turns to put it at the top. A transposition carries the centre along; `k`,
+centre, so in a just tuning the 1/1 moves to the new tonic: the tuning pie
+keeps its ratios and the letters turn round it, the tonic at the top. A transposition carries the centre along; `k`,
 `K` or another new scale lets it go back to the key signature's.
 
 **Intervals mode (`5`) treats the intervals as a list like the others.**

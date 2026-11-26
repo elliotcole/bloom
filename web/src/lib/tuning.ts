@@ -394,7 +394,25 @@ export function clearAlterations(t: Tuning, degs: number[], original?: Tuning | 
 }
 
 /**
- * opt-k: degree `a` becomes 1/1, every interval kept: the tuning turned so it
+ * opt-k in tuning mode: the 1/1 moves onto the note on slice `d` (counted from
+ * the 1/1 now on `root`). The tuning itself doesn't change, not a ratio or a
+ * cent: only which letter sits on which slice. When the root follows the key
+ * and the scale has that note, the key centre moves there (`centre`) and the
+ * 1/1 follows it; otherwise the root is set to it by hand.
+ */
+export function oneOneOnto(t: Tuning, root: number, d: number, scale: number[] | null, follows: boolean)
+  : { tuning: Tuning; pc: number; centre: boolean } {
+  const pc = (((root + d) % 12) + 12) % 12;
+  const tuning = editable(t);
+  const centre = follows && !!scale?.includes(pc);
+  if (!centre) tuning.root = pc;
+  return { tuning, pc, centre };
+}
+
+/**
+ * Tunings turned by an older opt-k, which wrote the ratios again over a new
+ * 1/1 (clearing still needs it, to find their notes in the library's copy).
+ * Degree `a` becomes 1/1, every interval kept: the tuning turned so it
  * starts there (base and alterations both; the new 1/1 unaltered, the others
  * altered relative to it). Its root moves up `a` semitones to match (the caller's).
  */

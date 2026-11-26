@@ -496,7 +496,7 @@ export interface TuningCtx {
 }
 
 export const TUNING_KEYS: ModeKey<TuningCtx>[] = [
-  { code: 'KeyK', alt: true, name: 'opt-k', label: 'the selected slice becomes 1/1 (none: the next up; shift: the one below)', act: c => c.recentre(c.e.shiftKey) },
+  { code: 'KeyK', alt: true, name: 'opt-k', label: "the 1/1 onto the selected slice's note, the ratios as they are (none: the next up; shift: the one below)", act: c => c.recentre(c.e.shiftKey) },
   {
     code: 'Escape', shift: false, name: 'esc', label: 'let go of the selected slices, then leave',
     act: c => {
