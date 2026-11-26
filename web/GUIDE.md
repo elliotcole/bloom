@@ -65,7 +65,7 @@ These move each note together with its time, velocity, channel and interval.
 | `R` | mirror | `9` `0` | rotate ← → |
 | `u` | stutter | `U` | sputter |
 | `d` | patterns: the palette (braid, pyramid, … or type your own; see **Patterns**) | `D` | the last pattern again |
-| `h` | thin: drops some notes, each giving its time to the note before | `H` | thicken: a few of the longest notes (3 at most) each give half their time to a new, softer note a scale step or three away, so new notes land in the gaps and the phrase stays |
+| `h` | thin: drops some notes, each giving its time to the note before | `H` | thicken: a few of the longest notes (3 at most) each give half their time to a new note a scale step or three away, at the level of the quietest note, so new notes land in the gaps behind the loud ones and the phrase stays |
 | `g` | gap (rests) | `G` | unGap |
 | `z` | drop last | `a` / `A` | add one (in scale / any) |
 | `"` | repeat: asks how many times, then every list plays that many times over (2 to start; it remembers) | `Z` | fit: every list made the notes' length, a longer one cut, a shorter one looped round, so all the loops come round together |

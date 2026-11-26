@@ -825,8 +825,8 @@ export class Bloom {
   /**
    * H: a few of the longest notes (at least half the longest, likelier the
    * longer they are) each give half their time to a new note after them, a
-   * scale step or three away and softer, so the thickening lands in the gaps
-   * and the phrase stays. At most GESTURE.thickenMax per press; false when no
+   * scale step or three away and at the level of the quietest note, so the
+   * thickening lands in the gaps, behind, and the phrase stays. At most GESTURE.thickenMax per press; false when no
    * note is long enough to halve.
    */
   thicken(): boolean {
@@ -843,6 +843,7 @@ export class Bloom {
       weights[i] = 0;
     }
     const s = this.scale;
+    const quietest = Math.min(...evs.filter(e => e.vel > 0).map(e => e.vel));   // a rest isn't a level
     const out: NoteEvent[] = [];
     evs.forEach((e, i) => {
       if (!picked.has(i)) { out.push(e); return; }
@@ -851,7 +852,7 @@ export class Bloom {
       const steps = pick([-3, -2, -1, 1, 2, 3]);
       const note = stepInScale(flat, s.degrees, steps, s.pitchesPerOctave);
       out.push({ ...e, time: roundTime(e.time - half) });
-      out.push({ ...e, note, time: half, vel: Math.max(20, Math.round(e.vel / 1.2)) });
+      out.push({ ...e, note, time: half, vel: quietest });
     });
     this.setEvents(out);
     this.enforceRange();

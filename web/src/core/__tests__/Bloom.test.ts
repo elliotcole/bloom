@@ -187,7 +187,18 @@ describe('thicken', () => {
       expect(b.timeIntervals[0]).toBeCloseTo(0.5, 6);
       expect(b.timeIntervals[1]).toBeCloseTo(0.5, 6);
       expect(b.notes[1]).not.toBe(60);                   // a scale neighbour, never the same note
-      expect(b.velocities[1]).toBeLessThan(80);
+      expect(b.velocities[1]).toBe(80);                  // the quietest level, here the only one
+    }
+  });
+  it('brings the new notes in at the level of the quietest note, so loud ones stay in front', () => {
+    for (let i = 0; i < 30; i++) {
+      // loud notes with the long gaps, quiet ones between (and a rest, which isn't the quietest note)
+      const b = bloom([60, 62, 64, 65, 67, 69], [110, 40, 0, 110, 35, 50], [1, 0.25, 0.25, 1, 0.25, 0.25]);
+      b.thicken();
+      const loud = b.velocities.filter(v => v === 110).length;
+      expect(loud).toBe(2);                              // nothing new joins the foreground
+      const added = b.notes.length - 6;
+      expect(b.velocities.filter(v => v === 35).length).toBe(1 + added);
     }
   });
   it('adds at most three notes however long the bloom', () => {
